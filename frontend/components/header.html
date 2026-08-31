@@ -1,0 +1,22 @@
+<!-- components/header.html — reusable host dash top nav -->
+<header class="dash-nav" id="dash-nav" role="banner">
+  <div class="dash-nav__left">
+    <a href="index.html" class="dash-nav__logo-link" aria-label="Back to Lobby" data-link="lobby">
+      <img src="assets/logo/logo-pinoy-henyo-white.png" alt="Pinoy Henyo Online" class="dash-nav__logo" loading="eager" />
+    </a>
+  </div>
+  <div class="dash-nav__center">
+    <span class="dash-nav__round-label">Round</span>
+    <span class="dash-nav__round-num" id="round-number">1</span>
+  </div>
+  <div class="dash-nav__right">
+    <div class="dash-nav__live">
+      <span class="dash-nav__live-dot" aria-label="Live"></span>
+      <span class="dash-nav__live-text">Live</span>
+    </div>
+    <button class="dash-nav__code-btn" id="btn-copy-code" aria-label="Copy game code" title="Click to copy">
+      <span id="game-code-display"></span>
+      <i class="fa-regular fa-copy" id="copy-icon"></i>
+    </button>
+  </div>
+</header>

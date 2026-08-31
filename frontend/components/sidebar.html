@@ -1,0 +1,30 @@
+<!-- components/sidebar.html — reusable host sidebar
+     Loaded dynamically via js/components/sidebar.js for vanilla HTML setups.
+     Nav hrefs use data-page attributes; JS marks active based on current path. -->
+<aside class="dash-sidebar" role="navigation" aria-label="Dashboard navigation">
+  <div class="sidebar__logo">
+    <img src="assets/logo/logo-pinoy-henyo-white.png" alt="Pinoy Henyo Online" class="sidebar__logo-img" loading="eager" />
+  </div>
+  <nav class="sidebar__nav">
+    <a href="host_dashboard.html" class="sidebar__nav-item" data-page="dashboard">
+      <i class="fa-solid fa-gauge-high"></i><span>Dashboard</span>
+    </a>
+    <a href="teams.html" class="sidebar__nav-item" data-page="teams">
+      <i class="fa-solid fa-users"></i><span>Teams</span>
+    </a>
+    <a href="words.html" class="sidebar__nav-item" data-page="words">
+      <i class="fa-solid fa-list"></i><span>Words</span>
+    </a>
+    <a href="#" class="sidebar__nav-item" data-page="connections">
+      <i class="fa-solid fa-wifi"></i><span>Connections</span>
+    </a>
+    <a href="#" class="sidebar__nav-item" data-page="settings">
+      <i class="fa-solid fa-gear"></i><span>Settings</span>
+    </a>
+  </nav>
+  <div class="sidebar__footer">
+    <a href="index.html" class="sidebar__lobby-btn" data-link="lobby" aria-label="Back to Lobby">
+      <i class="fa-solid fa-arrow-left"></i><span>Back to Lobby</span>
+    </a>
+  </div>
+</aside>

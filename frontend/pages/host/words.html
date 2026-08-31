@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Pinoy Henyo Online – Words Tab" />
+  <title>Words – Pinoy Henyo Online</title>
+
+  <link rel="icon" type="image/svg+xml" href="../../assets/logo/favicon.svg" />
+  <link rel="apple-touch-icon" href="../../assets/logo/apple-touch-icon.png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+
+  <!-- Global CSS (must load first) -->
+  <link rel="stylesheet" href="../../css/global.css" />
+  <link rel="stylesheet" href="../../css/pages/words.css" />
+</head>
+<body>
+
+  <!-- ============================================================
+       TOP NAV
+  ============================================================ -->
+  <header class="dash-nav" role="banner">
+    <div class="dash-nav__left">
+      <a href="../../index.html" class="dash-nav__logo-link" aria-label="Back to Lobby">
+        <img src="../../assets/logo/logo-pinoy-henyo-white.png" alt="Pinoy Henyo Online" class="dash-nav__logo" loading="eager" />
+      </a>
+    </div>
+    <div class="dash-nav__center">
+      <span class="dash-nav__round-label">Round</span>
+      <span class="dash-nav__round-num">1</span>
+    </div>
+    <div class="dash-nav__right">
+      <div class="dash-nav__live">
+        <span class="dash-nav__live-dot"></span>
+        <span class="dash-nav__live-text">Live</span>
+      </div>
+      <button class="dash-nav__code-btn" id="btn-copy-code" title="Click to copy">
+        <span id="game-code-display"></span>
+        <i class="fa-regular fa-copy" id="nav-copy-icon"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- ============================================================
+       SHELL
+  ============================================================ -->
+  <div class="dash-shell">
+
+    <!-- SIDEBAR -->
+    <aside class="dash-sidebar" role="navigation" aria-label="Dashboard navigation">
+      <div class="sidebar__logo">
+        <img src="../../assets/logo/logo-pinoy-henyo-white.png" alt="Pinoy Henyo Online" class="sidebar__logo-img" loading="eager" />
+      </div>
+      <nav class="sidebar__nav">
+        <a href="host_dashboard.html" class="sidebar__nav-item">
+          <i class="fa-solid fa-gauge-high"></i><span>Dashboard</span>
+        </a>
+        <a href="teams.html" class="sidebar__nav-item">
+          <i class="fa-solid fa-users"></i><span>Teams</span>
+        </a>
+        <a href="words.html" class="sidebar__nav-item sidebar__nav-item--active" aria-current="page">
+          <i class="fa-solid fa-list"></i><span>Words</span>
+        </a>
+        <a href="#" class="sidebar__nav-item">
+          <i class="fa-solid fa-wifi"></i><span>Connections</span>
+        </a>
+        <a href="#" class="sidebar__nav-item">
+          <i class="fa-solid fa-gear"></i><span>Settings</span>
+        </a>
+      </nav>
+      <div class="sidebar__footer">
+        <a href="../../index.html" class="sidebar__lobby-btn">
+          <i class="fa-solid fa-arrow-left"></i><span>Back to Lobby</span>
+        </a>
+      </div>
+    </aside>
+
+    <!-- MAIN -->
+    <main class="dash-main" role="main">
+
+      <!-- PAGE HEADER -->
+      <div class="page-header reveal">
+        <div class="page-header__left">
+          <div class="page-header__icon">
+            <i class="fa-solid fa-list-ul"></i>
+          </div>
+          <div>
+            <h1 class="page-header__title">Words</h1>
+            <p class="page-header__sub">Manage and assign words for each round.</p>
+          </div>
+        </div>
+        <div class="page-header__actions">
+          <button class="hdr-btn hdr-btn--primary" id="btn-add-word">
+            <i class="fa-solid fa-plus"></i> Add Word
+          </button>
+          <button class="hdr-btn hdr-btn--secondary" id="btn-randomize">
+            <i class="fa-solid fa-shuffle"></i> Randomize
+          </button>
+          <button class="hdr-btn hdr-btn--secondary" id="btn-assign-words">
+            <i class="fa-solid fa-clipboard-list"></i> Assign Words
+          </button>
+        </div>
+      </div>
+
+      <!-- SUMMARY CARDS -->
+      <div class="summary-grid reveal" style="--delay:0.05s">
+        <div class="summary-card">
+          <div class="summary-card__icon summary-card__icon--blue">
+            <i class="fa-solid fa-book-open"></i>
+          </div>
+          <div class="summary-card__body">
+            <p class="summary-card__label">Total Words</p>
+            <p class="summary-card__value" id="stat-total">120</p>
+          </div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-card__icon summary-card__icon--orange">
+            <i class="fa-solid fa-tags"></i>
+          </div>
+          <div class="summary-card__body">
+            <p class="summary-card__label">Categories</p>
+            <p class="summary-card__value" id="stat-cats">8</p>
+          </div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-card__icon summary-card__icon--blue2">
+            <i class="fa-solid fa-circle"></i>
+          </div>
+          <div class="summary-card__body">
+            <p class="summary-card__label">Round 1</p>
+            <p class="summary-card__value"><span id="stat-r1-assigned">20</span><span class="summary-card__denom">/ <span id="stat-r1-total">20</span></span></p>
+            <span class="summary-card__badge summary-card__badge--ready" id="badge-r1">
+              <i class="fa-solid fa-check"></i> Ready
+            </span>
+          </div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-card__icon summary-card__icon--green">
+            <i class="fa-solid fa-circle"></i>
+          </div>
+          <div class="summary-card__body">
+            <p class="summary-card__label">Round 2</p>
+            <p class="summary-card__value"><span id="stat-r2-assigned">20</span><span class="summary-card__denom">/ <span id="stat-r2-total">20</span></span></p>
+            <span class="summary-card__badge summary-card__badge--ready" id="badge-r2">
+              <i class="fa-solid fa-check"></i> Ready
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- OVERALL STATUS -->
+      <div class="overall-status reveal" id="overall-status" style="--delay:0.1s">
+        <i class="fa-solid fa-circle-check" id="overall-icon"></i>
+        <span id="overall-text">All words are ready for the game!</span>
+      </div>
+
+      <!-- LOCK STATUS -->
+      <div class="lock-bar reveal" id="lock-bar" style="--delay:0.12s">
+        <div class="lock-bar__left">
+          <i class="fa-solid fa-lock-open" id="lock-bar-icon"></i>
+          <span id="lock-bar-label">Words Unlocked</span>
+        </div>
+        <button class="lock-bar__btn" id="btn-lock-words">
+          <i class="fa-solid fa-lock" id="lock-btn-icon"></i>
+          <span id="lock-btn-label">Lock Words</span>
+        </button>
+      </div>
+
+      <!-- FILTERS & SEARCH -->
+      <div class="filters-panel reveal" style="--delay:0.15s">
+
+        <!-- Search -->
+        <div class="filters-search">
+          <i class="fa-solid fa-magnifying-glass filters-search__icon"></i>
+          <input type="text" id="search-input" class="filters-search__input" placeholder="Search words..." autocomplete="off" />
+          <button class="filters-search__clear" id="btn-clear-search" aria-label="Clear search" hidden>
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <!-- Category pills -->
+        <div class="filter-row">
+          <span class="filter-row__label">Category:</span>
+          <div class="filter-pills" id="cat-pills" role="group" aria-label="Filter by category">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+
+        <!-- Team pills -->
+        <div class="filter-row">
+          <span class="filter-row__label">Team:</span>
+          <div class="filter-pills" id="team-pills" role="group" aria-label="Filter by team">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+
+        <!-- View toggle -->
+        <div class="filter-row">
+          <span class="filter-row__label">View:</span>
+          <div class="view-toggle" role="group" aria-label="View mode">
+            <button class="view-toggle__btn view-toggle__btn--active" data-view="table" id="view-table">
+              <i class="fa-solid fa-table-list"></i> All Words
+            </button>
+            <button class="view-toggle__btn" data-view="team" id="view-team">
+              <i class="fa-solid fa-users"></i> By Team
+            </button>
+            <button class="view-toggle__btn" data-view="category" id="view-category">
+              <i class="fa-solid fa-tags"></i> By Category
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ====================================================
+           VIEW: ALL WORDS TABLE
+      ==================================================== -->
+      <div id="view-table-section">
+
+        <!-- Table -->
+        <div class="word-table-wrap" id="word-table-wrap">
+          <table class="word-table" aria-label="Words list">
+            <thead>
+              <tr>
+                <th scope="col">
+                  <label class="cb-label">
+                    <input type="checkbox" id="select-all" aria-label="Select all" />
+                    <span class="cb-custom"></span>
+                  </label>
+                </th>
+                <th scope="col" class="sortable" data-col="word">Word <i class="fa-solid fa-sort"></i></th>
+                <th scope="col" class="sortable" data-col="category">Category <i class="fa-solid fa-sort"></i></th>
+                <th scope="col" class="sortable" data-col="team">Team <i class="fa-solid fa-sort"></i></th>
+                <th scope="col" class="sortable" data-col="round">Round <i class="fa-solid fa-sort"></i></th>
+                <th scope="col">Status</th>
+                <th scope="col">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="word-table-body">
+              <!-- Populated by JS -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Bulk action bar -->
+        <div class="bulk-bar" id="bulk-bar" hidden>
+          <span id="bulk-count">0 selected</span>
+          <button class="bulk-btn bulk-btn--round" id="bulk-r1">
+            <i class="fa-solid fa-circle-1"></i> Assign to Round 1
+          </button>
+          <button class="bulk-btn bulk-btn--round" id="bulk-r2">
+            <i class="fa-solid fa-circle-2"></i> Assign to Round 2
+          </button>
+          <button class="bulk-btn bulk-btn--danger" id="bulk-delete">
+            <i class="fa-solid fa-trash"></i> Delete
+          </button>
+          <button class="bulk-btn" id="bulk-cancel">
+            <i class="fa-solid fa-xmark"></i> Cancel
+          </button>
+        </div>
+
+        <!-- Empty state -->
+        <div class="empty-state" id="empty-state" hidden>
+          <div class="empty-state__icon">
+            <i class="fa-solid fa-inbox"></i>
+          </div>
+          <h2 class="empty-state__title">No Words Yet</h2>
+          <p class="empty-state__sub">Add words or wait for teams to submit their words.</p>
+          <button class="hdr-btn hdr-btn--primary empty-state__btn" id="btn-add-word-empty">
+            <i class="fa-solid fa-plus"></i> Add Word
+          </button>
+        </div>
+
+      </div>
+
+      <!-- ====================================================
+           VIEW: BY TEAM
+      ==================================================== -->
+      <div id="view-team-section" hidden>
+        <div id="by-team-content">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+      <!-- ====================================================
+           VIEW: BY CATEGORY
+      ==================================================== -->
+      <div id="view-category-section" hidden>
+        <div id="by-category-content">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+      <!-- ====================================================
+           WORD STATUS / READINESS PANEL
+           Real per-team-per-category submission status (3-5 rule).
+      ==================================================== -->
+      <div id="assign-section" hidden>
+        <div class="assign-header">
+          <h2 class="assign-header__title">
+            <i class="fa-solid fa-clipboard-list"></i> Word Status
+          </h2>
+          <button class="assign-header__close" id="btn-close-assign" aria-label="Close status panel">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <p class="assign-hint">
+          Each category needs <strong>3&ndash;5 words per team</strong>. A category is ready for a team once it
+          has at least <strong>3 words</strong>. Words are never given back to the team that submitted them
+          (enforced by the game server during each turn).
+        </p>
+
+        <div id="word-status-body" class="word-status-body">
+          <p style="color:rgba(255,255,255,0.35);padding:1rem">No teams or categories loaded yet.</p>
+        </div>
+      </div>
+
+      <!-- ====================================================
+           ROUND & MATCH SETUP
+           Rounds: create Round 1 / 2, select Round-1 categories.
+           Matches: define team order / pairings + reorder.
+      ==================================================== -->
+      <div id="setup-section" class="setup-section reveal">
+        <div class="assign-header">
+          <h2 class="assign-header__title">
+            <i class="fa-solid fa-layer-group"></i> Round &amp; Match Setup
+          </h2>
+        </div>
+
+        <div class="setup-grid">
+          <!-- Rounds -->
+          <div class="setup-card setup-card--rounds">
+            <div class="setup-card__head">
+              <i class="fa-solid fa-circle-nodes"></i>
+              <span>Rounds</span>
+            </div>
+            <div class="setup-card__body">
+              <div class="setup-round" data-round="1">
+                <div class="setup-round__title">
+                  <i class="fa-solid fa-circle-1"></i> Round 1
+                  <span class="setup-round__status" id="round-1-status">Not set up</span>
+                </div>
+                <div class="setup-cats" id="round-1-cats">
+                  <p style="color:rgba(255,255,255,0.35);font-size:0.8rem">Create Round 1 to choose categories.</p>
+                </div>
+              </div>
+              <div class="setup-round" data-round="2">
+                <div class="setup-round__title">
+                  <i class="fa-solid fa-circle-2"></i> Round 2
+                  <span class="setup-round__status" id="round-2-status">Not set up</span>
+                </div>
+                <p class="setup-round__note">Round 2 automatically uses all categories.</p>
+              </div>
+            </div>
+            <div class="setup-card__foot">
+              <button class="hdr-btn hdr-btn--primary" id="btn-create-round-1">
+                <i class="fa-solid fa-plus"></i> Set Up Round 1
+              </button>
+              <button class="hdr-btn hdr-btn--secondary" id="btn-create-round-2">
+                <i class="fa-solid fa-plus"></i> Set Up Round 2
+              </button>
+            </div>
+          </div>
+
+          <!-- Matches -->
+          <div class="setup-card setup-card--matches">
+            <div class="setup-card__head">
+              <i class="fa-solid fa-ranking-star"></i>
+              <span>Matches (Team Order)</span>
+            </div>
+            <div class="setup-card__body">
+              <div class="setup-round-select">
+                <label for="matches-round">Round</label>
+                <select id="matches-round" class="form-select">
+                  <option value="1">Round 1</option>
+                  <option value="2">Round 2</option>
+                </select>
+              </div>
+              <div id="matches-list" class="matches-list">
+                <p style="color:rgba(255,255,255,0.35);font-size:0.85rem">No matches defined yet.</p>
+              </div>
+            </div>
+            <div class="setup-card__foot">
+              <button class="hdr-btn hdr-btn--primary" id="btn-add-match">
+                <i class="fa-solid fa-plus"></i> Add Match
+              </button>
+              <button class="hdr-btn hdr-btn--secondary" id="btn-create-matches">
+                <i class="fa-solid fa-floppy-disk"></i> Create Matches
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- MATCH MODAL -->
+  <div class="modal-overlay" id="modal-match" aria-hidden="true" role="dialog" aria-modal="true">
+    <div class="modal">
+      <button class="modal__close" id="close-match"><i class="fa-solid fa-xmark"></i></button>
+      <h2 class="modal__title"><i class="fa-solid fa-ranking-star"></i> Add Match</h2>
+      <form class="modal__form" id="form-match" novalidate>
+        <label for="match-team" class="form-label">Team</label>
+        <select id="match-team" class="form-select">
+          <option value="">Select team</option>
+        </select>
+        <span class="form-error" id="err-match-team"></span>
+
+        <label for="match-opponent" class="form-label">Opponent (optional)</label>
+        <select id="match-opponent" class="form-select">
+          <option value="">— No opponent / Free round —</option>
+        </select>
+        <span class="form-error" id="err-match-opponent"></span>
+
+        <div class="modal__actions">
+          <button type="button" class="btn-cancel" id="cancel-match">Cancel</button>
+          <button type="submit" class="btn-confirm"><i class="fa-solid fa-plus"></i> Add to Round</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ROUND 1 CATEGORIES MODAL -->
+  <div class="modal-overlay" id="modal-cats" aria-hidden="true" role="dialog" aria-modal="true">
+    <div class="modal">
+      <button class="modal__close" id="close-cats"><i class="fa-solid fa-xmark"></i></button>
+      <h2 class="modal__title"><i class="fa-solid fa-circle-1"></i> Round 1 Categories</h2>
+      <p class="modal__subtitle" id="cats-subtitle">Select the categories used in Round 1.</p>
+      <div id="cats-list" class="cats-list">
+        <p style="color:rgba(255,255,255,0.35)">Loading categories…</p>
+      </div>
+      <div class="modal__actions">
+        <button type="button" class="btn-cancel" id="cancel-cats">Cancel</button>
+        <button type="button" class="btn-confirm" id="btn-save-cats"><i class="fa-solid fa-check"></i> Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       MODALS
+  ============================================================ -->
+
+  <!-- ADD WORD -->
+  <div class="modal-overlay" id="modal-add" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="add-title">
+    <div class="modal">
+      <button class="modal__close" id="close-add"><i class="fa-solid fa-xmark"></i></button>
+      <div class="modal__header">
+        <div class="modal__icon modal__icon--blue"><i class="fa-solid fa-plus"></i></div>
+        <div>
+          <h2 class="modal__title" id="add-title">Add Word</h2>
+          <p class="modal__subtitle">Add a new word to the game.</p>
+        </div>
+      </div>
+      <form class="modal__form" id="form-add" novalidate>
+        <div class="form-group">
+          <label class="form-label" for="add-word"><i class="fa-solid fa-font"></i> Word</label>
+          <input type="text" id="add-word" class="form-input" placeholder="Enter word" maxlength="40" required />
+          <span class="form-error" id="err-add-word"></span>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="add-category"><i class="fa-solid fa-tag"></i> Category</label>
+          <select id="add-category" class="form-select" required>
+            <option value="">Select category</option>
+          </select>
+          <span class="form-error" id="err-add-category"></span>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="add-team"><i class="fa-solid fa-users"></i> Team</label>
+          <select id="add-team" class="form-select">
+            <option value="">— No team —</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="add-round"><i class="fa-solid fa-layer-group"></i> Round</label>
+          <select id="add-round" class="form-select">
+            <option value="">— Unassigned —</option>
+            <option value="1">Round 1</option>
+            <option value="2">Round 2</option>
+          </select>
+        </div>
+        <div class="modal__actions">
+          <button type="button" class="btn-cancel" id="cancel-add">Cancel</button>
+          <button type="submit" class="btn-confirm">
+            <i class="fa-solid fa-plus"></i> Add Word
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- EDIT WORD -->
+  <div class="modal-overlay" id="modal-edit" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="edit-title">
+    <div class="modal">
+      <button class="modal__close" id="close-edit"><i class="fa-solid fa-xmark"></i></button>
+      <div class="modal__header">
+        <div class="modal__icon modal__icon--orange"><i class="fa-solid fa-pen"></i></div>
+        <div>
+          <h2 class="modal__title" id="edit-title">Edit Word</h2>
+          <p class="modal__subtitle" id="edit-subtitle">Editing word</p>
+        </div>
+      </div>
+      <form class="modal__form" id="form-edit" novalidate>
+        <div class="form-group">
+          <label class="form-label" for="edit-word"><i class="fa-solid fa-font"></i> Word</label>
+          <input type="text" id="edit-word" class="form-input" maxlength="40" required />
+          <span class="form-error" id="err-edit-word"></span>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="edit-category"><i class="fa-solid fa-tag"></i> Category</label>
+          <select id="edit-category" class="form-select" required>
+            <option value="">Select category</option>
+          </select>
+          <span class="form-error" id="err-edit-category"></span>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="edit-team"><i class="fa-solid fa-users"></i> Team</label>
+          <select id="edit-team" class="form-select">
+            <option value="">— No team —</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="edit-round"><i class="fa-solid fa-layer-group"></i> Round</label>
+          <select id="edit-round" class="form-select">
+            <option value="">— Unassigned —</option>
+            <option value="1">Round 1</option>
+            <option value="2">Round 2</option>
+          </select>
+        </div>
+        <div class="modal__actions">
+          <button type="button" class="btn-cancel" id="cancel-edit">Cancel</button>
+          <button type="submit" class="btn-confirm">
+            <i class="fa-solid fa-floppy-disk"></i> Save Changes
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- DELETE CONFIRMATION -->
+  <div class="modal-overlay" id="modal-delete" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="delete-title">
+    <div class="modal">
+      <button class="modal__close" id="close-delete"><i class="fa-solid fa-xmark"></i></button>
+      <div class="modal__header">
+        <div class="modal__icon modal__icon--red"><i class="fa-solid fa-trash"></i></div>
+        <div>
+          <h2 class="modal__title" id="delete-title">Delete Word?</h2>
+          <p class="modal__subtitle" id="delete-subtitle">This cannot be undone.</p>
+        </div>
+      </div>
+      <p class="modal__body-text" id="delete-body">
+        "<span id="delete-word-name"></span>" will be removed from the game.
+      </p>
+      <div class="modal__actions">
+        <button type="button" class="btn-cancel" id="cancel-delete">Cancel</button>
+        <button type="button" class="btn-danger" id="btn-confirm-delete">
+          <i class="fa-solid fa-trash"></i> Delete Word
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- DUPLICATE WARNING -->
+  <div class="modal-overlay" id="modal-duplicate" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="dup-title">
+    <div class="modal">
+      <button class="modal__close" id="close-dup"><i class="fa-solid fa-xmark"></i></button>
+      <div class="modal__header">
+        <div class="modal__icon modal__icon--warn"><i class="fa-solid fa-triangle-exclamation"></i></div>
+        <div>
+          <h2 class="modal__title" id="dup-title">Duplicate Word Found</h2>
+          <p class="modal__subtitle">This word already exists.</p>
+        </div>
+      </div>
+      <p class="modal__body-text" id="dup-body">
+        "<span id="dup-word-name"></span>" already exists in another team's word list.
+      </p>
+      <div class="modal__actions">
+        <button type="button" class="btn-cancel" id="btn-dup-change">Change Word</button>
+        <button type="button" class="btn-confirm" id="btn-dup-keep">
+          <i class="fa-solid fa-check"></i> Keep Anyway
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- LOCK CONFIRMATION -->
+  <div class="modal-overlay" id="modal-lock" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="lock-title">
+    <div class="modal">
+      <button class="modal__close" id="close-lock"><i class="fa-solid fa-xmark"></i></button>
+      <div class="modal__header">
+        <div class="modal__icon modal__icon--orange"><i class="fa-solid fa-lock" id="lock-modal-icon"></i></div>
+        <div>
+          <h2 class="modal__title" id="lock-title">Lock Words</h2>
+          <p class="modal__subtitle" id="lock-modal-sub">Confirm before starting the game.</p>
+        </div>
+      </div>
+      <p class="modal__body-text" id="lock-modal-body">
+        Once locked, words cannot be added, edited, or deleted.
+      </p>
+      <div class="modal__actions">
+        <button type="button" class="btn-cancel" id="cancel-lock">Cancel</button>
+        <button type="button" class="btn-confirm" id="btn-confirm-lock">
+          <i class="fa-solid fa-lock" id="confirm-lock-icon"></i>
+          <span id="confirm-lock-label">Lock Words</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div class="copy-toast" id="toast" aria-live="polite"></div>
+
+  <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+  <script src="../../js/api/api.js"></script>
+  <script src="../../js/api/game-api.js"></script>
+  <script src="../../js/api/team-api.js"></script>
+  <script src="../../js/api/word-api.js"></script>
+  <script src="../../js/api/round-api.js"></script>
+  <script src="../../js/api/match-api.js"></script>
+  <script src="../../js/api/connect.js"></script>
+  <script src="../../js/api/realtime.js"></script>
+  <script src="../../js/host/words.js"></script>
+</body>
+</html>

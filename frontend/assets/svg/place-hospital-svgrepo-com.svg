@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+<!-- Uploaded to: SVG Repo, www.svgrepo.com, Generator: SVG Repo Mixer Tools -->
+<svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" 
+	 viewBox="0 0 512 512" xml:space="preserve">
+<rect x="162.408" style="fill:#E70020;" width="187.183" height="147.038"/>
+<polygon style="fill:#FFFFFF;" points="288.392,46.728 288.392,78.075 271.673,78.075 271.673,94.793 240.327,94.793 
+	240.327,78.075 223.608,78.075 223.608,46.728 240.327,46.728 240.327,30.009 271.673,30.009 271.673,46.728 "/>
+<rect x="256.084" style="fill:#990013;" width="93.508" height="147.038"/>
+<polygon style="fill:#C8C6CD;" points="288.392,46.728 288.392,78.075 271.673,78.075 271.673,94.793 256.084,94.793 
+	256.084,30.009 271.673,30.009 271.673,46.728 "/>
+<rect x="136.505" y="115.691" style="fill:#AEADB3;" width="238.989" height="396.309"/>
+<rect x="256.084" y="115.691" style="fill:#8B8892;" width="119.411" height="396.309"/>
+<g>
+	<rect x="232.49" y="396.769" style="fill:#FFFFFF;" width="47.02" height="99.558"/>
+	<rect x="188.176" y="171.175" style="fill:#FFFFFF;" width="32.192" height="32.192"/>
+	<rect x="239.909" y="171.175" style="fill:#FFFFFF;" width="32.183" height="32.193"/>
+	<rect x="291.631" y="171.175" style="fill:#FFFFFF;" width="32.183" height="32.193"/>
+	<rect x="188.176" y="221.853" style="fill:#FFFFFF;" width="32.192" height="32.192"/>
+	<rect x="239.909" y="221.853" style="fill:#FFFFFF;" width="32.183" height="32.193"/>
+	<rect x="291.631" y="221.853" style="fill:#FFFFFF;" width="32.183" height="32.193"/>
+	<rect x="188.176" y="272.53" style="fill:#FFFFFF;" width="32.192" height="32.192"/>
+	<rect x="239.909" y="272.53" style="fill:#FFFFFF;" width="32.183" height="32.193"/>
+	<rect x="291.631" y="272.53" style="fill:#FFFFFF;" width="32.183" height="32.193"/>
+	<rect x="188.176" y="323.208" style="fill:#FFFFFF;" width="32.192" height="32.192"/>
+	<rect x="239.909" y="323.208" style="fill:#FFFFFF;" width="32.183" height="32.193"/>
+	<rect x="291.631" y="323.208" style="fill:#FFFFFF;" width="32.183" height="32.193"/>
+</g>
+<polygon style="fill:#9A4C00;" points="496.327,480.653 496.327,512 15.673,512 15.673,480.653 52.339,480.653 52.339,411.732 
+	83.686,411.732 83.686,480.653 427.844,480.653 427.844,411.732 459.191,411.732 459.191,480.653 "/>
+<g>
+	<rect x="256.084" y="171.175" style="fill:#C8C6CD;" width="16.008" height="32.193"/>
+	<rect x="256.084" y="221.853" style="fill:#C8C6CD;" width="16.008" height="32.193"/>
+	<rect x="256.084" y="272.53" style="fill:#C8C6CD;" width="16.008" height="32.193"/>
+	<rect x="256.084" y="323.208" style="fill:#C8C6CD;" width="16.008" height="32.193"/>
+	<rect x="256.084" y="396.769" style="fill:#C8C6CD;" width="23.427" height="99.558"/>
+	<rect x="291.631" y="171.175" style="fill:#C8C6CD;" width="32.183" height="32.193"/>
+	<rect x="291.631" y="221.853" style="fill:#C8C6CD;" width="32.183" height="32.193"/>
+	<rect x="291.631" y="272.53" style="fill:#C8C6CD;" width="32.183" height="32.193"/>
+	<rect x="291.631" y="323.208" style="fill:#C8C6CD;" width="32.183" height="32.193"/>
+</g>
+<polygon style="fill:#723700;" points="496.327,480.653 496.327,512 256.084,512 256.084,480.653 427.844,480.653 427.844,411.732 
+	459.191,411.732 459.191,480.653 "/>
+<g>
+	<path style="fill:#36CD90;" d="M116.778,390.154c0,26.885-21.87,48.765-48.765,48.765c-26.885,0-48.755-21.88-48.755-48.765
+		c0-26.885,21.87-48.765,48.755-48.765C94.908,341.389,116.778,363.269,116.778,390.154z"/>
+	<path style="fill:#36CD90;" d="M492.283,390.154c0,26.885-21.87,48.765-48.765,48.765c-26.885,0-48.755-21.88-48.755-48.765
+		c0-26.885,21.87-48.765,48.755-48.765C470.413,341.389,492.283,363.269,492.283,390.154z"/>
+</g>
+<g>
+	<path style="fill:#00A653;" d="M492.283,390.154c0,26.885-21.87,48.765-48.765,48.765v-97.531
+		C470.413,341.389,492.283,363.269,492.283,390.154z"/>
+	<path style="fill:#00A653;" d="M116.778,390.154c0,26.885-21.87,48.765-48.765,48.765v-97.531
+		C94.908,341.389,116.778,363.269,116.778,390.154z"/>
+</g>
+</svg>

@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="Pinoy Henyo Online – Player Interface" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Player – Pinoy Henyo Online</title>
+
+  <link rel="icon" type="image/svg+xml" href="../../assets/logo/favicon.svg" />
+  <link rel="apple-touch-icon" href="../../assets/logo/apple-touch-icon.png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+
+  <!-- Global CSS (must load first) -->
+  <link rel="stylesheet" href="../../css/global.css" />
+  <link rel="stylesheet" href="../../css/pages/player.css" />
+</head>
+<body>
+
+  <!-- ============================================================
+       APP SHELL — wraps everything except game fullscreen views
+  ============================================================ -->
+  <div class="app-shell" id="app-shell">
+
+    <!-- ========================================================
+         APP HEADER
+    ======================================================== -->
+    <header class="app-header" id="app-header" role="banner">
+      <div class="app-header__brand">
+        <img src="../../assets/logo/logo-pinoy-henyo-white.png" alt="Pinoy Henyo Online" class="app-header__logo" loading="eager" />
+      </div>
+      <div class="app-header__team">
+        <span class="app-header__team-name" id="header-team-name"></span>
+        <span class="app-header__conn-badge" id="header-conn-badge">
+          <span class="conn-dot conn-dot--disconnected" id="header-conn-dot"></span>
+          <span id="header-conn-label">Disconnected</span>
+        </span>
+      </div>
+      <button class="app-header__qr-btn" id="btn-header-qr" aria-label="Scan QR Code">
+        <i class="fa-solid fa-qrcode"></i>
+      </button>
+    </header>
+
+    <!-- ========================================================
+         MAIN CONTENT (tab views)
+    ======================================================== -->
+    <main class="app-content" id="app-content" role="main">
+
+      <!-- ====================================================
+           TAB: TEAMS
+      ==================================================== -->
+      <div class="tab-view" id="tab-teams" role="tabpanel" aria-label="Teams">
+
+        <!-- Team Information Card -->
+        <div class="player-card fade-in">
+          <h2 class="player-card__title">
+            <i class="fa-solid fa-shield-halved"></i> Team Information
+          </h2>
+          <div class="info-rows">
+            <div class="info-row">
+              <span class="info-row__label">Team Name</span>
+              <span class="info-row__value" id="team-info-name"></span>
+            </div>
+            <div class="info-row">
+              <span class="info-row__label">Members</span>
+              <span class="info-row__value" id="team-info-count">0</span>
+            </div>
+            <div class="info-row">
+              <span class="info-row__label">Team Code</span>
+              <span class="info-row__value code-val" id="team-info-code">>
+                <button class="inline-copy-btn" id="btn-copy-team-code" aria-label="Copy team code">
+                  <i class="fa-regular fa-copy"></i>
+                </button>
+              </span>
+            </div>
+            <div class="info-row">
+              <span class="info-row__label">Host Connection</span>
+              <span class="info-row__value" id="team-info-host">
+                <span class="conn-dot conn-dot--disconnected"></span> Disconnected
+              </span>
+            </div>
+            <div class="info-row">
+              <span class="info-row__label">Game Status</span>
+              <span class="info-row__value" id="team-info-status">
+                <i class="fa-regular fa-clock" style="color:var(--accent-1-400)"></i> Waiting for Host
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Team Members Card -->
+        <div class="player-card fade-in" style="--fd:0.08s">
+          <h2 class="player-card__title">
+            <i class="fa-solid fa-users"></i> Team Members
+          </h2>
+          <div class="member-list" id="member-list">
+            <!-- Populated by JS -->
+          </div>
+          <button class="player-btn player-btn--outline" id="btn-add-member" style="margin-top:0.75rem">
+            <i class="fa-solid fa-plus"></i> Add Member
+          </button>
+        </div>
+
+        <!-- Player Roles Card -->
+        <div class="player-card fade-in" style="--fd:0.14s">
+          <h2 class="player-card__title">
+            <i class="fa-solid fa-masks-theater"></i> Player Roles
+          </h2>
+          <div class="role-section">
+            <p class="role-section__label">
+              <i class="fa-solid fa-bullseye"></i> Manghuhula
+            </p>
+            <select class="player-select" id="select-manghuhula" aria-label="Select Manghuhula">
+              <!-- Populated by JS -->
+            </select>
+          </div>
+          <div class="role-section" style="margin-top:1rem">
+            <p class="role-section__label">
+              <i class="fa-solid fa-comments"></i> Tagasagot
+            </p>
+            <div class="tagasagot-list" id="tagasagot-list">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+          <button class="player-btn player-btn--primary" id="btn-save-roles" style="margin-top:1rem">
+            <i class="fa-solid fa-floppy-disk"></i> Save Roles
+          </button>
+        </div>
+
+        <!-- Team Connection Card -->
+        <div class="player-card fade-in" style="--fd:0.2s">
+          <h2 class="player-card__title">
+            <i class="fa-solid fa-wifi"></i> Team Connection
+          </h2>
+          <div class="qr-placeholder" id="team-qr-placeholder" aria-label="QR Code">
+            <div class="qr-grid" id="team-qr-grid"></div>
+            <p class="qr-placeholder__hint">Scan to join team</p>
+          </div>
+          <div class="team-code-row">
+            <span class="team-code-label">Team Code:</span>
+            <span class="team-code-val" id="team-code-display"></span>
+          </div>
+          <div class="conn-status-row">
+            <span class="conn-dot conn-dot--connected"></span>
+            <span id="team-conn-status-text">Host Connected</span>
+          </div>
+          <div class="player-btn-row">
+            <button class="player-btn player-btn--outline" id="btn-generate-qr">
+              <i class="fa-solid fa-qrcode"></i> Generate QR
+            </button>
+            <button class="player-btn player-btn--outline" id="btn-scan-qr-teams">
+              <i class="fa-solid fa-camera"></i> Scan QR
+            </button>
+          </div>
+        </div>
+
+      </div><!-- /#tab-teams -->
+
+      <!-- ====================================================
+           TAB: WORDS
+      ==================================================== -->
+      <div class="tab-view tab-view--hidden" id="tab-words" role="tabpanel" aria-label="Words">
+
+        <!-- Words Card -->
+        <div class="player-card fade-in">
+          <div class="words-card-header">
+            <h2 class="player-card__title">
+              <i class="fa-solid fa-list-ul"></i> Words
+            </h2>
+            <span class="words-category-badge" id="words-category-badge">Pagkain / Food</span>
+          </div>
+
+          <!-- Progress -->
+          <div class="words-progress" id="words-progress-wrap">
+            <div class="words-progress__bar-wrap">
+              <div class="words-progress__bar" id="words-progress-bar" style="width:100%"></div>
+            </div>
+            <div class="words-progress__meta">
+              <span id="words-submitted-label">5 / 5 Words Submitted</span>
+              <span class="words-ready-badge words-ready-badge--ready" id="words-ready-badge">
+                <i class="fa-solid fa-check"></i> Ready
+              </span>
+            </div>
+          </div>
+
+          <!-- Word list -->
+          <div class="word-chips" id="word-chips">
+            <!-- Populated by JS -->
+          </div>
+
+          <!-- Locked overlay -->
+          <div class="words-locked-overlay" id="words-locked-overlay" hidden>
+            <i class="fa-solid fa-lock"></i>
+            <p>Words are locked for the game.</p>
+          </div>
+
+          <button class="player-btn player-btn--primary" id="btn-add-word" style="margin-top:0.85rem">
+            <i class="fa-solid fa-plus"></i> Add Word
+          </button>
+        </div>
+
+        <!-- Word Status Card -->
+        <div class="player-card fade-in" style="--fd:0.08s">
+          <h2 class="player-card__title">
+            <i class="fa-solid fa-circle-info"></i> Word Status
+          </h2>
+          <div class="word-status-info" id="word-status-info">
+            <div class="word-status-row">
+              <i class="fa-solid fa-lock-open" style="color:var(--secondary-400)"></i>
+              <strong>Words Unlocked</strong>
+            </div>
+            <p class="word-status-desc">You can add, edit, or delete words until the host locks them.</p>
+          </div>
+        </div>
+
+      </div><!-- /#tab-words -->
+
+      <!-- ====================================================
+           TAB: SETTINGS
+      ==================================================== -->
+      <div class="tab-view tab-view--hidden" id="tab-settings" role="tabpanel" aria-label="Settings">
+
+        <!-- Team Settings -->
+        <div class="player-card fade-in">
+          <h2 class="player-card__title">
+            <i class="fa-solid fa-users-gear"></i> Team Settings
+          </h2>
+          <form class="settings-form" id="form-team-settings" novalidate>
+            <div class="settings-group">
+              <label class="settings-label" for="setting-team-name">Team Name</label>
+              <input type="text" id="setting-team-name" class="player-input" value="" maxlength="32" />
+            </div>
+            <div class="settings-group">
+              <label class="settings-label">Team Code</label>
+              <div class="settings-code-row">
+                <span class="settings-code" id="settings-team-code"></span>
+                <button type="button" class="inline-copy-btn" id="btn-copy-settings-code" aria-label="Copy team code">
+                  <i class="fa-regular fa-copy"></i>
+                </button>
+              </div>
+            </div>
+            <button type="submit" class="player-btn player-btn--primary">
+              <i class="fa-solid fa-floppy-disk"></i> Save Changes
+            </button>
+          </form>
+        </div>
+
+        <!-- Player Settings -->
+        <div class="player-card fade-in" style="--fd:0.08s">
+          <h2 class="player-card__title">
+            <i class="fa-solid fa-user-gear"></i> Player Settings
+          </h2>
+          <form class="settings-form" id="form-player-settings" novalidate>
+            <div class="settings-group">
+              <label class="settings-label" for="setting-username">Your Username</label>
+              <input type="text" id="setting-username" class="player-input" value="" maxlength="40" />
+            </div>
+            <button type="submit" class="player-btn player-btn--outline">
+              <i class="fa-solid fa-rotate-right"></i> Update
+            </button>
+          </form>
+        </div>
+
+        <!-- Game Information -->
+        <div class="player-card fade-in" style="--fd:0.14s">
+          <h2 class="player-card__title">
+            <i class="fa-solid fa-circle-info"></i> Game Information
+          </h2>
+          <div class="info-rows">
+            <div class="info-row">
+              <span class="info-row__label">Game Code</span>
+              <span class="info-row__value code-val">>
+                <button class="inline-copy-btn" id="btn-copy-game-code" aria-label="Copy game code">
+                  <i class="fa-regular fa-copy"></i>
+                </button>
+              </span>
+            </div>
+            <div class="info-row">
+              <span class="info-row__label">Current Round</span>
+              <span class="info-row__value" id="settings-round">—</span>
+            </div>
+            <div class="info-row">
+              <span class="info-row__label">Host</span>
+              <span class="info-row__value">
+                <span class="conn-dot conn-dot--connected"></span> Connected
+              </span>
+            </div>
+            <div class="info-row">
+              <span class="info-row__label">Status</span>
+              <span class="info-row__value" id="settings-status">Waiting for Host</span>
+            </div>
+          </div>
+          <div class="settings-actions">
+            <button class="player-btn player-btn--danger" id="btn-leave-game">
+              <i class="fa-solid fa-right-from-bracket"></i> Leave Game
+            </button>
+          </div>
+        </div>
+
+      </div><!-- /#tab-settings -->
+
+      <!-- ====================================================
+           VIEW: WAITING SCREEN
+      ==================================================== -->
+      <div class="tab-view tab-view--hidden" id="view-waiting" role="region" aria-label="Waiting screen">
+
+        <div class="waiting-card player-card fade-in">
+          <div class="waiting-card__icon">
+            <i class="fa-solid fa-hourglass-half"></i>
+          </div>
+          <h2 class="waiting-card__title">Get Ready!</h2>
+          <p class="waiting-card__team" id="waiting-team-name"></p>
+
+          <div class="waiting-checklist">
+            <div class="waiting-check">
+              <span class="conn-dot conn-dot--connected"></span>
+              <span>Connected to Host</span>
+            </div>
+            <div class="waiting-check" id="waiting-members-check">
+              <i class="fa-solid fa-users" style="color:var(--primary-400)"></i>
+              <span><strong id="waiting-connected">0</strong> / <strong id="waiting-total">0</strong> Members Connected</span>
+            </div>
+            <div class="waiting-check" id="waiting-words-check">
+              <i class="fa-solid fa-list-ul" style="color:var(--primary-400)"></i>
+              <span>Words: <strong id="waiting-words">5 / 5</strong> Submitted</span>
+            </div>
+            <div class="waiting-check" id="waiting-roles-check">
+              <i class="fa-solid fa-masks-theater" style="color:var(--primary-400)"></i>
+              <span>Roles: <strong>Assigned</strong></span>
+            </div>
+          </div>
+
+          <div class="waiting-spinner">
+            <div class="spinner-ring"></div>
+            <p class="waiting-spinner__text">Waiting for the host to start…</p>
+          </div>
+        </div>
+
+      </div><!-- /#view-waiting -->
+
+    </main>
+
+    <!-- ========================================================
+         BOTTOM NAV
+    ======================================================== -->
+    <nav class="bottom-nav" id="bottom-nav" role="navigation" aria-label="Main navigation">
+      <button class="bottom-nav__item bottom-nav__item--active" data-tab="teams" id="nav-teams" aria-label="Teams" aria-selected="true">
+        <i class="fa-solid fa-users"></i>
+        <span>Teams</span>
+      </button>
+      <button class="bottom-nav__item" data-tab="words" id="nav-words" aria-label="Words" aria-selected="false">
+        <i class="fa-solid fa-list-ul"></i>
+        <span>Words</span>
+      </button>
+      <button class="bottom-nav__item" data-tab="settings" id="nav-settings" aria-label="Settings" aria-selected="false">
+        <i class="fa-solid fa-gear"></i>
+        <span>Settings</span>
+      </button>
+    </nav>
+
+  </div><!-- /#app-shell -->
+
+  <!-- ============================================================
+       FULLSCREEN: COUNTDOWN
+  ============================================================ -->
+  <div class="fullscreen-view" id="view-countdown" hidden aria-label="Countdown">
+    <div class="countdown-inner">
+      <p class="countdown-round" id="countdown-round-label">Round 1</p>
+      <p class="countdown-label">GET READY!</p>
+      <div class="countdown-number" id="countdown-number">3</div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       FULLSCREEN: TAGASAGOT GAME VIEW
+  ============================================================ -->
+  <div class="fullscreen-view fullscreen-view--game" id="view-tagasagot" hidden aria-label="Tagasagot game view">
+
+    <!-- Game top bar -->
+    <div class="game-topbar">
+      <div class="game-topbar__round" id="game-round-label">Round 1</div>
+      <div class="game-topbar__score">
+        <i class="fa-solid fa-star" style="color:var(--gold)"></i>
+        <span id="game-score">0</span> pts
+      </div>
+    </div>
+
+    <!-- Timer -->
+    <div class="game-timer" id="game-timer">
+      <span class="game-timer__digits" id="game-timer-digits">1:24</span>
+    </div>
+
+    <!-- Team + score -->
+    <div class="game-team-row">
+      <span class="game-team-name" id="game-team-name"></span>
+    </div>
+
+    <!-- Role card -->
+    <div class="game-role-card">
+      <p class="game-role-card__eyebrow">
+        <i class="fa-solid fa-comments"></i> TAGASAGOT
+      </p>
+      <p class="game-role-card__instruction">Give clues to the Manghuhula!</p>
+      <p class="game-role-card__hint">Answer using:</p>
+      <div class="game-answer-btns">
+        <button class="game-ans-btn game-ans-btn--yes" id="btn-ans-oo">
+          OO
+        </button>
+        <button class="game-ans-btn game-ans-btn--no" id="btn-ans-hindi">
+          HINDI
+        </button>
+        <button class="game-ans-btn game-ans-btn--maybe" id="btn-ans-pwede">
+          PWEDE
+        </button>
+      </div>
+    </div>
+
+    <!-- Progress -->
+    <div class="game-progress-card">
+      <div class="game-progress-top">
+        <i class="fa-solid fa-chart-simple"></i>
+        <span id="game-progress-label">0 / 0 Words</span>
+        <span id="game-progress-pct">0%</span>
+      </div>
+      <div class="game-progress-bar-wrap">
+        <div class="game-progress-bar" id="game-progress-bar" style="width:60%"></div>
+      </div>
+    </div>
+
+    <!-- Bottom nav inside game -->
+    <nav class="bottom-nav bottom-nav--game" aria-label="Game navigation">
+      <button class="bottom-nav__item" data-tab="teams" aria-label="Teams">
+        <i class="fa-solid fa-users"></i><span>Teams</span>
+      </button>
+      <button class="bottom-nav__item" data-tab="words" aria-label="Words">
+        <i class="fa-solid fa-list-ul"></i><span>Words</span>
+      </button>
+      <button class="bottom-nav__item" data-tab="settings" aria-label="Settings">
+        <i class="fa-solid fa-gear"></i><span>Settings</span>
+      </button>
+    </nav>
+
+  </div><!-- /#view-tagasagot -->
+
+  <!-- ============================================================
+       FULLSCREEN: QR SCANNER
+  ============================================================ -->
+  <div class="fullscreen-view" id="view-qr-scanner" hidden aria-label="QR Scanner">
+    <div class="qr-scanner-shell">
+
+      <div class="qr-scanner-header">
+        <button class="qr-scanner-back" id="btn-qr-back" aria-label="Go back">
+          <i class="fa-solid fa-arrow-left"></i>
+        </button>
+        <h1 class="qr-scanner-title">
+          <i class="fa-solid fa-camera"></i> Scan QR Code
+        </h1>
+      </div>
+
+      <!-- Camera / video -->
+      <div class="qr-viewport" id="qr-viewport">
+        <video id="qr-video" class="qr-video" autoplay muted playsinline></video>
+        <div class="qr-overlay-ui" aria-hidden="true">
+          <div class="qr-frame">
+            <span class="qr-frame__corner qr-frame__corner--tl"></span>
+            <span class="qr-frame__corner qr-frame__corner--tr"></span>
+            <span class="qr-frame__corner qr-frame__corner--bl"></span>
+            <span class="qr-frame__corner qr-frame__corner--br"></span>
+            <div class="qr-scan-line"></div>
+          </div>
+        </div>
+        <!-- Camera error state -->
+        <div class="qr-error-state" id="qr-error-state" hidden>
+          <i class="fa-solid fa-camera-slash"></i>
+          <p id="qr-error-msg">Camera access was denied.</p>
+          <button class="player-btn player-btn--outline" id="btn-retry-cam">
+            <i class="fa-solid fa-rotate-right"></i> Retry
+          </button>
+        </div>
+      </div>
+
+      <p class="qr-scanner-hint">Point your camera at the host's QR code.</p>
+
+      <button class="player-btn player-btn--outline qr-enter-code-btn" id="btn-enter-code-instead">
+        <i class="fa-solid fa-keyboard"></i> Enter Code Instead
+      </button>
+
+    </div>
+  </div><!-- /#view-qr-scanner -->
+
+  <!-- ============================================================
+       FULLSCREEN: CONNECTION SUCCESS
+  ============================================================ -->
+  <div class="fullscreen-view fullscreen-view--success" id="view-conn-success" hidden aria-label="Connection successful">
+    <div class="conn-success-inner">
+      <div class="conn-success-icon">
+        <i class="fa-solid fa-circle-check"></i>
+      </div>
+      <h1 class="conn-success-title">Connected!</h1>
+      <p class="conn-success-sub">Your team is now connected to the host.</p>
+      <button class="player-btn player-btn--primary" id="btn-back-to-team">
+        <i class="fa-solid fa-arrow-left"></i> Back to Team
+      </button>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       MODALS
+  ============================================================ -->
+
+  <!-- Add Member -->
+  <div class="modal-overlay" id="modal-add-member" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="add-member-title">
+    <div class="modal slide-up">
+      <button class="modal__close" id="close-add-member"><i class="fa-solid fa-xmark"></i></button>
+      <div class="modal__header">
+        <div class="modal__icon modal__icon--blue"><i class="fa-solid fa-user-plus"></i></div>
+        <div>
+          <h2 class="modal__title" id="add-member-title">Add Member</h2>
+          <p class="modal__subtitle">Add a new player to your team.</p>
+        </div>
+      </div>
+      <form class="modal__form" id="form-add-member" novalidate>
+        <div class="form-group">
+          <label class="form-label" for="add-member-name">
+            <i class="fa-solid fa-user"></i> Username
+          </label>
+          <input type="text" id="add-member-name" class="form-input" placeholder="Enter username" maxlength="40" required />
+          <span class="form-error" id="err-add-member"></span>
+        </div>
+        <div class="modal__actions">
+          <button type="button" class="btn-cancel" id="cancel-add-member">Cancel</button>
+          <button type="submit" class="btn-confirm">
+            <i class="fa-solid fa-check"></i> Add Member
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Add Word -->
+  <div class="modal-overlay" id="modal-add-word" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="add-word-title">
+    <div class="modal slide-up">
+      <button class="modal__close" id="close-add-word"><i class="fa-solid fa-xmark"></i></button>
+      <div class="modal__header">
+        <div class="modal__icon modal__icon--blue"><i class="fa-solid fa-plus"></i></div>
+        <div>
+          <h2 class="modal__title" id="add-word-title">Add Word</h2>
+          <p class="modal__subtitle">Submit a word for the game.</p>
+        </div>
+      </div>
+      <form class="modal__form" id="form-add-word" novalidate>
+        <div class="form-group">
+          <label class="form-label" for="add-word-input">
+            <i class="fa-solid fa-font"></i> Word
+          </label>
+          <input type="text" id="add-word-input" class="form-input" placeholder="Enter word" maxlength="40" required />
+          <span class="form-error" id="err-add-word"></span>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="add-word-category">
+            <i class="fa-solid fa-tag"></i> Category
+          </label>
+          <select id="add-word-category" class="form-select" required>
+            <option value="">Select Category</option>
+            <option value="Tao / Person">Tao / Person</option>
+            <option value="Bagay / Object">Bagay / Object</option>
+            <option value="Hayop / Animal">Hayop / Animal</option>
+            <option value="Pagkain / Food">Pagkain / Food</option>
+            <option value="Lugar / Place">Lugar / Place</option>
+          </select>
+          <span class="form-error" id="err-add-word-cat"></span>
+        </div>
+        <div class="modal__actions">
+          <button type="button" class="btn-cancel" id="cancel-add-word">Cancel</button>
+          <button type="submit" class="btn-confirm">
+            <i class="fa-solid fa-check"></i> Add Word
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Enter Code Instead (from QR scanner) -->
+  <div class="modal-overlay" id="modal-enter-code" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="enter-code-title">
+    <div class="modal slide-up">
+      <button class="modal__close" id="close-enter-code"><i class="fa-solid fa-xmark"></i></button>
+      <div class="modal__header">
+        <div class="modal__icon modal__icon--blue"><i class="fa-solid fa-keyboard"></i></div>
+        <div>
+          <h2 class="modal__title" id="enter-code-title">Enter Game Code</h2>
+          <p class="modal__subtitle">Type the code shown on the host screen.</p>
+        </div>
+      </div>
+      <form class="modal__form" id="form-enter-code" novalidate>
+        <div class="form-group">
+          <label class="form-label" for="input-game-code">
+            <i class="fa-solid fa-hashtag"></i> Game Code
+          </label>
+          <input type="text" id="input-game-code" class="form-input form-input--code"
+            placeholder="e.g. PH-1234" maxlength="16" autocomplete="off" required />
+          <span class="form-error" id="err-game-code"></span>
+        </div>
+        <div class="modal__actions">
+          <button type="button" class="btn-cancel" id="cancel-enter-code">Cancel</button>
+          <button type="submit" class="btn-confirm">
+            <i class="fa-solid fa-right-to-bracket"></i> Connect
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="player-toast" id="player-toast" aria-live="polite"></div>
+
+  <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+  <script src="../../js/api/api.js"></script>
+  <script src="../../js/api/game-api.js"></script>
+  <script src="../../js/api/team-api.js"></script>
+  <script src="../../js/api/word-api.js"></script>
+  <script src="../../js/api/device-api.js"></script>
+  <script src="../../js/api/connect.js"></script>
+  <script src="../../js/api/realtime.js"></script>
+  <script src="../../js/player/player.js"></script>
+</body>
+</html>

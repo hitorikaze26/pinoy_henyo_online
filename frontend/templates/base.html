@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Pinoy Henyo Online – {{page_description}}" />
+  <title>{{page_title}} – Pinoy Henyo Online</title>
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="{{path_to_assets}}/logo/favicon.svg" />
+  <link rel="apple-touch-icon" href="{{path_to_assets}}/logo/apple-touch-icon.png" />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+
+  <!-- Global CSS (must load first) -->
+  <link rel="stylesheet" href="{{path_to_css}}/global.css" />
+  <!-- Page-specific CSS (overrides global) -->
+  <link rel="stylesheet" href="{{path_to_css}}/pages/{{page_css}}" />
+
+  <!-- Socket.IO CDN (where needed) -->
+  <!-- <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script> -->
+</head>
+<body>
+
+  <!-- Top nav injected via components/header.html (or inline for static build) -->
+  <!-- <div id="header-mount"></div> -->
+
+  <!-- Sidebar + main shell for host pages -->
+  <!-- <div class="dash-shell">
+       <div id="sidebar-mount"></div>
+       <main class="dash-main"> ... page content ... </main>
+     </div> -->
+
+  <!-- Common footer -->
+  <!-- <div id="footer-mount"></div> -->
+
+  <!-- Toast container (shared) -->
+  <div class="copy-toast" id="copy-toast" aria-live="polite"></div>
+
+  <!-- Core JS (load before page JS) -->
+  <script src="{{path_to_js}}/core/config.js"></script>
+  <script src="{{path_to_js}}/core/session.js"></script>
+  <script src="{{path_to_js}}/core/utils.js"></script>
+  <script src="{{path_to_js}}/core/notifications.js"></script>
+  <script src="{{path_to_js}}/core/modal.js"></script>
+
+  <!-- API layer -->
+  <script src="{{path_to_js}}/api/api.js"></script>
+  <!-- additional api/* includes as needed -->
+
+  <!-- Page JS -->
+  <!-- <script src="{{path_to_js}}/pages/{{page_js}}"></script> -->
+
+  <!-- Component loaders (vanilla JS — no framework) -->
+  <script src="{{path_to_js}}/components/header.js"></script>
+  <script src="{{path_to_js}}/components/sidebar.js"></script>
+</body>
+</html>
+<!--
+  How to use this base for vanilla HTML (no SSR):
+  - Copy this file as your starting point when creating a new page.
+  - Replace {{placeholders}} with real relative paths based on file location:
+      index.html (root):               path_to_css=css, path_to_assets=assets, path_to_js=js
+      pages/host/*.html:               path_to_css=../../css, path_to_assets=../../assets, path_to_js=../../js
+      pages/player/*.html:             same as above
+  - Or load components dynamically:
+      fetch('../../components/header.html').then(r=>r.text()).then(h=> document.getElementById('header-mount').innerHTML=h)
+-->

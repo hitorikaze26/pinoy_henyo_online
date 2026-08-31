@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Pinoy Henyo Online – Host Dashboard" />
+  <title>Host Dashboard – Pinoy Henyo Online</title>
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="../../assets/logo/favicon.svg" />
+  <link rel="apple-touch-icon" href="../../assets/logo/apple-touch-icon.png" />
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+
+  <!-- Global CSS (must load first) -->
+  <link rel="stylesheet" href="../../css/global.css" />
+  <!-- Dashboard Stylesheet -->
+  <link rel="stylesheet" href="../../css/pages/host_dashboard.css" />
+</head>
+
+<body>
+
+  <!-- ============================================================
+       TOP NAV BAR
+  ============================================================ -->
+  <header class="dash-nav" id="dash-nav" role="banner">
+
+    <!-- Left: Logo → links back to lobby -->
+    <div class="dash-nav__left">
+      <a href="../../index.html" class="dash-nav__logo-link" aria-label="Back to Lobby">
+        <img
+          src="../../assets/logo/logo-pinoy-henyo-white.png"
+          alt="Pinoy Henyo Online"
+          class="dash-nav__logo"
+          loading="eager"
+        />
+      </a>
+    </div>
+
+    <!-- Center: Round indicator -->
+    <div class="dash-nav__center">
+      <span class="dash-nav__round-label">Round</span>
+      <span class="dash-nav__round-num" id="round-number">1</span>
+    </div>
+
+    <!-- Right: Live indicator + Game code -->
+    <div class="dash-nav__right">
+      <div class="dash-nav__live">
+        <span class="dash-nav__live-dot" aria-label="Live"></span>
+        <span class="dash-nav__live-text">Live</span>
+      </div>
+      <button class="dash-nav__code-btn" id="btn-copy-code" aria-label="Copy game code" title="Click to copy">
+        <span id="game-code-display">------</span>
+        <i class="fa-regular fa-copy" id="copy-icon"></i>
+      </button>
+    </div>
+
+  </header>
+
+  <!-- ============================================================
+       SHELL: Sidebar + Main
+  ============================================================ -->
+  <div class="dash-shell">
+
+    <!-- ========================================================
+         SIDEBAR
+    ======================================================== -->
+    <aside class="dash-sidebar" role="navigation" aria-label="Dashboard navigation">
+
+      <!-- Sidebar Logo -->
+      <div class="sidebar__logo">
+        <img
+          src="../../assets/logo/logo-pinoy-henyo-white.png"
+          alt="Pinoy Henyo Online"
+          class="sidebar__logo-img"
+          loading="eager"
+        />
+      </div>
+
+      <!-- Nav Links -->
+      <nav class="sidebar__nav">
+        <a href="host_dashboard.html" class="sidebar__nav-item sidebar__nav-item--active" id="nav-dashboard" aria-current="page">
+          <i class="fa-solid fa-gauge-high"></i>
+          <span>Dashboard</span>
+        </a>
+        <a href="teams.html" class="sidebar__nav-item" id="nav-teams">
+          <i class="fa-solid fa-users"></i>
+          <span>Teams</span>
+        </a>
+        <a href="words.html" class="sidebar__nav-item" id="nav-words">
+          <i class="fa-solid fa-list"></i>
+          <span>Words</span>
+        </a>
+        <a href="#" class="sidebar__nav-item" id="nav-connections">
+          <i class="fa-solid fa-wifi"></i>
+          <span>Connections</span>
+        </a>
+        <a href="#" class="sidebar__nav-item" id="nav-settings">
+          <i class="fa-solid fa-gear"></i>
+          <span>Settings</span>
+        </a>
+      </nav>
+
+      <!-- Sidebar Footer: Back to Lobby -->
+      <div class="sidebar__footer">
+        <a href="../../index.html" class="sidebar__lobby-btn" id="btn-back-lobby" aria-label="Back to Lobby">
+          <i class="fa-solid fa-arrow-left"></i>
+          <span>Back to Lobby</span>
+        </a>
+      </div>
+
+    </aside>
+
+    <!-- ========================================================
+         MAIN CONTENT
+    ======================================================== -->
+    <main class="dash-main" role="main" aria-label="Host Dashboard">
+
+      <!-- ======================================================
+           3-COLUMN GRID
+      ====================================================== -->
+      <div class="dash-grid">
+
+        <!-- ====================================================
+             LEFT COLUMN — Game Control Panel
+        ==================================================== -->
+        <section class="dash-col dash-col--left" aria-label="Game Control Panel">
+
+          <!-- Current Turn -->
+          <div class="ctrl-card" id="card-current-turn">
+            <p class="ctrl-card__label">
+              <i class="fa-solid fa-bolt"></i>
+              Current Turn
+            </p>
+            <div class="ctrl-card__team-wrap">
+              <select class="ctrl-card__team-select" id="team-select" aria-label="Select active team">
+                <!-- Options populated by JS -->
+              </select>
+            </div>
+          </div>
+
+          <!-- Category -->
+          <div class="ctrl-card ctrl-card--sm">
+            <p class="ctrl-card__label">
+              <i class="fa-solid fa-tag"></i>
+              Category
+            </p>
+            <p class="ctrl-card__category" id="current-category">Hayop / Animal</p>
+          </div>
+
+          <!-- Word Display -->
+          <div class="word-card" id="word-card" aria-live="polite" aria-atomic="true">
+            <p class="word-card__eyebrow">
+              <i class="fa-solid fa-eye-slash"></i>
+              WORD
+            </p>
+            <div class="word-card__word-wrap">
+              <h1 class="word-card__word" id="current-word">—</h1>
+            </div>
+          </div>
+
+          <!-- Team Status Bar -->
+          <div class="team-status-bar" aria-label="Team status">
+            <p class="team-status-bar__label">Team Status</p>
+            <div class="team-status-bar__grid" id="team-status-grid">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+
+          <!-- Next Round -->
+          <button class="next-round-btn" id="btn-next-round" aria-label="Advance to next round">
+            <i class="fa-solid fa-forward-step"></i>
+            <span>Next Round</span>
+            <span class="next-round-btn__badge" id="next-round-badge">Round 2</span>
+          </button>
+
+          <!-- Reset Round -->
+          <button class="reset-round-btn" id="btn-reset-round" aria-label="Reset current round">
+            <i class="fa-solid fa-rotate-left"></i>
+            <span>Reset Round</span>
+          </button>
+
+        </section>
+
+        <!-- ====================================================
+             MIDDLE COLUMN — Timer & Progress
+        ==================================================== -->
+        <section class="dash-col dash-col--middle" aria-label="Timer and Progress">
+
+          <!-- Timer Card — all game controls live here -->
+          <div class="timer-card" id="timer-card">
+
+            <!-- Eyebrow label -->
+            <p class="timer-card__eyebrow">
+              <i class="fa-regular fa-clock"></i>
+              TIME REMAINING
+            </p>
+
+            <!-- Big timer digits -->
+            <div class="timer-card__display" aria-live="polite" aria-atomic="true" aria-label="Timer">
+              <span class="timer-card__digits" id="timer-display">1:35</span>
+            </div>
+
+            <!-- Row 1: utility controls — Sound · Set Time · Reset -->
+            <div class="timer-card__util-row">
+              <button class="ctrl-btn ctrl-btn--icon ctrl-btn--sound" id="btn-sound" aria-label="Toggle sound" title="Toggle sound">
+                <i class="fa-solid fa-volume-high" id="sound-icon"></i>
+              </button>
+              <button class="ctrl-btn ctrl-btn--settime" id="btn-set-time" aria-label="Set time">
+                <i class="fa-regular fa-clock"></i>
+                Set Time
+              </button>
+              <button class="ctrl-btn ctrl-btn--reset" id="btn-timer-reset" aria-label="Reset timer">
+                <i class="fa-solid fa-rotate-left"></i>
+                Reset
+              </button>
+            </div>
+
+            <!-- Row 2: game action controls — -3s · Start/Pause · Stop · +3s -->
+            <div class="timer-card__action-row">
+              <button class="ctrl-btn ctrl-btn--penalty" id="btn-penalty" aria-label="Subtract 3 seconds">
+                <i class="fa-solid fa-minus"></i>
+                <span>3s</span>
+              </button>
+              <button class="ctrl-btn ctrl-btn--pause" id="btn-pause-play" aria-label="Start/Pause timer">
+                <i class="fa-solid fa-play" id="pause-icon"></i>
+              </button>
+              <button class="ctrl-btn ctrl-btn--stop" id="btn-stop" aria-label="Stop round">
+                <i class="fa-solid fa-stop"></i>
+                Stop
+              </button>
+              <button class="ctrl-btn ctrl-btn--bonus" id="btn-bonus" aria-label="Add 3 seconds">
+                <i class="fa-solid fa-plus"></i>
+                <span>3s</span>
+              </button>
+            </div>
+
+            <!-- Row 3: Correct / Pass -->
+            <div class="action-buttons">
+              <button class="action-btn action-btn--correct" id="btn-correct" aria-label="Mark word as correct">
+                <i class="fa-solid fa-check"></i>
+                Correct
+              </button>
+              <button class="action-btn action-btn--pass" id="btn-pass" aria-label="Pass this word">
+                <i class="fa-solid fa-forward"></i>
+                Pass
+              </button>
+            </div>
+
+          </div>
+
+          <!-- Progress Card -->
+          <div class="progress-card" id="progress-card">
+            <div class="progress-card__header">
+              <p class="progress-card__label">
+                <i class="fa-solid fa-chart-simple"></i>
+                Progress
+              </p>
+              <span class="progress-card__fraction">
+                <span id="words-correct">0</span>/<span id="words-total">0</span> Words
+              </span>
+            </div>
+
+            <div class="progress-bar-wrap" role="progressbar" aria-valuenow="60" aria-valuemin="0" aria-valuemax="100" aria-label="Word progress">
+              <div class="progress-bar" id="progress-bar" style="width: 60%;"></div>
+            </div>
+            <p class="progress-card__pct" id="progress-pct">60%</p>
+
+            <div class="progress-card__score-row">
+              <div class="progress-card__stat">
+                <span class="progress-card__stat-label">Score</span>
+                <span class="progress-card__stat-val" id="current-score">0</span>
+              </div>
+              <div class="progress-card__stat">
+                <span class="progress-card__stat-label">Penalties</span>
+                <span class="progress-card__stat-val progress-card__stat-val--danger" id="current-penalties">0</span>
+              </div>
+              <div class="progress-card__stat">
+                <span class="progress-card__stat-label">Passes</span>
+                <span class="progress-card__stat-val progress-card__stat-val--muted" id="current-passes">0</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Next Word Preview -->
+          <div class="next-word-card">
+            <p class="next-word-card__label">
+              <i class="fa-solid fa-forward-step"></i>
+              Up Next
+            </p>
+            <div class="next-word-card__words" id="word-queue">
+              <!-- Populated by JS — first item is highlighted as "next" -->
+            </div>
+          </div>
+
+        </section>
+
+        <!-- ====================================================
+             RIGHT COLUMN — Leaderboard
+        ==================================================== -->
+        <section class="dash-col dash-col--right" aria-label="Leaderboard">
+
+          <!-- Leaderboard Card -->
+          <div class="leaderboard-card">
+            <div class="leaderboard-card__header">
+              <p class="leaderboard-card__title">
+                <i class="fa-solid fa-trophy"></i>
+                Leaderboard
+              </p>
+              <span class="leaderboard-card__round-badge">Round 1</span>
+            </div>
+
+            <ol class="leaderboard-list" id="leaderboard-list" aria-label="Leaderboard">
+              <!-- Populated by JS -->
+            </ol>
+
+            <button class="leaderboard-view-all" id="btn-view-all-teams" aria-label="View all teams">
+              <i class="fa-solid fa-chart-bar"></i>
+              View All Teams
+            </button>
+          </div>
+
+          <!-- QR Code Card -->
+          <div class="qr-card">
+            <div class="qr-card__header">
+              <p class="qr-card__label">
+                <i class="fa-solid fa-qrcode"></i>
+                Join Game
+              </p>
+              <span class="qr-card__code" id="qr-code-label">------</span>
+            </div>
+            <div class="qr-card__placeholder" aria-label="QR Code placeholder">
+              <div class="qr-card__grid" aria-hidden="true" id="qr-visual"></div>
+              <p class="qr-card__hint">Scan to join</p>
+            </div>
+          </div>
+
+        </section>
+
+      </div><!-- /.dash-grid -->
+
+      <!-- ======================================================
+           BOTTOM CONNECTION STATUS BAR
+      ====================================================== -->
+      <footer class="connection-bar" id="connection-bar" aria-label="Connection status">
+        <div class="connection-bar__left">
+          <span class="connection-bar__dot connection-bar__dot--online" aria-hidden="true"></span>
+          <span class="connection-bar__text">
+            Connected Teams: <strong id="connected-count">0</strong>/<strong id="total-count">0</strong>
+          </span>
+        </div>
+        <div class="connection-bar__teams" id="connection-team-chips">
+          <!-- Populated by JS -->
+        </div>
+        <div class="connection-bar__right">
+          <button class="connection-bar__qr-btn" id="btn-show-qr" aria-label="Show QR Code">
+            <i class="fa-solid fa-qrcode"></i>
+            QR Code
+          </button>
+        </div>
+      </footer>
+
+    </main>
+
+  </div><!-- /.dash-shell -->
+
+  <!-- ============================================================
+       MODALS
+  ============================================================ -->
+
+  <!-- Set Time Modal -->
+  <div class="dash-modal-overlay" id="modal-set-time" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="set-time-title">
+    <div class="dash-modal">
+      <button class="dash-modal__close" id="close-set-time" aria-label="Close">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+      <h2 class="dash-modal__title" id="set-time-title">
+        <i class="fa-regular fa-clock"></i>
+        Set Timer
+      </h2>
+      <div class="set-time-inputs">
+        <div class="set-time-group">
+          <label class="set-time-label" for="input-minutes">Minutes</label>
+          <input type="number" id="input-minutes" class="set-time-input" min="0" max="9" value="1" />
+        </div>
+        <span class="set-time-colon">:</span>
+        <div class="set-time-group">
+          <label class="set-time-label" for="input-seconds">Seconds</label>
+          <input type="number" id="input-seconds" class="set-time-input" min="0" max="59" value="35" />
+        </div>
+      </div>
+      <div class="dash-modal__presets">
+        <button class="preset-btn" data-seconds="60">1:00</button>
+        <button class="preset-btn" data-seconds="90">1:30</button>
+        <button class="preset-btn" data-seconds="120">2:00</button>
+        <button class="preset-btn" data-seconds="180">3:00</button>
+      </div>
+      <div class="dash-modal__actions">
+        <button class="dash-modal__confirm" id="btn-confirm-time">
+          <i class="fa-solid fa-check"></i>
+          Apply
+        </button>
+        <button class="dash-modal__cancel" id="btn-cancel-time">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- View All Teams Modal -->
+  <div class="dash-modal-overlay" id="modal-all-teams" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="all-teams-title">
+    <div class="dash-modal dash-modal--wide">
+      <button class="dash-modal__close" id="close-all-teams" aria-label="Close">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+      <h2 class="dash-modal__title" id="all-teams-title">
+        <i class="fa-solid fa-users"></i>
+        All Teams Overview
+      </h2>
+      <div class="all-teams-table-wrap">
+        <table class="all-teams-table" aria-label="All teams scores">
+          <thead>
+            <tr>
+              <th scope="col">Rank</th>
+              <th scope="col">Team</th>
+              <th scope="col">Score</th>
+              <th scope="col">Penalties</th>
+              <th scope="col">Passes</th>
+              <th scope="col">Status</th>
+            </tr>
+          </thead>
+          <tbody id="all-teams-tbody">
+            <!-- Populated by JS -->
+          </tbody>
+        </table>
+      </div>
+      <div class="dash-modal__actions">
+        <button class="dash-modal__cancel" id="btn-close-all-teams">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- QR Code Modal -->
+  <div class="dash-modal-overlay" id="modal-qr-display" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="qr-display-title">
+    <div class="dash-modal">
+      <button class="dash-modal__close" id="close-qr-display" aria-label="Close">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+      <h2 class="dash-modal__title" id="qr-display-title">
+        <i class="fa-solid fa-qrcode"></i>
+        Scan to Join
+      </h2>
+      <p class="dash-modal__subtitle">Show this to players to join the game.</p>
+      <div class="qr-modal-visual" id="qr-modal-grid" aria-label="QR Code"></div>
+      <div class="qr-modal-code">
+        <span id="qr-modal-code-text">------</span>
+        <button class="qr-modal-copy" id="btn-copy-modal-code" aria-label="Copy code">
+          <i class="fa-regular fa-copy"></i>
+        </button>
+      </div>
+      <div class="dash-modal__actions">
+        <button class="dash-modal__cancel" id="btn-close-qr-display">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dashboard JS -->
+  <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+  <script src="../../js/api/api.js"></script>
+  <script src="../../js/api/game-api.js"></script>
+  <script src="../../js/api/team-api.js"></script>
+  <script src="../../js/api/word-api.js"></script>
+  <script src="../../js/api/round-api.js"></script>
+  <script src="../../js/api/match-api.js"></script>
+  <script src="../../js/api/turn-api.js"></script>
+  <script src="../../js/api/connect.js"></script>
+  <script src="../../js/api/realtime.js"></script>
+  <script src="../../js/host/host_dashboard.js"></script>
+
+</body>
+</html>
