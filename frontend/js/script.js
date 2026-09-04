@@ -138,10 +138,14 @@ document.getElementById('btn-are-you-host').addEventListener('click', async () =
     API.setHostContext(game);
     window.PINOY_GAME = game;
 
-    // Create the host's first team (required to place the host in a team).
-    const team = await TeamAPI.createTeam(game.game_id, 'Host Team', 'Host');
-    API.setTeamId(team.team_id);
-    API.setSessionToken(null);
+    // Register this game in the device's "My Games" list so it can be
+    // resumed/reviewed from the lobby later (see api.js registry docs).
+    API.recordMyGame({
+      game_id: game.game_id,
+      game_code: game.game_code,
+      host_token: game.host_session_token,
+      status: game.status,
+    });
 
     btn.disabled = false;
     btn.innerHTML = original;
@@ -237,6 +241,14 @@ document.getElementById('form-start').addEventListener('submit', (e) => {
       API.setGameId(game.game_id);
       API.setGameCode(game.game_code);
       window.PINOY_GAME = game;
+
+      // Register this game in the device's "My Games" list (see api.js).
+      API.recordMyGame({
+        game_id: game.game_id,
+        game_code: game.game_code,
+        host_token: game.host_session_token,
+        status: game.status,
+      });
 
       // Create the player's team (the creator becomes the team leader).
       const team = await TeamAPI.createTeam(game.game_id, teamname, username);

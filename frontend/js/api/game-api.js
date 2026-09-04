@@ -71,6 +71,31 @@ const GameAPI = (() => {
     return API.request(`/games/${gameId}/statistics`, { host: true });
   }
 
+  // POST /api/games/<id>/save -> GAME_SAVED checkpoint marker
+  // DB is the source of truth; this never duplicates the game.
+  function save(gameId) {
+    return API.request(`/games/${gameId}/save`, { method: 'POST', host: true });
+  }
+
+  // GET /api/games/<id>/state (host only) -> recoverable resume snapshot
+  function state(gameId) {
+    return API.request(`/games/${gameId}/state`, { host: true });
+  }
+
+  // POST /api/games/<id>/leave -> end host device session, keep game
+  function leave(gameId) {
+    return API.request(`/games/${gameId}/leave`, { method: 'POST', host: true });
+  }
+
+  // DELETE /api/games/<id>  (host only, terminal games only, needs confirm)
+  function deleteGame(gameId, { confirm = true } = {}) {
+    return API.request(`/games/${gameId}`, {
+      method: 'DELETE',
+      host: true,
+      body: { confirm },
+    });
+  }
+
   return {
     create,
     get,
@@ -87,6 +112,10 @@ const GameAPI = (() => {
     gameHistory,
     leaderboard,
     statistics,
+    save,
+    state,
+    leave,
+    deleteGame,
   };
 })();
 

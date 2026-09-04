@@ -40,6 +40,7 @@ const API = (() => {
      ============================================================ */
   const STORAGE_KEY = 'pinoy_henyo_session';
   const DEVICE_KEY  = 'pinoy_henyo_device_id';
+  const MY_GAMES_KEY = 'pinoy_henyo_my_games';
 
   // In-memory default context, seeded from shared window fields.
   const ctx = {
@@ -101,6 +102,83 @@ const API = (() => {
     } catch (e) {
       return 'dev-' + Math.random().toString(36).slice(2, 12);
     }
+  }
+
+  /* ============================================================
+     My Games registry.
+     ------------------------------------------------------------
+     The backend scopes GET /api/games/history to a single host
+     token, but every game gets its OWN host token at creation, so
+     history alone can only ever list the current game. To give the
+     lobby a real "games from this device" list we persist a small
+     per-game registry HERE (localStorage) that records each game's
+     id / code / host_token / status on this browser. The token is
+     never exposed by the server for other games, so this client-side
+     index is the only place it is available; live status/winner
+     fields can still be refreshed from the public status endpoint.
+     ============================================================ */
+  function loadMyGames() {
+    try {
+      const raw = localStorage.getItem(MY_GAMES_KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function saveMyGames(list) {
+    try { localStorage.setItem(MY_GAMES_KEY, JSON.stringify(list)); }
+    catch (e) { /* storage disabled */ }
+  }
+
+  // Upsert a game into the registry (fields never deleted when absent).
+  function recordMyGame(info) {
+    if (!info || info.game_id == null) return;
+    const list = loadMyGames();
+    const existing = list.find((g) => String(g.game_id) === String(info.game_id));
+    if (existing) {
+      if (info.game_code) existing.game_code = info.game_code;
+      if (info.host_token) existing.host_token = info.host_token;
+      if (info.status) existing.status = info.status;
+      if (info.created_at) existing.created_at = info.created_at;
+      if (info.saved_at) existing.saved_at = info.saved_at;
+      if (info.winner_name) existing.winner_name = info.winner_name;
+    } else {
+      list.push({
+        game_id: info.game_id,
+        game_code: info.game_code || '',
+        host_token: info.host_token || ctx.hostToken,
+        status: info.status || null,
+        created_at: info.created_at || new Date().toISOString(),
+        saved_at: info.saved_at || null,
+        winner_name: info.winner_name || null,
+      });
+    }
+    saveMyGames(list);
+  }
+
+  // Merge a partial update into an existing registry entry.
+  function updateMyGame(partial) {
+    if (!partial || partial.game_id == null) return;
+    const list = loadMyGames();
+    const match = list.find((g) => String(g.game_id) === String(partial.game_id));
+    if (!match) return;
+    Object.keys(partial).forEach((k) => {
+      if (k !== 'game_id' && partial[k] !== undefined && partial[k] !== null) {
+        match[k] = partial[k];
+      }
+    });
+    saveMyGames(list);
+  }
+
+  function removeMyGame(gameId) {
+    if (gameId == null) return;
+    saveMyGames(loadMyGames().filter((g) => String(g.game_id) !== String(gameId)));
+  }
+
+  function clearMyGames() {
+    try { localStorage.removeItem(MY_GAMES_KEY); } catch (e) { /* ignore */ }
   }
 
   /* ---------- generic get/set that keep ctx + storage in sync ---------- */
@@ -413,6 +491,11 @@ const API = (() => {
     setTeamId,
     getGameCode,
     setGameCode,
+    getMyGames,
+    recordMyGame,
+    updateMyGame,
+    removeMyGame,
+    clearMyGames,
     request,
     withLoading,
     isLoading,

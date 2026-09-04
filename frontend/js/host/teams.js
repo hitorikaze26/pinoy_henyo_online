@@ -996,6 +996,104 @@ init();
 let rosterGameId     = API.getGameId() || null;
 let rosterRefreshing = false;
 
+/* ============================================================
+   CONNECTION APPROVAL (host teams page)
+   ------------------------------------------------------------
+   Pending connection requests must be actionable even when the
+   live ``connection_requested`` socket event was missed — e.g. the
+   page was opened after the request, or the socket was briefly
+   down. Roster seeds/refreshes therefore surface the first
+   undismissed pending team in the approval modal, not just realtime
+   events. ``dismissedApprovalTeamIds`` stops a team the host
+   explicitly closed from re-prompting until it re-requests.
+   Approved/declined teams naturally drop out (their status changes).
+   ============================================================ */
+let approvalTeamId           = null;
+let approvalBusy             = false;
+const dismissedApprovalTeamIds = new Set();
+
+function buildApprovalPayload(team) {
+  const leaderName = team.leaderName || (team.members[0] && team.members[0].name) || '—';
+  return {
+    team_id: team.id,
+    team_name: team.name,
+    connection_status: team.connectionStatus || 'CONNECTION_REQUESTED',
+    leader: { username: leaderName },
+    member_count: team.members.length,
+  };
+}
+
+function openApprovalModal(payload) {
+  if (!payload || payload.team_id == null) return;
+  let team = STATE.teams.find(t => String(t.id) === String(payload.team_id));
+  if (!team) {
+    team = applyConnectionStatus({
+      id: payload.team_id,
+      name: payload.team_name || 'Team ' + payload.team_id,
+      members: [],
+      leaderName: (payload.leader && payload.leader.username) || '',
+    }, payload.connection_status || 'CONNECTION_REQUESTED');
+    STATE.teams.push(team);
+  }
+  if (payload.team_name) team.name = payload.team_name;
+  applyConnectionStatus(team, payload.connection_status || 'CONNECTION_REQUESTED');
+
+  const leader = (payload.leader && payload.leader.username) || '—';
+  $('approve-team-name').textContent = team.name;
+  $('approve-leader-name').textContent = leader;
+  $('approve-member-count').textContent = (payload.member_count != null)
+    ? String(payload.member_count)
+    : String(team.members.length);
+  $('approve-connection-details').textContent =
+    `"${team.name}" is requesting to join the host screen for this game.`;
+  approvalBusy = false;
+  try { render(); } catch (e) {}
+  openModal($('modal-approve-connection'));
+}
+
+async function decideConnection(teamId, approve) {
+  if (approvalBusy) return;
+  approvalBusy = true;
+  const overlay = $('modal-approve-connection');
+  const team = STATE.teams.find(t => String(t.id) === String(teamId));
+  try {
+    $('btn-approve-connection').disabled = true;
+    $('btn-decline-connection').disabled = true;
+    const res = approve
+      ? await TeamAPI.approveConnection(API.getGameId(), teamId)
+      : await TeamAPI.declineConnection(API.getGameId(), teamId);
+    if (team) {
+      applyConnectionStatus(team, res.connection_status || (approve ? 'CONNECTED' : 'DECLINED'));
+    }
+    if (approvalTeamId === teamId) approvalTeamId = null;
+    closeModal(overlay);
+    try { render(); } catch (e) {}
+    showToast(approve
+      ? `Connected "${team ? team.name : 'team'}" to the host`
+      : `Declined "${team ? team.name : 'team'}"`);
+  } catch (err) {
+    console.error('[teams] connection decision failed', err);
+    closeModal(overlay);
+    showToast(err.message || 'Action failed');
+  } finally {
+    approvalBusy = false;
+    if (approvalTeamId === teamId) approvalTeamId = null;
+    $('btn-approve-connection').disabled = false;
+    $('btn-decline-connection').disabled = false;
+    maybePromptPendingApprovals();
+  }
+}
+
+function maybePromptPendingApprovals() {
+  if (approvalTeamId != null) return; // a decision modal is already showing
+  const pending = STATE.teams.find(t =>
+    t.connectionStatus === 'CONNECTION_REQUESTED' &&
+    !dismissedApprovalTeamIds.has(t.id));
+  if (!pending) return;
+  approvalTeamId = pending.id;
+  openApprovalModal(buildApprovalPayload(pending));
+}
+
 function gameplayRole(role) {
   return String(role || '').toUpperCase() === 'MANGHUHULA' ? 'Manghuhula' : 'Tagasagot';
 }
@@ -1006,6 +1104,7 @@ function seedRoster(teams) {
       id: team.team_id,
       name: team.team_name || 'Team ' + team.team_id,
       connectionStatus: team.connection_status || 'NOT_CONNECTED',
+      leaderName: (team.leader && team.leader.username) || null,
       members: (team.members || []).map(m => ({
         id: m.member_id,
         name: m.username,
@@ -1021,6 +1120,10 @@ function seedRoster(teams) {
     if (API.addKnownTeam) API.addKnownTeam(t.team_id, t.team_name);
   });
   render();
+  // Surface a missed request: a team pending on the roster whose live
+  // ``connection_requested`` event we did not receive (page just opened, or
+  // the socket was down) still needs an approve/decline affordance.
+  maybePromptPendingApprovals();
 }
 
 async function refreshRoster() {
@@ -1037,7 +1140,11 @@ async function refreshRoster() {
       const title = String($('approve-team-name').textContent || '');
       const stillPending = STATE.teams.some(t =>
         String(t.name) === title && t.connectionStatus === 'CONNECTION_REQUESTED');
-      if (!stillPending) closeModal($('modal-approve-connection'));
+      if (!stillPending) {
+        closeModal($('modal-approve-connection'));
+        approvalTeamId = null;
+        maybePromptPendingApprovals();
+      }
     }
   } catch (e) { console.warn('[teams] roster refresh failed', e && e.message); }
   finally { rosterRefreshing = false; }
@@ -1254,63 +1361,25 @@ function renderRealQr(container, dataUri) {
 
   /* ------------------------------------------------------------
      HOST-CONNECTION EVENTS (client -> host approval flow)
-     ------------------------------------------------------------ */
-  let approvalTeamId = null; // team the approval modal is currently showing
-  let approvalBusy   = false; // guards double-submit of the approval modal
-  function openApprovalModal(payload) {
-    const team = ensureTeam(payload.team_id);
-    if (payload.team_name) team.name = payload.team_name;
-    applyConnectionStatus(team, payload.connection_status || 'CONNECTION_REQUESTED');
-
-    const leader = (payload.leader && payload.leader.username) || '—';
-    $('approve-team-name').textContent = team.name;
-    $('approve-leader-name').textContent = leader;
-    $('approve-member-count').textContent = (payload.member_count != null)
-      ? String(payload.member_count)
-      : String(team.members.length);
-    $('approve-connection-details').textContent =
-      `"${team.name}" is requesting to join the host screen for this game.`;
-    approvalBusy = false;
-    reRender();
-    openModal($('modal-approve-connection'));
-  }
-  async function decideConnection(teamId, approve) {
-    if (approvalBusy) return;
-    approvalBusy = true;
-    const overlay = $('modal-approve-connection');
-    try {
-      $('btn-approve-connection').disabled = true;
-      $('btn-decline-connection').disabled = true;
-      const res = approve
-        ? await TeamAPI.approveConnection(API.getGameId(), teamId)
-        : await TeamAPI.declineConnection(API.getGameId(), teamId);
-      const team = ensureTeam(teamId);
-      applyConnectionStatus(team, res.connection_status || (approve ? 'CONNECTED' : 'DECLINED'));
-      if (approvalTeamId === team.id) approvalTeamId = null;
-      closeModal(overlay);
-      reRender();
-      showToast(approve ? `Connected "${team.name}" to the host` : `Declined "${team.name}"`);
-    } catch (err) {
-      console.error('[teams] connection decision failed', err);
-      closeModal(overlay);
-      showToast(err.message || 'Action failed');
-    } finally {
-      approvalBusy = false;
-      $('btn-approve-connection').disabled = false;
-      $('btn-decline-connection').disabled = false;
-    }
-  }
-
+     ------------------------------------------------------------
+     Approval machinery lives at the top level (shared with the
+     roster-seed prompt); handlers here drive it. */
   $('btn-approve-connection').addEventListener('click', () => {
     if (approvalTeamId != null) decideConnection(approvalTeamId, true);
   });
   $('btn-decline-connection').addEventListener('click', () => {
     if (approvalTeamId != null) decideConnection(approvalTeamId, false);
   });
-  $('close-approve-connection').addEventListener('click', () => closeModal($('modal-approve-connection')));
+  $('close-approve-connection').addEventListener('click', () => {
+    if (approvalTeamId != null) dismissedApprovalTeamIds.add(approvalTeamId);
+    approvalTeamId = null;
+    closeModal($('modal-approve-connection'));
+    maybePromptPendingApprovals();
+  });
 
   rt.on('connection_requested', (p) => {
     if (!p || !p.team_id) return;
+    dismissedApprovalTeamIds.delete(p.team_id);
     approvalTeamId = p.team_id;
     openApprovalModal(p);
   });
@@ -1321,6 +1390,7 @@ function renderRealQr(container, dataUri) {
     if (approvalTeamId === team.id) { closeModal($('modal-approve-connection')); approvalTeamId = null; }
     reRender();
     showToast(`"${team.name}" is now connected`);
+    maybePromptPendingApprovals();
   });
   rt.on('connection_declined', (p) => {
     if (!p || !p.team_id) return;
@@ -1328,6 +1398,7 @@ function renderRealQr(container, dataUri) {
     applyConnectionStatus(team, p.connection_status || 'DECLINED');
     if (approvalTeamId === team.id) { closeModal($('modal-approve-connection')); approvalTeamId = null; }
     reRender();
+    maybePromptPendingApprovals();
   });
   rt.on('connection_disconnected', (p) => {
     if (!p || !p.team_id) return;

@@ -994,6 +994,9 @@ function renderRealQr(container, dataUri) {
     try {
       const res = await TeamAPI.listTeams(gameId);
       roster = (res && res.teams) || [];
+      // Pending teams whose live ``connection_requested`` event was missed
+      // still need an approve/decline affordance.
+      maybePromptPendingApprovals();
     } catch (e) {
       /* keep last known roster */
     }
@@ -1452,9 +1455,174 @@ function renderRealQr(container, dataUri) {
   async function checkGameComplete() {
     try {
       const st = await GameAPI.status(gameId);
-      if (st.status === 'GAME_COMPLETE') toast('🏆 Game complete');
+      if (st.status === 'GAME_COMPLETE') {
+        API.updateMyGame({ game_id: gameId, status: 'GAME_COMPLETE' });
+        if (!gameOverShown) {
+          toast('🏆 Game complete');
+          showGameOverModal();
+        }
+      }
     } catch (e) { /* ignore */ }
   }
+
+  /* ---------- save game (checkpoint marker) ---------- */
+  function escHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  async function saveGameNow() {
+    try {
+      const res = await API.withLoading('save-game', () => GameAPI.save(gameId));
+      const savedAt = (res && res.saved_at) || new Date().toISOString();
+      API.updateMyGame({ game_id: gameId, saved_at: savedAt });
+      if (res && res.saved_at) {
+        const t = new Date(res.saved_at);
+        toast('💾 Game saved' + (isNaN(t.getTime()) ? '' : ' at ' + t.toLocaleTimeString()));
+      } else {
+        toast('💾 Game saved');
+      }
+    } catch (e) {
+      toast('Could not save the game: ' + ((e && e.message) || 'please try again'));
+    }
+  }
+
+  /* ---------- game over modal (winner + leaderboard + delete) ---------- */
+  let gameOverShown = false;
+
+  async function showGameOverModal() {
+    const ov = $('modal-game-over');
+    if (!ov) return;
+    resetGameOverDelete();
+    const [lbRes, stRes] = await Promise.all([
+      GameAPI.leaderboard(gameId).catch(() => null),
+      GameAPI.statistics(gameId).catch(() => null),
+    ]);
+    const board = (lbRes && lbRes.leaderboard) || [];
+    const stats = stRes || {};
+    const w = stats.winning_team || board[0] || null;
+
+    const winnerEl = $('game-over-winner');
+    if (winnerEl) {
+      winnerEl.innerHTML = w
+        ? '<i class="fa-solid fa-trophy"></i> ' + escHtml(w.team_name || '') +
+          ' <span class="gameover-winner__pts">' + Number(w.points || 0) + ' pts</span>'
+        : '<i class="fa-solid fa-trophy"></i> Game complete';
+    }
+    const codeEl = $('game-over-code');
+    if (codeEl) codeEl.textContent = 'Game ' + (STATE.gameCode || gameId);
+    const hintEl = $('game-over-delete-hint');
+    if (hintEl) hintEl.textContent = STATE.gameCode || '';
+
+    const statsEl = $('game-over-stats');
+    if (statsEl) {
+      const fast = stats.fastest_team;
+      const chips = [
+        ['Teams', stats.total_teams],
+        ['Words', stats.total_words],
+        ['Correct', stats.total_correct_answers],
+        ['Passes', stats.total_passes],
+        ['Penalties', stats.total_penalties],
+        ['Duration', (stats.total_game_duration_seconds != null && isFinite(stats.total_game_duration_seconds))
+          ? Math.round(stats.total_game_duration_seconds / 60) + ' min' : '—'],
+        ['Fastest', fast ? fast.team_name : '—'],
+      ].map(([label, value]) =>
+        '<span class="gameover-stats__chip"><span>' + escHtml(label) + '</span><strong>' +
+        escHtml(value == null ? '—' : value) + '</strong></span>'
+      ).join('');
+      statsEl.innerHTML = chips || 'No statistics yet.';
+    }
+
+    const tbody = $('game-over-tbody');
+    if (tbody) {
+      tbody.innerHTML = board.length
+        ? board.map((t) =>
+            '<tr>' +
+              '<td>' + Number(t.rank || 0) + '</td>' +
+              '<td>' + escHtml(t.team_name || '') + '</td>' +
+              '<td>' + Number(t.points || 0) + '</td>' +
+              '<td>' + Number(t.correct_words || 0) + '</td>' +
+              '<td>' + Number(t.passed_words || 0) + '</td>' +
+              '<td>' + Number(t.penalty_seconds || 0) + '</td>' +
+            '</tr>'
+          ).join('')
+        : '<tr><td colspan="6">No scores recorded.</td></tr>';
+    }
+
+    gameOverShown = true;
+    openModal(ov);
+  }
+
+  function resetGameOverDelete() {
+    const box = $('game-over-delete');
+    const input = $('input-game-over-delete');
+    const btn = $('btn-confirm-delete-game');
+    if (box) box.hidden = true;
+    if (input) input.value = '';
+    if (btn) btn.disabled = true;
+    const err = $('game-over-delete-error');
+    if (err) err.textContent = '';
+  }
+
+  rebind('btn-save-game', saveGameNow);
+  rebind('btn-save-game-over', saveGameNow);
+  rebind('close-game-over', () => { closeModal($('modal-game-over')); resetGameOverDelete(); });
+  rebind('btn-close-game-over', () => { closeModal($('modal-game-over')); resetGameOverDelete(); });
+  rebind('btn-prompt-delete', () => {
+    const box = $('game-over-delete');
+    const input = $('input-game-over-delete');
+    const btn = $('btn-confirm-delete-game');
+    const err = $('game-over-delete-error');
+    if (err) err.textContent = '';
+    if (input) input.value = '';
+    if (btn) btn.disabled = true;
+    if (box) box.hidden = false;
+    if (input) input.focus();
+  });
+
+  const goDeleteInput = $('input-game-over-delete');
+  if (goDeleteInput) {
+    goDeleteInput.addEventListener('input', () => {
+      const btn = $('btn-confirm-delete-game');
+      const code = goDeleteInput.value.trim().toUpperCase();
+      if (btn) btn.disabled = !(STATE.gameCode && code === String(STATE.gameCode).toUpperCase());
+    });
+    goDeleteInput.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      const btn = $('btn-confirm-delete-game');
+      if (btn && !btn.disabled) deleteFinishedGame();
+    });
+  }
+
+  async function deleteFinishedGame() {
+    const btn = $('btn-confirm-delete-game');
+    const err = $('game-over-delete-error');
+    if (!btn || btn.disabled) return;
+    btn.disabled = true;
+    const original = btn.innerHTML;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Deleting…';
+    if (err) err.textContent = '';
+    try {
+      await API.withLoading('delete-game', () => GameAPI.deleteGame(gameId, { confirm: true }));
+      API.removeMyGame(gameId);
+      API.clearTokens();
+      window.location.replace('../../index.html');
+    } catch (e) {
+      btn.disabled = false;
+      btn.innerHTML = original;
+      const map = {
+        INVALID_OPERATION: 'Only completed, cancelled, or expired games can be deleted.',
+        WITH_CONFIRMATION_REQUIRED: 'Please type the game code to confirm the deletion.',
+        GAME_FROZEN: 'This game is read-only and cannot be deleted.',
+      };
+      if (err) err.textContent = map[e.code] || (e && e.message) || 'Could not delete the game.';
+    }
+  }
+  rebind('btn-confirm-delete-game', deleteFinishedGame);
 
   /* ---------- button wiring (replaces demo handlers) ---------- */
   rebind('btn-pause-play', handleStartPause);
@@ -1524,6 +1692,33 @@ function renderRealQr(container, dataUri) {
      handle connection requests without leaving the dashboard. */
   let approvalTeamId = null;
   let approvalBusy   = false;
+  const dismissedApprovalTeamIds = new Set();
+
+  function buildApprovalPayload(t) {
+    const leader = (t.leader && t.leader.username)
+      || ((t.members && t.members[0] && t.members[0].username) || '—');
+    return {
+      team_id: t.team_id,
+      team_name: t.team_name || 'Team ' + t.team_id,
+      connection_status: t.connection_status || 'CONNECTION_REQUESTED',
+      leader: { username: leader },
+      member_count: (t.members && t.members.length) || 0,
+    };
+  }
+
+  // Surface a connection request whose live socket event was missed (page
+  // opened after the request, or the socket was down) so pending teams are
+  // always actionable. Dismissed teams stay suppressed until they re-request.
+  function maybePromptPendingApprovals() {
+    if (approvalTeamId != null) return;             // a decision modal is already showing
+    if (!DOM.modalApproveConnection) return;
+    const pending = roster.find(t =>
+      t.connection_status === 'CONNECTION_REQUESTED' &&
+      !dismissedApprovalTeamIds.has(t.team_id));
+    if (!pending) return;
+    approvalTeamId = pending.team_id;
+    openApprovalModal(buildApprovalPayload(pending));
+  }
 
   function openApprovalModal(payload) {
     if (!DOM.modalApproveConnection) return;
@@ -1555,6 +1750,7 @@ function renderRealQr(container, dataUri) {
       console.error('[dashboard] connection decision failed', err);
       if (approvalTeamId === teamId) { closeModal(DOM.modalApproveConnection); approvalTeamId = null; }
       toast((err && err.message) || 'Action failed');
+      maybePromptPendingApprovals();
     } finally {
       approvalBusy = false;
       DOM.btnApproveConnection.disabled = false;
@@ -1568,7 +1764,12 @@ function renderRealQr(container, dataUri) {
   DOM.btnDeclineConnection.addEventListener('click', () => {
     if (approvalTeamId != null) decideConnection(approvalTeamId, false);
   });
-  DOM.closeApproveConnection.addEventListener('click', () => closeModal(DOM.modalApproveConnection));
+  DOM.closeApproveConnection.addEventListener('click', () => {
+    if (approvalTeamId != null) dismissedApprovalTeamIds.add(approvalTeamId);
+    approvalTeamId = null;
+    closeModal(DOM.modalApproveConnection);
+    maybePromptPendingApprovals();
+  });
 
   /* ---------- realtime socket bridge (host) ----------
      Connects the HOST socket. Because the backend only broadcasts a
@@ -1633,6 +1834,7 @@ function renderRealQr(container, dataUri) {
     // Connection request approval — show modal on request, dismiss on resolve.
     rt.on('connection_requested', (p) => {
       if (!p || !p.team_id) return;
+      dismissedApprovalTeamIds.delete(p.team_id);
       approvalTeamId = p.team_id;
       if (p.team_name) teamNameOf.register(p.team_id, p.team_name);
       openApprovalModal(p);

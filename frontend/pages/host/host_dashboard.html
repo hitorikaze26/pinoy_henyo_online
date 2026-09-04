@@ -207,10 +207,14 @@
               <span class="timer-card__digits" id="timer-display">1:35</span>
             </div>
 
-            <!-- Row 1: utility controls — Sound · Set Time · Reset -->
+            <!-- Row 1: utility controls — Sound · Save · Set Time · Reset -->
             <div class="timer-card__util-row">
               <button class="ctrl-btn ctrl-btn--icon ctrl-btn--sound" id="btn-sound" aria-label="Toggle sound" title="Toggle sound">
                 <i class="fa-solid fa-volume-high" id="sound-icon"></i>
+              </button>
+              <button class="ctrl-btn ctrl-btn--save" id="btn-save-game" aria-label="Save game checkpoint" title="Save a checkpoint of this game">
+                <i class="fa-solid fa-floppy-disk"></i>
+                Save
               </button>
               <button class="ctrl-btn ctrl-btn--settime" id="btn-set-time" aria-label="Set time">
                 <i class="fa-regular fa-clock"></i>
@@ -500,6 +504,60 @@
         <button class="dash-modal__confirm" id="btn-approve-connection">
           <i class="fa-solid fa-check"></i> Confirm
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Game Over Modal -->
+  <div class="dash-modal-overlay" id="modal-game-over" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="game-over-title">
+    <div class="dash-modal dash-modal--wide">
+      <button class="dash-modal__close" id="close-game-over" aria-label="Close">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+      <h2 class="dash-modal__title" id="game-over-title">
+        <i class="fa-solid fa-trophy"></i>
+        Game Complete
+      </h2>
+      <p class="dash-modal__subtitle" id="game-over-code">Game ------</p>
+      <div class="gameover-winner" id="game-over-winner"></div>
+      <div class="gameover-stats" id="game-over-stats"></div>
+      <div class="gameover-table-wrap">
+        <table class="gameover-table" aria-label="Final standings">
+          <thead>
+            <tr>
+              <th scope="col">Rank</th>
+              <th scope="col">Team</th>
+              <th scope="col">Points</th>
+              <th scope="col">Correct</th>
+              <th scope="col">Passed</th>
+              <th scope="col">Penalty</th>
+            </tr>
+          </thead>
+          <tbody id="game-over-tbody">
+            <!-- Populated by JS -->
+          </tbody>
+        </table>
+      </div>
+      <div class="gameover-actions">
+        <button class="dash-modal__confirm" id="btn-save-game-over">
+          <i class="fa-solid fa-floppy-disk"></i> Save Game
+        </button>
+        <button class="dash-modal__cancel gameover-delete-toggle" id="btn-prompt-delete">
+          <i class="fa-solid fa-trash"></i> Delete Game
+        </button>
+        <button class="dash-modal__cancel" id="btn-close-game-over">Close</button>
+      </div>
+      <div class="gameover-delete" id="game-over-delete" hidden>
+        <p class="gameover-delete__hint">
+          Type the game code <strong id="game-over-delete-hint">------</strong> to permanently delete it.
+        </p>
+        <div class="gameover-delete__row">
+          <input type="text" id="input-game-over-delete" class="set-time-input" maxlength="16" placeholder="GAME CODE" autocomplete="off" />
+          <button class="dash-modal__confirm dash-modal__confirm--danger" id="btn-confirm-delete-game" disabled>
+            <i class="fa-solid fa-trash"></i> Delete Forever
+          </button>
+        </div>
+        <p class="gameover-delete__error" id="game-over-delete-error"></p>
       </div>
     </div>
   </div>

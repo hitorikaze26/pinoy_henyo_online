@@ -1,4 +1,4 @@
-/* ============================================================
+﻿/* ============================================================
    CSS CUSTOM PROPERTIES
 ============================================================ */
 :root {
@@ -466,7 +466,7 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
   animation: fadeInUp 0.8s ease 0.85s both;
 }
 
-/* Primary button – gold */
+/* Primary button â€“ gold */
 .btn-primary {
   position: relative;
   overflow: hidden;
@@ -500,7 +500,7 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
   50%       { box-shadow: 0 4px 18px rgba(238,147,38,0.45), 0 0 0 8px rgba(238,147,38,0); }
 }
 
-/* Secondary button – outlined */
+/* Secondary button â€“ outlined */
 .btn-secondary {
   position: relative;
   overflow: hidden;
@@ -717,7 +717,7 @@ section { position: relative; z-index: 1; }
   line-height: 1.65;
 }
 
-/* Hero (large) feature card – first one */
+/* Hero (large) feature card â€“ first one */
 .features__hero-card {
   grid-column: 1 / -1;
   display: flex;
@@ -975,7 +975,7 @@ section { position: relative; z-index: 1; }
 .features__grid .feature-card:nth-child(4) { transition-delay: 0.3s; }
 
 /* ============================================================
-   RESPONSIVE – TABLET (1024px)
+   RESPONSIVE â€“ TABLET (1024px)
 ============================================================ */
 @media (max-width: 1024px) {
   .features__grid { grid-template-columns: repeat(2, 1fr); }
@@ -985,7 +985,7 @@ section { position: relative; z-index: 1; }
 }
 
 /* ============================================================
-   RESPONSIVE – MOBILE (768px)
+   RESPONSIVE â€“ MOBILE (768px)
 ============================================================ */
 @media (max-width: 768px) {
   .navbar { padding: 0 1rem; }
@@ -1193,7 +1193,7 @@ section { position: relative; z-index: 1; }
   box-shadow: 0 0 0 3px rgba(184,3,30,0.1);
 }
 
-/* Game code input – larger, monospace */
+/* Game code input â€“ larger, monospace */
 .form-input--code {
   font-family: 'Baloo 2', monospace;
   font-size: 1.1rem;
@@ -1453,3 +1453,168 @@ section { position: relative; z-index: 1; }
 
   .qr-frame { width: 70%; }
 }
+
+
+/* ============================================================
+   MY GAMES (lobby: continue / review / delete)
+============================================================ */
+.my-games { margin: 3.5rem auto 4rem; max-width: 1080px; padding: 0 1.5rem; }
+
+.my-games__toolbar {
+  display: flex; justify-content: flex-end; margin: 0 0 1.25rem;
+}
+.my-games__refresh {
+  display: inline-flex; align-items: center; gap: 0.45rem;
+  background: var(--primary-50); color: var(--primary-700);
+  border: 1px solid var(--primary-200); border-radius: 999px;
+  padding: 0.45rem 1rem; font: 600 0.82rem/1.4 'Inter', sans-serif;
+  cursor: pointer; transition: all 0.2s ease;
+}
+.my-games__refresh:hover {
+  background: var(--primary-100); border-color: var(--primary-300);
+  transform: translateY(-1px);
+}
+
+.my-games__list {
+  display: grid; gap: 1.25rem;
+}
+
+.my-games__group-title {
+  display: flex; align-items: center; gap: 0.5rem;
+  font-family: 'Baloo 2', sans-serif; font-size: 1.05rem; color: var(--text-white, #fff);
+  margin: 0 0 0.75rem;
+}
+.my-games__group-title i { color: var(--gold); font-size: 0.95rem; }
+.my-games__group { display: grid; gap: 0.75rem; }
+
+.my-games__card {
+  display: flex; flex-direction: column; gap: 0.4rem;
+  background: linear-gradient(135deg, var(--primary-900), var(--gray-900));
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: var(--radius-lg);
+  padding: 1rem 1.25rem;
+  box-shadow: 0 6px 22px rgba(15,23,42,0.25);
+}
+.my-games__card-main {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 0.75rem; flex-wrap: wrap;
+}
+.my-games__code {
+  font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 1.05rem;
+  letter-spacing: 0.04em; color: #fff;
+}
+.my-games__status {
+  font: 700 0.72rem/1.3 'Inter', sans-serif;
+  padding: 0.22rem 0.7rem; border-radius: 999px; text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.my-games__status--live { background: rgba(34,197,94,0.16); color: #4ade80; border: 1px solid rgba(34,197,94,0.35); }
+.my-games__status--done { background: rgba(245,185,66,0.14); color: var(--gold); border: 1px solid rgba(245,185,66,0.3); }
+.my-games__status--muted { background: rgba(148,163,184,0.16); color: #94a3b8; border: 1px solid rgba(148,163,184,0.3); }
+
+.my-games__meta {
+  margin: 0; font-size: 0.8rem; color: rgba(255,255,255,0.6);
+}
+.my-games__acts {
+  display: flex; align-items: center; gap: 0.5rem; margin-top: 0.35rem;
+  flex-wrap: wrap;
+}
+.my-games__act {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  font: 700 0.8rem/1.4 'Inter', sans-serif; cursor: pointer;
+  color: var(--primary-500);
+  background: rgba(49,154,251,0.1);
+  border: 1px solid rgba(49,154,251,0.3);
+  border-radius: 0.6rem; padding: 0.4rem 0.85rem;
+  transition: all 0.2s ease;
+}
+.my-games__act:hover { background: rgba(49,154,251,0.2); transform: translateY(-1px); }
+.my-games__act--primary {
+  background: var(--primary-600); color: #fff; border-color: var(--primary-600);
+}
+.my-games__act--primary:hover { background: var(--primary-500); }
+.my-games__act--danger {
+  color: #f87171; background: rgba(248,113,113,0.1);
+  border-color: rgba(248,113,113,0.35);
+}
+.my-games__act--danger:hover { background: rgba(248,113,113,0.22); }
+
+.my-games__state {
+  text-align: center; padding: 2.5rem 1rem; color: var(--gray-600);
+  border: 1px dashed var(--gray-300); border-radius: var(--radius-lg);
+  display: grid; gap: 0.9rem; justify-items: center; align-items: center;
+  font-size: 0.95rem;
+}
+.my-games__retry { width: auto; }
+
+.my-games__spinner {
+  width: 34px; height: 34px; border-radius: 50%;
+  border: 3px solid var(--primary-200);
+  border-top-color: var(--primary-600);
+  animation: myGamesSpin 0.8s linear infinite;
+}
+@keyframes myGamesSpin { to { transform: rotate(360deg); } }
+
+/* ============================================================
+   GAME REPORT MODAL (lobby)
+============================================================ */
+.modal--wide { max-width: 720px; }
+
+.modal__icon--danger {
+  background: rgba(239,68,68,0.12); color: #ef4444; border: 1px solid rgba(239,68,68,0.3);
+}
+
+.btn-modal-danger {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  background: #dc2626; color: #fff; font: 700 0.92rem/1.4 'Inter', sans-serif;
+  border: 1px solid #dc2626; border-radius: var(--radius-md);
+  padding: 0.75rem 1.25rem; cursor: pointer; transition: all 0.2s ease;
+}
+.btn-modal-danger:hover:not(:disabled) { background: #b91c1c; transform: translateY(-2px); }
+.btn-modal-danger:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.report-body {
+  display: grid; gap: 1rem;
+}
+.report-body__winner {
+  display: flex; align-items: center; gap: 0.5rem;
+  background: rgba(245,185,66,0.12); color: var(--gold);
+  border: 1px solid rgba(245,185,66,0.35);
+  border-radius: var(--radius-md); padding: 0.7rem 1rem;
+  font-size: 0.95rem;
+}
+.report-winner__pts {
+  margin-left: auto; font-weight: 800; color: #fff;
+}
+.report-body__table-wrap {
+  overflow-x: auto; border-radius: var(--radius-md);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.report-table {
+  width: 100%; border-collapse: collapse; font-size: 0.85rem;
+}
+.report-table th,
+.report-table td {
+  padding: 0.55rem 0.75rem; text-align: left; white-space: nowrap;
+}
+.report-table thead th {
+  font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em;
+  color: rgba(255,255,255,0.55);
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+.report-table tbody td { color: rgba(255,255,255,0.85); }
+.report-table tbody tr:nth-child(odd) td { background: rgba(255,255,255,0.03); }
+.report-table tbody tr td:first-child { font-weight: 800; color: var(--gold); }
+
+.report-body__stats {
+  display: flex; flex-wrap: wrap; gap: 0.6rem;
+}
+.report-stats__chip {
+  display: inline-flex; flex-direction: column; gap: 0.15rem;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: var(--radius-md); padding: 0.45rem 0.85rem;
+  font-size: 0.78rem;
+}
+.report-stats__label { color: rgba(255,255,255,0.55); }
+.report-stats__chip strong { color: #fff; }

@@ -161,6 +161,41 @@
     </section>
 
     <!-- ============================================================
+         MY GAMES / SAVED GAMES SECTION (host re-entry)
+         Rendered by js/lobby/my-games.js when a host token exists.
+    ============================================================ -->
+    <section class="my-games" id="my-games" aria-labelledby="my-games-heading" hidden>
+      <div class="section-inner">
+
+        <div class="features__header reveal">
+          <div class="section-tag gold">
+            <i class="fa-solid fa-floppy-disk"></i>
+            My Games
+          </div>
+          <h2 class="section-heading" id="my-games-heading">
+            Continue, Review, <span class="gold-accent">or Delete.</span>
+          </h2>
+          <p class="section-sub">
+            Games started from this device are saved automatically. Jump back into a live one,
+            review a finished game, or clear them out.
+          </p>
+        </div>
+
+        <div class="my-games__toolbar">
+          <button type="button" class="my-games__refresh" id="my-games-refresh" aria-label="Refresh my games" title="Refresh">
+            <i class="fa-solid fa-rotate-right"></i>
+            Refresh
+          </button>
+        </div>
+
+        <div class="my-games__list" id="my-games-list" aria-live="polite" aria-busy="true">
+          <!-- Populated by JS -->
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ============================================================
          FEATURES SECTION
     ============================================================ -->
     <section class="features" id="features" aria-labelledby="features-heading">
@@ -576,6 +611,96 @@
     </div>
   </div>
 
+  <!-- ============================================================
+       MODAL: GAME REPORT (leaderboard + statistics)
+  ============================================================ -->
+  <div class="modal-overlay" id="modal-report-game" role="dialog" aria-modal="true" aria-labelledby="modal-report-title" aria-hidden="true">
+    <div class="modal modal--wide">
+      <button class="modal__close" id="modal-report-close" aria-label="Close modal">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+
+      <div class="modal__header">
+        <div class="modal__icon modal__icon--gold">
+          <i class="fa-solid fa-trophy"></i>
+        </div>
+        <h2 class="modal__title" id="modal-report-title">Game Report</h2>
+        <p class="modal__subtitle" id="modal-report-subtitle">Final standings</p>
+      </div>
+
+      <div class="report-body">
+        <div class="report-body__winner" id="report-winner"></div>
+        <div class="report-body__table-wrap">
+          <table class="report-table" aria-label="Final leaderboard">
+            <thead>
+              <tr>
+                <th scope="col">Rank</th>
+                <th scope="col">Team</th>
+                <th scope="col">Points</th>
+                <th scope="col">Correct</th>
+                <th scope="col">Passed</th>
+                <th scope="col">Penalty (s)</th>
+              </tr>
+            </thead>
+            <tbody id="report-tbody">
+              <!-- Populated by JS -->
+            </tbody>
+          </table>
+        </div>
+        <div class="report-body__stats" id="report-stats">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+      <div class="modal__actions">
+        <button type="button" class="btn-modal-cancel" id="modal-report-cancel">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       MODAL: DELETE A GAME (type-to-confirm)
+  ============================================================ -->
+  <div class="modal-overlay" id="modal-delete-game" role="dialog" aria-modal="true" aria-labelledby="modal-delete-title" aria-hidden="true">
+    <div class="modal">
+      <button class="modal__close" id="modal-delete-close" aria-label="Close modal">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+
+      <div class="modal__header">
+        <div class="modal__icon modal__icon--danger">
+          <i class="fa-solid fa-trash"></i>
+        </div>
+        <h2 class="modal__title" id="modal-delete-title">Delete Game</h2>
+        <p class="modal__subtitle">This permanently removes the game and all of its data.</p>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="input-delete-code">
+          <i class="fa-solid fa-hashtag"></i>
+          Type the game code <strong id="delete-code-hint">------</strong> to confirm
+        </label>
+        <input
+          type="text"
+          id="input-delete-code"
+          class="form-input form-input--code"
+          placeholder="e.g. HENYO-1234"
+          autocomplete="off"
+          maxlength="16"
+        />
+        <span class="form-error" id="error-delete-code" aria-live="polite"></span>
+      </div>
+
+      <div class="modal__actions">
+        <button type="button" class="btn-modal-danger" id="btn-delete-confirm" disabled>
+          <i class="fa-solid fa-trash"></i>
+          Delete Forever
+        </button>
+        <button type="button" class="btn-modal-cancel" id="modal-delete-cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <!-- JavaScript -->
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
   <script src="js/core/runtime-config.js"></script>
@@ -587,6 +712,7 @@
   <script src="js/api/connect.js"></script>
   <script src="js/qr/scanner.js"></script>
   <script src="js/script.js"></script>
+  <script src="js/lobby/my-games.js"></script>
 
 </body>
 </html>

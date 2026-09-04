@@ -1751,3 +1751,123 @@ ol, ul { list-style: none; }
 .request-summary__row + .request-summary__row { border-top: 1px solid rgba(255,255,255,0.05); }
 .request-summary__label { color: rgba(255,255,255,0.45); font-weight: 600; font-size: 0.85rem; }
 .request-summary__value { color: rgba(255,255,255,0.9); font-weight: 700; text-align: right; font-size: 0.85rem; }
+
+
+/* ============================================================
+   GAME SAVE + GAME OVER MODAL
+============================================================ */
+/* Save (checkpoint) control button */
+.ctrl-btn--save {
+  padding: 0.5rem 0.85rem;
+  font-size: 0.8rem;
+  background: var(--primary-600);
+  color: #fff;
+  box-shadow: 0 3px 10px rgba(24,131,229,0.4);
+}
+.ctrl-btn--save:hover { box-shadow: 0 5px 16px rgba(24,131,229,0.55); }
+
+.dash-modal__confirm--danger {
+  background: var(--accent-2-600);
+  box-shadow: 0 3px 12px rgba(184,3,30,0.4);
+}
+.dash-modal__confirm--danger:hover:not(:disabled) { background: var(--accent-2-500); }
+.dash-modal__confirm--danger:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+.gameover-winner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.9rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--r-md);
+  background: rgba(245,185,66,0.12);
+  border: 1px solid rgba(245,185,66,0.35);
+  color: var(--gold);
+  font-family: 'Baloo 2', sans-serif;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+.gameover-winner__pts {
+  margin-left: auto;
+  color: #fff;
+}
+
+.gameover-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin: 0 0 0.9rem;
+}
+.gameover-stats__chip {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.12rem;
+  padding: 0.4rem 0.8rem;
+  border-radius: var(--r-md);
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--dash-border);
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.55);
+}
+.gameover-stats__chip strong { color: #fff; }
+
+.gameover-table-wrap {
+  overflow-x: auto;
+  border-radius: var(--r-md);
+  border: 1px solid var(--dash-border);
+  margin: 0 0 1rem;
+}
+.gameover-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.gameover-table th,
+.gameover-table td {
+  padding: 0.55rem 0.8rem;
+  text-align: left;
+  white-space: nowrap;
+}
+.gameover-table thead th {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgba(255,255,255,0.5);
+  border-bottom: 1px solid var(--dash-border);
+}
+.gameover-table tbody td { color: rgba(255,255,255,0.85); }
+.gameover-table tbody tr:nth-child(odd) td { background: rgba(255,255,255,0.03); }
+.gameover-table tbody tr td:first-child { color: var(--gold); font-weight: 800; }
+
+.gameover-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.gameover-delete {
+  margin-top: 1rem;
+  padding: 0.9rem 1rem;
+  border-radius: var(--r-md);
+  background: rgba(184,3,30,0.08);
+  border: 1px solid rgba(184,3,30,0.3);
+}
+.gameover-delete__hint {
+  margin: 0 0 0.6rem;
+  font-size: 0.85rem;
+  color: rgba(255,255,255,0.7);
+}
+.gameover-delete__hint strong { color: #fff; font-family: 'Baloo 2', monospace; }
+.gameover-delete__row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.gameover-delete__row .set-time-input { flex: 1; min-width: 160px; }
+.gameover-delete__error {
+  margin: 0.55rem 0 0;
+  font-size: 0.82rem;
+  color: #f87171;
+}
