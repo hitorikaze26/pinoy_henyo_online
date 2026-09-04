@@ -457,6 +457,43 @@
     </div>
   </div>
 
+  <!-- Modal 7: Approve Team Connection -->
+  <div class="modal-overlay" id="modal-approve-connection" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="approve-connection-title">
+    <div class="modal">
+      <button class="modal__close" id="close-approve-connection" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+      <div class="modal__header">
+        <div class="modal__icon modal__icon--orange"><i class="fa-solid fa-handshake"></i></div>
+        <div>
+          <h2 class="modal__title" id="approve-connection-title">Team Connection Request</h2>
+          <p class="modal__subtitle">A team wants to join the host screen.</p>
+        </div>
+      </div>
+      <p class="modal__body-text" id="approve-connection-details"></p>
+      <div class="request-summary">
+        <div class="request-summary__row">
+          <span class="request-summary__label">Team</span>
+          <span class="request-summary__value" id="approve-team-name"></span>
+        </div>
+        <div class="request-summary__row">
+          <span class="request-summary__label">Leader</span>
+          <span class="request-summary__value" id="approve-leader-name"></span>
+        </div>
+        <div class="request-summary__row">
+          <span class="request-summary__label">Members</span>
+          <span class="request-summary__value" id="approve-member-count"></span>
+        </div>
+      </div>
+      <div class="modal__actions">
+        <button type="button" class="btn-cancel" id="btn-decline-connection">
+          <i class="fa-solid fa-xmark"></i> Decline
+        </button>
+        <button type="button" class="btn-confirm" id="btn-approve-connection">
+          <i class="fa-solid fa-check"></i> Confirm
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal: Show QR Code -->
   <div class="modal-overlay" id="modal-qr" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="qr-modal-title">
     <div class="modal">

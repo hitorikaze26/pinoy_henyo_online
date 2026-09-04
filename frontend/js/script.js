@@ -134,6 +134,7 @@ document.getElementById('btn-are-you-host').addEventListener('click', async () =
     // Store the host session + game context so host pages can reuse them.
     API.setHostToken(game.host_session_token);
     API.setGameId(game.game_id);
+    API.setGameCode(game.game_code);
     API.setHostContext(game);
     window.PINOY_GAME = game;
 
@@ -363,6 +364,20 @@ document.getElementById('form-join').addEventListener('submit', async (e) => {
       await DeviceAPI.connect({ connectionToken });
     }
 
+    // 4) Creating a NEW team is not approval to join the host's screen. The
+    //    entered/scanned host code is an explicit CONNECTION REQUEST that the
+    //    host must approve before gameplay. Joining an existing team as a
+    //    member leaves the team's connection status untouched.
+    if (joined.leader) {
+      try {
+        await TeamAPI.requestConnection(gameId, joined.leader.connection_token);
+      } catch (err) {
+        if (err.code !== 'ALREADY_CONNECTED' && err.code !== 'REQUEST_PENDING') {
+          console.warn('[Pinoy Henyo] connection request failed', err);
+        }
+      }
+    }
+
     closeModal(overlayJoin);
     window.location.href = 'pages/player/player.html';
   } catch (err) {
@@ -464,7 +479,7 @@ async function startCamera() {
     });
     video.srcObject = qrStream;
     await video.play();
-    startQrDecode();
+    window.QrScanner.start({ video, onScan: handleQrScanned });
     console.log('[Pinoy Henyo] Camera started');
   } catch (err) {
     console.warn('[Pinoy Henyo] Camera error:', err.name, err.message);
@@ -485,7 +500,7 @@ async function startCamera() {
 
 /** Stop all camera tracks, release the stream, and halt QR decoding */
 function stopCamera() {
-  stopQrDecode();
+  if (window.QrScanner) window.QrScanner.stop();
   if (qrStream) {
     qrStream.getTracks().forEach(track => track.stop());
     qrStream = null;
@@ -498,81 +513,13 @@ function stopCamera() {
 
 /* ============================================================
    QR CODE DECODING
-   Prefers the native BarcodeDetector API when available, else
-   falls back to the bundled jsQR lib scanning canvas frames.
-   On a hit we stop the camera and route the player back to the
-   Join modal with the scanned game/team codes pre-filled.
+   Delegates to the shared QrScanner module (js/qr/scanner.js),
+   which decodes each frame with jsQR FIRST and only races the
+   native BarcodeDetector against a short timeout, so a hanging
+   native API can never starve the jsQR fallback. On a hit we stop
+   the camera and route the player back to the Join modal with the
+   scanned game/team codes pre-filled.
    ============================================================ */
-let qrDecodeTimer = null;
-
-function startQrDecode() {
-  stopQrDecode();
-  qrDecodeTimer = setInterval(processQrFrame, 220);
-}
-
-function stopQrDecode() {
-  if (qrDecodeTimer) {
-    clearInterval(qrDecodeTimer);
-    qrDecodeTimer = null;
-  }
-}
-
-async function processQrFrame() {
-  const video = document.getElementById('qr-video');
-  if (!video || !video.videoWidth) return;
-
-  let raw = await decodeWithBarcodeDetector(video);
-  if (raw == null) raw = decodeWithJsQr(video);
-  if (raw) {
-    stopCamera();
-    handleQrScanned(raw);
-  }
-}
-
-let _barcodeDetector = null;
-
-async function decodeWithBarcodeDetector(video) {
-  if (!('BarcodeDetector' in window)) return null;
-  try {
-    if (!_barcodeDetector) {
-      _barcodeDetector = new window.BarcodeDetector({ formats: ['qr_code'] });
-    }
-    const codes = await _barcodeDetector.detect(video);
-    for (const c of codes) {
-      if (c && c.rawValue) return c.rawValue;
-    }
-  } catch (e) { /* fall through to jsQR */ }
-  return null;
-}
-
-function decodeWithJsQr(video) {
-  if (typeof window.jsQR !== 'function') return null;
-
-  let canvas = document.getElementById('qr-canvas');
-  if (!canvas) {
-    canvas = document.createElement('canvas');
-    canvas.id = 'qr-canvas';
-    canvas.hidden = true;
-    canvas.setAttribute('aria-hidden', 'true');
-    document.body.appendChild(canvas);
-  }
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  if (!ctx) return null;
-
-  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-  let imageData;
-  try {
-    imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  } catch (e) {
-    return null;
-  }
-  const code = window.jsQR(imageData.data, imageData.width, imageData.height, {
-    inversionAttempts: 'dontInvert',
-  });
-  return (code && code.data) ? code.data : null;
-}
 
 function handleQrScanned(raw) {
   const parsed = Connect.parseJoinUrl(raw);
@@ -586,7 +533,8 @@ function handleQrScanned(raw) {
     return;
   }
 
-  stopQrDecode();
+  if (window.QrScanner) window.QrScanner.stop();
+  stopCamera();
   closeModal(overlayQr);
 
   // Pre-fill the Join modal with the public codes carried by the QR payload.

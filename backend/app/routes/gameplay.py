@@ -652,3 +652,37 @@ def end_turn(turn_id):
     return _apply_turn_run(
         turn, turn_service.end_turn, after=_emit_turn_finished
     )
+
+
+@gameplay_bp.get("/turns/<int:turn_id>/penalties")
+def get_penalties(turn_id):
+    turn, error = _turn_or_error(turn_id)
+    if error is not None:
+        return error
+    return success_response(
+        data={"penalties": turn_service.get_penalties_for_turn(turn_id)}
+    )
+
+
+@gameplay_bp.post("/penalties/<int:penalty_id>/revert")
+def revert_penalty(penalty_id):
+    body = request.get_json(silent=True) or {}
+    token = host_token_from_request()
+    if not token:
+        return error_response(
+            "Host token required.", code="UNAUTHORIZED", status=401,
+        )
+    try:
+        reversal = turn_service.revert_penalty(
+            penalty_id, reason=body.get("reason")
+        )
+        db.session.commit()
+    except turn_service.TurnServiceError as exc:
+        db.session.rollback()
+        return _handle(exc)
+    return success_response(data={
+        "penalty_id": reversal.id,
+        "original_penalty_id": penalty_id,
+        "type": reversal.type,
+        "seconds": reversal.seconds,
+    })

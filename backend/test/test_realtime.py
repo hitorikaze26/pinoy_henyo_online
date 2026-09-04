@@ -378,6 +378,41 @@ def test_unauthorized_socket_connect(app, client):
 
 
 # ---------------------------------------------------------------------------
+# 7a. Unexpected errors inside the connect handler must surface as a clean,
+#     controllable refusal (CONNECT_INTERNAL_ERROR), never as an opaque HTTP
+#     500 to the socket client. The full cause is logged server-side.
+# ---------------------------------------------------------------------------
+
+
+def test_connect_internal_error_refused_not_500(app, client, monkeypatch, caplog):
+    import logging
+
+    from app.sockets import events as socket_events
+
+    # A valid host token so the guard passes; the injected fault then fires
+    # inside the authorize step, exactly like a DB/emit crash mid-handshake.
+    game_id, host_token = _create_game(client)
+    assert host_token
+
+    def boom(token):
+        raise RuntimeError("simulated connect-handshake failure")
+
+    monkeypatch.setattr(socket_events, "_authorize_and_join", boom)
+
+    with caplog.at_level(logging.ERROR, logger="app"):
+        sio = SocketIOTestClient(app, socketio, auth={"token": host_token})
+
+    # The socket was refused (clean), NOT an HTTP 500; and the connect
+    # failure was logged server-side with an exception, not swallowed.
+    assert not sio.is_connected()
+    assert any(
+        "Socket connect handler failed" in getattr(r, "message", "")
+        and r.exc_info is not None
+        for r in caplog.records
+    )
+
+
+# ---------------------------------------------------------------------------
 # 8. Realtime host event flow (game, round, match, turn, timer)
 # ---------------------------------------------------------------------------
 
@@ -481,3 +516,182 @@ def test_join_turn_room_and_state(app, client):
     host_sio.disconnect()
     tagasagot_sio.disconnect()
     outsider_sio.disconnect()
+
+
+# ---------------------------------------------------------------------------
+# 9. Team connection lifecycle events
+# ---------------------------------------------------------------------------
+
+
+def test_connection_requested_reaches_host_and_team(app, client):
+    game_id, host = _create_game(client)
+    host_sio = _socket(app, host)
+    team = _create_team(client, game_id, "Team A")
+    team_sio = _socket(
+        app, _connect(client, team["leader"])["session_token"]
+    )
+    host_sio.get_received()
+    team_sio.get_received()
+
+    response = client.post(
+        "/api/games/{}/connection-request".format(game_id),
+        json={"connection_token": team["leader"]["connection_token"]},
+    )
+    assert response.status_code == 200
+
+    host_events = _named(host_sio.get_received(), "connection_requested")
+    assert len(host_events) == 1
+    payload = host_events[0]["args"][0]
+    assert payload["team_id"] == team["team_id"]
+    assert payload["game_id"] == game_id
+    assert payload["connection_status"] == "CONNECTION_REQUESTED"
+
+    team_events = _named(team_sio.get_received(), "connection_requested")
+    assert len(team_events) >= 1
+    assert team_events[0]["args"][0]["team_id"] == team["team_id"]
+
+    host_sio.disconnect()
+    team_sio.disconnect()
+
+
+def test_connection_approved_reaches_team_and_host(app, client):
+    game_id, host = _create_game(client)
+    host_sio = _socket(app, host)
+    team_a = _create_team(client, game_id, "Team A")
+    team_b = _create_team(client, game_id, "Team B")
+    team_a_sio = _socket(
+        app, _connect(client, team_a["leader"], device_id="dev-a")["session_token"]
+    )
+    team_b_sio = _socket(
+        app, _connect(client, team_b["leader"], device_id="dev-b")["session_token"]
+    )
+    for sio in (host_sio, team_a_sio, team_b_sio):
+        sio.get_received()
+
+    client.post(
+        "/api/games/{}/connection-request".format(game_id),
+        json={"connection_token": team_a["leader"]["connection_token"]},
+    )
+    for sio in (host_sio, team_a_sio, team_b_sio):
+        sio.get_received()
+
+    approved = client.post(
+        "/api/games/{}/connection-requests/{}/approve".format(
+            game_id, team_a["team_id"]
+        ),
+        headers={HOST_TOKEN_HEADER: host},
+    )
+    assert approved.status_code == 200
+    assert approved.get_json()["data"]["connection_status"] == "CONNECTED"
+
+    # The approving team and the host both receive the event.
+    assert len(_named(team_a_sio.get_received(), "connection_approved")) >= 1
+    assert len(_named(host_sio.get_received(), "connection_approved")) == 1
+
+    # game_room is an intentional shared broadcast channel, so other teams may
+    # also receive the event; it must never carry secret gameplay data.
+    for payload in _named(team_b_sio.get_received(), "connection_approved"):
+        assert "words" not in payload["args"][0]
+        assert "current_word_text" not in payload["args"][0]
+
+    host_sio.disconnect()
+    team_a_sio.disconnect()
+    team_b_sio.disconnect()
+
+
+def test_connection_declined_reaches_team(app, client):
+    game_id, host = _create_game(client)
+    team = _create_team(client, game_id, "Team A")
+    team_sio = _socket(
+        app, _connect(client, team["leader"])["session_token"]
+    )
+    team_sio.get_received()
+
+    client.post(
+        "/api/games/{}/connection-request".format(game_id),
+        json={"connection_token": team["leader"]["connection_token"]},
+    )
+    team_sio.get_received()
+    response = client.post(
+        "/api/games/{}/connection-requests/{}/decline".format(
+            game_id, team["team_id"]
+        ),
+        headers={HOST_TOKEN_HEADER: host},
+    )
+    assert response.status_code == 200
+    declined = _named(team_sio.get_received(), "connection_declined")
+    assert len(declined) >= 1
+    assert declined[0]["args"][0]["connection_status"] == "DECLINED"
+    team_sio.disconnect()
+
+
+def test_member_joined_and_left_reach_host_and_team(app, client):
+    game_id, host = _create_game(client)
+    host_sio = _socket(app, host)
+    team = _create_team(client, game_id, "Team A")
+    team_sio = _socket(
+        app, _connect(client, team["leader"])["session_token"]
+    )
+    host_sio.get_received()
+    team_sio.get_received()
+
+    member = _add_member(client, team["team_id"], "Maria")
+    for sio in (host_sio, team_sio):
+        joined = _named(sio.get_received(), "member_joined")
+        assert len(joined) >= 1
+        assert joined[0]["args"][0]["member"]["member_id"] == member["member_id"]
+
+    removed = client.delete(
+        "/api/members/{}".format(member["member_id"]),
+        headers={HOST_TOKEN_HEADER: host},
+    )
+    assert removed.status_code == 200
+    for sio in (host_sio, team_sio):
+        left = _named(sio.get_received(), "member_left")
+        assert len(left) >= 1
+        assert left[0]["args"][0]["member_id"] == member["member_id"]
+
+    host_sio.disconnect()
+    team_sio.disconnect()
+
+
+# ---------------------------------------------------------------------------
+# 10. Score + penalty events reach the team socket
+# ---------------------------------------------------------------------------
+
+
+def test_score_and_penalty_reach_team_socket(app, client):
+    s = _setup(client)
+    host_sio = _socket(app, s.host)
+    tagasagot_sio = _socket(
+        app, _connect(client, s.member_a, device_id="dev-2")["session_token"]
+    )
+    for sio in (host_sio, tagasagot_sio):
+        sio.get_received()
+
+    turn_a = _turn_by_assign(client, s.host, s.match_a, s.words_b0[:4])
+    _start_turn(client, s.host, s.match_a)
+    for sio in (host_sio, tagasagot_sio):
+        sio.get_received()
+
+    assert _host_post(
+        client, s.host, "/api/turns/{}/correct".format(turn_a)
+    ).status_code == 200
+    correct = _named(tagasagot_sio.get_received(), "word_correct")
+    assert len(correct) >= 1
+    assert correct[0]["args"][0]["correct_words"] == 1
+    assert correct[0]["args"][0]["turn_id"] == turn_a
+
+    assert _host_post(
+        client,
+        s.host,
+        "/api/turns/{}/time/add".format(turn_a),
+        json={"seconds": 10},
+    ).status_code == 200
+    team_events = tagasagot_sio.get_received()
+    assert len(_named(team_events, "time_added")) >= 1
+    assert len(_named(team_events, "penalty_applied")) >= 1
+
+    host_sio.disconnect()
+    tagasagot_sio.disconnect()
+

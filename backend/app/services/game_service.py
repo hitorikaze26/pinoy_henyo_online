@@ -32,6 +32,18 @@ def assert_game_mutable(game):
         raise GameFrozenError()
 
 
+def assert_game_terminal(game):
+    """Raise if the game is NOT terminal — only terminal games may be deleted."""
+    if game.status not in (
+        Game.STATUS_GAME_COMPLETE,
+        Game.STATUS_CANCELLED,
+        Game.STATUS_EXPIRED,
+    ):
+        raise GameStateError(
+            "Only completed, cancelled, or expired games can be deleted."
+        )
+
+
 ALLOWED_TRANSITIONS = {
     Game.STATUS_LOBBY: frozenset({Game.STATUS_READY}),
     Game.STATUS_SETUP: frozenset({Game.STATUS_READY}),
@@ -161,6 +173,73 @@ def mark_game_expired(game):
         game.ended_at = utcnow()
     _record_event(game, "GAME_EXPIRED", {"from_status": game.status})
     return True
+
+
+def cancel_game(game):
+    """Transition a mutable game to CANCELLED."""
+    _transition(game, Game.STATUS_CANCELLED, "GAME_CANCELLED")
+    return _status_payload(game)
+
+
+def leave_game(game):
+    """Host leaves the game without deleting it.
+
+    The host's device session is closed (host_last_seen_at is cleared so the
+    maintenance sweeper treats the host as absent) and, when the host leaves
+    mid-play, the game is paused so it cannot advance while unattended. The
+    game, teams, members, words and scores all remain intact and the session
+    token stays valid so the host (or a returning device) can reconnect.
+    """
+    from_status = game.status
+    if from_status in (
+        Game.STATUS_GAME_COMPLETE,
+        Game.STATUS_CANCELLED,
+        Game.STATUS_EXPIRED,
+    ):
+        raise GameStateError("A finished game cannot be left.")
+    game.host_last_seen_at = None
+    if from_status in (
+        Game.STATUS_ROUND_1,
+        Game.STATUS_ROUND_2,
+        Game.STATUS_TIE_BREAKER,
+    ):
+        game.status = Game.STATUS_PAUSED
+        to_status = Game.STATUS_PAUSED
+    else:
+        to_status = from_status
+    _record_event(
+        game,
+        "HOST_LEFT",
+        {"from_status": from_status, "to_status": game.status},
+    )
+    return _status_payload(game)
+
+
+def save_game(game):
+    """Manually persist the current game state.
+
+    Operates on the existing game only — it never creates a duplicate game.
+    All mutations throughout the app are already committed to the database
+    (the DB is the source of truth), so this records an explicit manual-save
+    marker (GAME_SAVED) with the produced timestamp and returns the current
+    status/round so the caller can confirm the exact state that was saved.
+    """
+    _record_event(game, "GAME_SAVED", {"status": game.status})
+    return {
+        "game_id": game.id,
+        "status": game.status,
+        "current_round": game.current_round,
+        "saved_at": utcnow(),
+    }
+
+
+def delete_game(game):
+    """Permanently delete a game and all cascaded data.
+
+    Only allowed for terminal games (COMPLETE, CANCELLED, EXPIRED).
+    """
+    assert_game_terminal(game)
+    db.session.delete(game)
 
 
 def _status_payload(game):

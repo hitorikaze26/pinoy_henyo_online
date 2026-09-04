@@ -988,10 +988,13 @@ function renderRealQr(container, dataUri) {
     }
   }
 
-  // True if the team has at least one member with an active socket connection.
+  // True if the team is CONNECTED to the host screen (host approval given).
+  // Falls back to active member sockets only when the roster lacks the field.
   function teamConnected(teamId) {
     const r = roster.find((t) => t.team_id === teamId);
-    return !!(r && (r.members || []).some((m) => m.is_connected));
+    if (!r) return false;
+    if (typeof r.connection_status === 'string') return r.connection_status === 'CONNECTED';
+    return !!(r.members || []).some((m) => m.is_connected);
   }
 
   function allRosterTeams() {
@@ -1561,16 +1564,27 @@ function renderRealQr(container, dataUri) {
   // rejoin the active turn room so the server re-sends turn_state.
   if (rt && !rt.getSocket()) {
     rt.connect({ mode: 'host' });
+    const rtRosterRefresh = () => {
+      loadRoster().then(() => { renderConnections(); renderAllTeams(); }).catch(() => {});
+    };
     rt.onConnect(() => {
       if (activeMatch && turn && activeTurnId()) rt.joinTurn(turn.turn_id);
       rtReload();
+      rtRosterRefresh();
     });
     rt.onReconnect(() => {
       if (activeMatch && turn && activeTurnId()) rt.joinTurn(turn.turn_id);
       rtReload();
+      rtRosterRefresh();
     });
     rt.onDisconnect(() => { /* connection banner handled by pages */ });
   }
+
+  // If the host returns to this tab after teams connected while away,
+  // refresh the roster (realtime events are not guaranteed to be missed).
+  window.addEventListener('focus', () => {
+    loadRoster().then(() => { renderConnections(); renderAllTeams(); }).catch(() => {});
+  });
 
   // helper that returns a match object by id from `matches`
   function pendingMatchForId(id) {

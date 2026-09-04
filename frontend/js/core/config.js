@@ -4,9 +4,15 @@
    Central base URLs + constants. Vanilla JS, no framework.
    ============================================================ */
 const PINOY_CONFIG = (() => {
-  const API_BASE = window.PINOY_API_BASE || 'http://localhost:5000/api';
+  // Base URLs derive from the current page origin. Flask serves the frontend,
+  // REST API, and Socket.IO from the same origin, so this is correct both for
+  // local dev (http://localhost:5000) and behind a Cloudflare Tunnel / custom
+  // domain (https://your-host). Override with window.PINOY_API_BASE /
+  // window.PINOY_SOCKET_BASE only if the client and server are on different origins.
+  const DEFAULT_ORIGIN = (window.location && window.location.origin) || 'http://localhost:5000';
+  const API_BASE = window.PINOY_API_BASE || DEFAULT_ORIGIN + '/api';
   const SOCKET_BASE = window.PINOY_SOCKET_BASE || (() => {
-    try { return new URL(API_BASE).origin; } catch (e) { return 'http://localhost:5000'; }
+    try { return new URL(API_BASE).origin; } catch (e) { return DEFAULT_ORIGIN; }
   })();
   const QR_BASE = 'https://pinoyhenyo.online';
 

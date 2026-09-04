@@ -60,6 +60,14 @@ class Game(db.Model):
         onupdate=utcnow,
     )
 
+    __table_args__ = (
+        db.Index(
+            "ix_games_host_token_created",
+            "host_session_token",
+            "created_at",
+        ),
+    )
+
     current_match = db.relationship(
         "Match", foreign_keys=[current_match_id], post_update=True
     )

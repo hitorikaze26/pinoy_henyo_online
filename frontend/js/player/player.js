@@ -11,6 +11,9 @@ let STATE = {
   gameCode:      '',
   isConnected:   false,
   hostConnected: false,
+  connectionStatus: 'NOT_CONNECTED', // NOT_CONNECTED | CONNECTION_REQUESTED | CONNECTED | DECLINED | DISCONNECTED
+  connectionToken: '',               // leader's connection token (used for re-requests)
+  teamQrDataUri:   '',               // real join-this-team QR (data URI), when available
   gameStatus:    'waiting',   // waiting | ready | round1 | round2 | complete
   currentRound:  1,
   username:      '',
@@ -96,6 +99,10 @@ function applyTeamRoster(team) {
   if (!team) return;
   if (team.team_name) STATE.teamName = team.team_name;
   if (team.team_code) STATE.teamCode = team.team_code;
+  if (team.connection_status) {
+    STATE.connectionStatus = team.connection_status;
+    STATE.hostConnected = team.connection_status === 'CONNECTED';
+  }
   STATE.members = (team.members || []).map(memberFromPayload);
   const myId = team.my_member_id;
   const me = (team.members || []).find(m => m.member_id === myId);
@@ -103,11 +110,42 @@ function applyTeamRoster(team) {
     STATE.username = me.username || STATE.username;
     STATE.role = roleDisplayName(me.gameplay_role);
     STATE.nextMemberId = Math.max(me.member_id + 1, STATE.nextMemberId);
+    if (me.device_role === 'TEAM_LEADER' && team.leader && team.leader.connection_token) {
+      STATE.connectionToken = team.leader.connection_token;
+    }
   }
   (team.members || []).forEach(m => {
     if (m.member_id >= STATE.nextMemberId) STATE.nextMemberId = m.member_id + 1;
   });
   if (API.getUsername && API.getUsername()) STATE.username = API.getUsername();
+}
+
+/* ============================================================
+   HOST-CONNECTION STATE (server-authoritative)
+   ============================================================ */
+function setConnectionStatus(status) {
+  const prev = STATE.connectionStatus;
+  STATE.connectionStatus = status;
+  STATE.hostConnected = status === 'CONNECTED';
+  try { renderHeader(); } catch (e) {}
+  try { renderTeamsTab(); } catch (e) {}
+  try { renderWaitingScreen(); } catch (e) {}
+  return prev !== status;
+}
+
+function connectionStateMeta(status) {
+  switch (status) {
+    case 'CONNECTED':
+      return { dot: 'connected', label: 'Host Connected', hint: '' };
+    case 'CONNECTION_REQUESTED':
+      return { dot: 'waiting', label: 'Waiting for host approval…', hint: 'Request sent. The host must approve this team.' };
+    case 'DECLINED':
+      return { dot: 'disconnected', label: 'Declined by host', hint: 'Scan the host QR or enter the host code to try again.' };
+    case 'DISCONNECTED':
+      return { dot: 'disconnected', label: 'Disconnected by host', hint: 'Scan the host QR or enter the host code to reconnect.' };
+    default:
+      return { dot: 'disconnected', label: 'Not Connected', hint: 'Ask the host to approve this team before playing.' };
+  }
 }
 
 // Populate STATE.words from the player's team words payload.
@@ -304,9 +342,9 @@ function renderTeamsTab() {
       <i class="fa-regular fa-copy"></i>
     </button>`;
 
-  $('team-info-host').innerHTML = STATE.hostConnected
-    ? `<span class="conn-dot conn-dot--connected"></span> Connected`
-    : `<span class="conn-dot conn-dot--disconnected"></span> Disconnected`;
+  const meta = connectionStateMeta(STATE.connectionStatus);
+  $('team-info-host').innerHTML = `
+    <span class="conn-dot conn-dot--${meta.dot}"></span> ${meta.label}</span>`;
 
   const statusHtml = {
     waiting:  `<i class="fa-regular fa-clock" style="color:var(--accent-1-400)"></i> Waiting for Host`,
@@ -330,13 +368,32 @@ function renderTeamsTab() {
   renderRoles();
 
   // QR
-  renderQrGrid($('team-qr-grid'), STATE.teamCode);
+  renderTeamQrArea();
   $('team-code-display').textContent = STATE.teamCode;
 
   const connCount = STATE.members.filter(m => m.connected).length;
-  $('team-conn-status-text').innerHTML = STATE.hostConnected
-    ? `<span class="conn-dot conn-dot--connected"></span> Host Connected — ${connCount}/${STATE.members.length} members`
-    : `<span class="conn-dot conn-dot--disconnected"></span> Not Connected`;
+  const connMeta = connectionStateMeta(STATE.connectionStatus);
+  $('team-conn-status-text').innerHTML = `
+    <span class="conn-dot conn-dot--${connMeta.dot}"></span> ${connMeta.label}`;
+  const hintEl = $('team-conn-status-hint');
+  if (hintEl) hintEl.textContent = connMeta.hint;
+
+  const needsConnect = STATE.connectionStatus !== 'CONNECTED';
+  const cta = $('btn-connect-host');
+  if (cta) {
+    cta.hidden = !needsConnect;
+    cta.textContent = STATE.connectionStatus === 'CONNECTION_REQUESTED'
+      ? 'Waiting for host approval…'
+      : 'Connect to Host';
+  }
+  // Member feedback when the team is pending/declined.
+  const pendingBox = $('team-conn-pending-box');
+  if (pendingBox) {
+    pendingBox.hidden = !(
+      STATE.connectionStatus === 'CONNECTION_REQUESTED' ||
+      STATE.connectionStatus === 'DECLINED'
+    );
+  }
 }
 
 function renderMemberList() {
@@ -496,14 +553,48 @@ $('form-add-member').addEventListener('submit', async e => {
 
 /* ============================================================
    QR & SCAN BUTTONS (teams tab)
-============================================================ */
+   ============================================================ */
+/* Real team QR (deep-link for joining this team). Falls back to the
+   decorative grid when no session/session isn't a leader yet. */
+function renderTeamQrArea() {
+  const el = $('team-qr-grid');
+  if (!el) return;
+  if (STATE.teamQrDataUri) {
+    el.innerHTML = `<img class="team-qr-img" src="${STATE.teamQrDataUri}" alt="Team QR code">`;
+  } else {
+    renderQrGrid(el, STATE.teamCode);
+  }
+}
+
+async function loadTeamQr() {
+  const teamId = API.getTeamId();
+  if (!teamId || !API.getSessionToken()) {
+    renderTeamQrArea();
+    showToast('QR available after you are signed in');
+    return;
+  }
+  try {
+    const res = await TeamAPI.teamQr(teamId);
+    if (res && res.qr_image) {
+      STATE.teamQrDataUri = res.qr_image;
+      renderTeamQrArea();
+      showToast('Team QR ready');
+    }
+  } catch (err) {
+    console.warn('[player] team QR load failed', err && err.message);
+    renderTeamQrArea();
+    showToast(err && err.message ? 'Please join the game first' : 'Team QR unavailable');
+  }
+}
+
 $('btn-generate-qr').addEventListener('click', () => {
-  renderQrGrid($('team-qr-grid'), STATE.teamCode);
-  showToast('QR code refreshed');
+  loadTeamQr();
 });
 
 $('btn-scan-qr-teams').addEventListener('click', () => openQrScanner());
 $('btn-header-qr').addEventListener('click',    () => openQrScanner());
+
+$('btn-connect-host').addEventListener('click', () => openQrScanner());
 
 $('btn-copy-game-code').addEventListener('click', () => copyText(STATE.gameCode, 'Game Code'));
 $('btn-copy-settings-code').addEventListener('click', () => copyText(STATE.teamCode, 'Team Code'));
@@ -923,6 +1014,7 @@ async function startCamera() {
     });
     video.srcObject = STATE.cameraStream;
     await video.play();
+    window.QrScanner.start({ video, onScan: handlePlayerQrScanned });
   } catch (err) {
     const msgs = {
       NotAllowedError:        'Camera access was denied. Please allow camera permission and try again.',
@@ -938,12 +1030,58 @@ async function startCamera() {
 }
 
 function stopCamera() {
+  if (window.QrScanner) window.QrScanner.stop();
   if (STATE.cameraStream) {
     STATE.cameraStream.getTracks().forEach(t => t.stop());
     STATE.cameraStream = null;
   }
   const video = $('qr-video');
   if (video) video.srcObject = null;
+}
+
+/* A detected frame: the host QR embeds the game code. Requesting
+   connection is a real backend call; the host approves it. */
+function handlePlayerQrScanned(raw) {
+  const parsed = Connect.parseJoinUrl(raw);
+  if (!parsed || !parsed.gameCode) {
+    showToast('That is not a Pinoy Henyo QR code.');
+    return;
+  }
+  API.setGameCode(parsed.gameCode);
+  STATE.gameCode = parsed.gameCode;
+  closeQrScanner();
+  sendConnectionRequest();
+}
+
+/* Ask the host to approve this team. Server-authoritative state is
+   applied from the response / realtime events. */
+async function sendConnectionRequest() {
+  const gameId = API.getGameId();
+  const teamId = API.getTeamId();
+  if (!gameId || !teamId) {
+    showToast('Join a game first before connecting to the host.');
+    return;
+  }
+  try {
+    await API.withLoading('player-conn-req', () =>
+      TeamAPI.requestConnection(gameId, STATE.connectionToken || undefined)
+    );
+    setConnectionStatus('CONNECTION_REQUESTED');
+    showToast('Request sent — waiting for host approval');
+  } catch (err) {
+    if (err.code === 'ALREADY_CONNECTED') {
+      setConnectionStatus('CONNECTED');
+      showToast('Your team is already connected to the host');
+    } else if (err.code === 'REQUEST_PENDING') {
+      setConnectionStatus('CONNECTION_REQUESTED');
+      showToast('Request is already pending — the host will approve it soon');
+    } else if (err.code === 'NOT_TEAM_LEADER') {
+      showToast('Only the team leader can request connection');
+    } else {
+      console.warn('[player] connection request failed', err);
+      showToast(err.message || 'Could not send the connection request.');
+    }
+  }
 }
 
 $('btn-qr-back').addEventListener('click', closeQrScanner);
@@ -988,14 +1126,14 @@ $('form-enter-code').addEventListener('submit', e => {
 
   if (gameCode) API.setGameCode(gameCode);
   if (teamCode) { API.setTeamCode(teamCode); STATE.teamCode = teamCode; }
-  if (parsed && parsed.type === 'team') STATE.hostConnected = true;
 
-  STATE.gameCode      = gameCode;
-  STATE.isConnected   = true;
-  STATE.hostConnected = true;
+  STATE.gameCode = gameCode;
 
   closeModal('modal-enter-code');
-  showConnSuccess();
+
+  // Entering the host code is an explicit connection request. The host must
+  // approve before the team shows as connected.
+  sendConnectionRequest();
 });
 
 /* ============================================================
@@ -1132,6 +1270,7 @@ init();
         applyTeamRoster(teamData);
         if (teamData.team_name) API.setTeamName(teamData.team_name);
         if (teamData.team_code) API.setTeamCode(teamData.team_code);
+        if (API.getDeviceRole() === 'TEAM_LEADER') loadTeamQr();
       }
       if (wordsData && wordsData.words) applyMyWords(wordsData.words);
     } catch (e) {
@@ -1310,16 +1449,26 @@ init();
   rt.on('team_updated', (p) => { if (forMyTeam(p) && p.team_name) { STATE.teamName = p.team_name; try { renderHeader(); renderTeamsTab(); renderSettingsTab(); } catch (e) {} } });
 
   // Lifecycle: on (re)connect rejoin the known turn room to re-push state.
+  // NOTE: the device socket being up is NOT proof the host approved the team —
+  // host approval is ``Team.connection_status``, re-read from the server.
+  async function refreshConnectionStatus() {
+    const teamId = API.getTeamId();
+    if (!teamId || !API.getSessionToken()) return;
+    try {
+      const teamData = await TeamAPI.getMyTeam(teamId);
+      if (teamData) applyTeamRoster(teamData);
+    } catch (e) { /* keep last known state */ }
+  }
   rt.onConnect(() => {
     STATE.isConnected = true;
-    STATE.hostConnected = true;
     if (knownTurnId) rt.joinTurn(knownTurnId);
+    refreshConnectionStatus();
     try { renderHeader(); renderWaitingScreen(); } catch (e) {}
   });
   rt.onReconnect(() => {
     STATE.isConnected = true;
-    STATE.hostConnected = true;
     if (knownTurnId) rt.joinTurn(knownTurnId);
+    refreshConnectionStatus();
     try { renderHeader(); renderWaitingScreen(); } catch (e) {}
     showToast('Reconnected');
   });
@@ -1327,6 +1476,27 @@ init();
     STATE.isConnected = false;
     stopTimerTicker();
     try { renderHeader(); } catch (e) {}
+  });
+
+  // Host connection / approval state (server-authoritative).
+  rt.on('connection_requested', (p) => {
+    if (!forMyTeam(p)) return;
+    setConnectionStatus('CONNECTION_REQUESTED');
+  });
+  rt.on('connection_approved', (p) => {
+    if (!forMyTeam(p)) return;
+    setConnectionStatus('CONNECTED');
+    showToast('Host approved your team!');
+  });
+  rt.on('connection_declined', (p) => {
+    if (!forMyTeam(p)) return;
+    setConnectionStatus('DECLINED');
+    showToast('The host declined your team. Scan or enter the code to try again.');
+  });
+  rt.on('connection_disconnected', (p) => {
+    if (!forMyTeam(p)) return;
+    setConnectionStatus('DISCONNECTED');
+    showToast('The host disconnected your team.');
   });
 
   // Connect the device socket.

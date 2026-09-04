@@ -97,6 +97,8 @@ const Realtime = (() => {
       'time_added', 'time_removed', 'penalty_applied',
       'team_connected', 'team_disconnected',
       'member_joined', 'member_left', 'role_updated', 'team_updated',
+      'connection_requested', 'connection_approved',
+      'connection_declined', 'connection_disconnected',
       'error',
     ]);
     KNOWN.forEach((name) => {
@@ -180,13 +182,14 @@ const Realtime = (() => {
       'time_added', 'time_removed', 'penalty_applied',
       'team_connected', 'team_disconnected',
       'member_joined', 'member_left', 'role_updated', 'team_updated',
+      'connection_requested', 'connection_approved',
+      'connection_declined', 'connection_disconnected',
     ];
     return KNOWN.filter((name) => !(handlers.has(name) && handlers.get(name).size));
   }
 
   if (typeof window !== 'undefined') {
     window.addEventListener('beforeunload', teardown);
-    window.Realtime = Realtime;
   }
 
   return {

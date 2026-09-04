@@ -49,6 +49,16 @@ def _register_error_handlers(app):
 
         app.register_error_handler(status_code, handler)
 
+    # engineio raises ConnectionError when the WebSocket upgrade fails
+    # on werkzeug (dev server). This is expected — the client falls back
+    # to polling — but it must not surface as an opaque HTTP 500.
+    app.register_error_handler(
+        ConnectionError,
+        lambda error: error_response(
+            "WebSocket upgrade failed.", code="CONNECTION_ERROR", status=400,
+        ),
+    )
+
 
 def _register_sockets():
     from .services import realtime as _realtime

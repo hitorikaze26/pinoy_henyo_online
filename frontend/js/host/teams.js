@@ -5,7 +5,7 @@
 ============================================================ */
 let GAME_CODE  = '';
 const ROLES      = ['Manghuhula', 'Tagasagot'];
-const STATUSES   = ['connected', 'waiting', 'disconnected', 'none'];
+const STATUSES   = ['connected', 'waiting', 'pending', 'disconnected', 'none'];
 
 // Cached real backend QR image (data URI), populated during bootstrap.
 let qrDataUri = null;
@@ -23,6 +23,7 @@ let STATE = {
   pendingRemoveTeamId: null,  // team pending removal confirmation
   search: '',
   filter: 'all',              // all | connected | waiting | disconnected
+  noSession: false,           // true when no host game context could be resolved
 
   teams: [],
 };
@@ -174,13 +175,35 @@ function renderStats() {
 
 /* ============================================================
    STATUS HELPERS
-============================================================ */
+   ------------------------------------------------------------
+   Card statuses are derived from the team's backend
+   ``connection_status`` (host-connection approval state):
+     CONNECTED            -> connected
+     CONNECTION_REQUESTED -> pending (awaiting host approval)
+     NOT_CONNECTED        -> none
+     DECLINED/DISCONNECTED-> disconnected
+   Member statuses stay presence-based (device online).
+   ============================================================ */
+function connectionToCardStatus(cs) {
+  switch (cs) {
+    case 'CONNECTED':            return 'connected';
+    case 'CONNECTION_REQUESTED': return 'pending';
+    case 'DECLINED':             return 'disconnected';
+    case 'DISCONNECTED':         return 'disconnected';
+    default:                     return 'none';
+  }
+}
+function applyConnectionStatus(team, cs) {
+  team.connectionStatus = cs || 'NOT_CONNECTED';
+  team.status = connectionToCardStatus(team.connectionStatus);
+  return team;
+}
 function statusClass(status) {
-  const map = { connected: 'connected', waiting: 'waiting', disconnected: 'disconnected', none: 'none' };
+  const map = { connected: 'connected', waiting: 'waiting', pending: 'pending', disconnected: 'disconnected', none: 'none' };
   return map[status] || 'none';
 }
 function statusLabel(status) {
-  const map = { connected: 'Connected', waiting: 'Waiting', disconnected: 'Disconnected', none: 'Not Connected' };
+  const map = { connected: 'Connected', waiting: 'Waiting', pending: 'Pending Approval', disconnected: 'Disconnected', none: 'Not Connected' };
   return map[status] || 'Not Connected';
 }
 
@@ -258,19 +281,29 @@ function renderTeams() {
   const query  = STATE.search.trim().toLowerCase();
   const filter = STATE.filter;
 
-  const visible = STATE.teams.filter(t => {
-    const matchSearch = !query || t.name.toLowerCase().includes(query);
-    const matchFilter = filter === 'all' || t.status === filter;
-    return matchSearch && matchFilter;
-  });
-
   const grid  = $('teams-grid');
   const empty = $('empty-state');
 
+  // No host game session -> show a dedicated "Game session not found" state,
+  // never the misleading "No Teams Yet" message.
+  if (STATE.noSession) {
+    return showNoSessionState();
+  }
+
+  const visible = STATE.teams.filter(t => {
+    const matchSearch = !query || t.name.toLowerCase().includes(query);
+    const matchFilter = filter === 'all'
+      || t.status === filter
+      || (filter === 'waiting' && t.status === 'pending');
+    return matchSearch && matchFilter;
+  });
+
   if (visible.length === 0) {
     grid.innerHTML = '';
+    empty.classList.remove('empty-state--nosession');
     empty.hidden = false;
   } else {
+    empty.classList.remove('empty-state--nosession');
     empty.hidden = true;
     grid.innerHTML = visible.map(buildTeamCard).join('');
   }
@@ -352,6 +385,38 @@ function render() {
   renderTeams();
   renderConnectSection();
   renderLockBtn();
+}
+
+/* ============================================================
+   NO SESSION STATE
+   Shown instead of "No Teams Yet" when the page loads with no
+   host game context (lost/stale game_id). Gives a clear message
+   and a path back to the Host Dashboard instead of a misleading
+   empty roster.
+   ============================================================ */
+function showNoSessionState() {
+  STATE.noSession = true;
+  const grid  = $('teams-grid');
+  const empty = $('empty-state');
+  if (!empty) return;
+  empty.hidden = false;
+  empty.classList.add('empty-state--nosession');
+  if (grid) grid.innerHTML = '';
+  // Replace the "No Teams Yet" copy with a session-not-found message.
+  const title = empty.querySelector('.empty-state__title');
+  const sub   = empty.querySelector('.empty-state__sub');
+  const btn   = empty.querySelector('.empty-state__btn');
+  if (title) title.textContent = 'Game session not found';
+  if (sub) sub.textContent = 'No host game is active in this browser. Return to the Host Dashboard to recover your game, or create a new one from the lobby.';
+  if (btn) {
+    btn.classList.remove('controls-btn--add');
+    btn.innerHTML = '<i class="fa-solid fa-gauge-high"></i> Go to Host Dashboard';
+    btn.replaceWith(btn.cloneNode(true));
+    const fresh = empty.querySelector('.empty-state__btn');
+    fresh.addEventListener('click', () => {
+      window.location.href = 'host_dashboard.html';
+    });
+  }
 }
 
 /* ============================================================
@@ -480,17 +545,16 @@ $('form-add-team').addEventListener('submit', async (e) => {
 
       closeModal($('modal-add-team'));
       // The backend has no team-list endpoint; reflect the created team.
-      STATE.teams.push({
+      STATE.teams.push(applyConnectionStatus({
         id: teamId,
         name: team.team_name,
-        status: team.team_status || 'waiting',
         members: allMembers.map(({ member_id, role }, i) => ({
           id: member_id,
           name: members[i] && members[i].name ? members[i].name : 'Member',
           role,
           status: 'none',
         })),
-      });
+      }, team.connection_status || 'CONNECTED'));
       render();
       showToast(`Team "${name}" created`);
     } catch (err) {
@@ -900,7 +964,69 @@ init();
    - Host reconnect guard
    - Replace the demo QR + game code with the real backend QR/data
      when a host game context exists.
+   ------------------------------------------------------------
+   Roster refresh: teams connect WHILE this page is already open,
+   and realtime events can be late/missed (slow or tunneled
+   connections), so the roster is re-fetched from the backend on
+   socket connect/reconnect and whenever the tab regains focus.
    ============================================================ */
+let rosterGameId     = API.getGameId() || null;
+let rosterRefreshing = false;
+
+function gameplayRole(role) {
+  return String(role || '').toUpperCase() === 'MANGHUHULA' ? 'Manghuhula' : 'Tagasagot';
+}
+
+function seedRoster(teams) {
+  STATE.teams = (teams || []).map(team => {
+    const t = {
+      id: team.team_id,
+      name: team.team_name || 'Team ' + team.team_id,
+      connectionStatus: team.connection_status || 'NOT_CONNECTED',
+      members: (team.members || []).map(m => ({
+        id: m.member_id,
+        name: m.username,
+        role: gameplayRole(m.gameplay_role),
+        status: m.is_connected ? 'connected' : 'disconnected',
+      })),
+    };
+    t.status = connectionToCardStatus(t.connectionStatus);
+    return t;
+  });
+  // Keep known teams in sync for other setup pages (words/match filters).
+  (teams || []).forEach(t => {
+    if (API.addKnownTeam) API.addKnownTeam(t.team_id, t.team_name);
+  });
+  render();
+}
+
+async function refreshRoster() {
+  const gameId = rosterGameId || API.getGameId();
+  if (!gameId || rosterRefreshing) return;
+  const isOpen = !!document.getElementById('modal-approve-connection');
+  rosterRefreshing = true;
+  try {
+    const roster = await TeamAPI.listTeams(gameId);
+    // Drop the approval modal if the requesting team's state resolved
+    // server-side while we were away (e.g. approved on another device).
+    seedRoster((roster && Array.isArray(roster.teams)) ? roster.teams : []);
+    if (isOpen) {
+      const title = String($('approve-team-name').textContent || '');
+      const stillPending = STATE.teams.some(t =>
+        String(t.name) === title && t.connectionStatus === 'CONNECTION_REQUESTED');
+      if (!stillPending) closeModal($('modal-approve-connection'));
+    }
+  } catch (e) { console.warn('[teams] roster refresh failed', e && e.message); }
+  finally { rosterRefreshing = false; }
+}
+
+// If this page was opened fresh while the host is mid-game, catching
+// focus/tab visibility keeps the roster honest even without socket events.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') refreshRoster();
+});
+window.addEventListener('focus', () => refreshRoster());
+
 function renderRealQr(container, dataUri) {
   if (!container) return;
   if (!dataUri) { renderQrGrid(container, GAME_CODE); return; }
@@ -914,11 +1040,40 @@ function renderRealQr(container, dataUri) {
 }
 
 (async function bootstrapTeamsIntegration() {
-  const gameId = API.getGameId();
-  if (!gameId) return;
+  // ------------------------------------------------------------------
+  // DIAGNOSTIC LOGGING (see Task 5)
+  // The backend is the source of truth; the page only renders when it can
+  // resolve a game_id + host token. Log the inputs we are about to use so
+  // a "empty Teams page" can be traced without digging into the network tab.
+  // ------------------------------------------------------------------
+  const diagToken = API.getHostToken() ? 'present' : 'missing';
+  const diagGameId = API.getGameId();
+  const diagHostGameId = API.getHostGameId();
+  const diagGameCode = API.getGameCode();
+  const diagBase = API.getBaseUrl ? API.getBaseUrl() : 'n/a';
+  console.log('[teams] bootstrap', {
+    host_token: diagToken,
+    game_id: diagGameId,
+    host_game_id: diagHostGameId,
+    game_code: diagGameCode,
+    teams_api_url: diagGameId ? `${diagBase}/games/${diagGameId}/teams` : '(no game_id)',
+  });
+
+  let gameId = diagGameId || diagHostGameId;
+
+  // If the page was opened fresh with no game context (e.g. after a hard
+  // refresh or a lost/stale session), try to recover it before giving up.
+  if (!gameId) {
+    console.warn('[teams] no game_id found in session; attempting restore', {
+      host_token: diagToken,
+    });
+  }
 
   try {
     const r = await Connect.restoreHostSession();
+    if (r.status === 'connected' && r.data && r.data.game_id) {
+      gameId = r.data.game_id;
+    }
     if (r.status === 'invalid' || r.status === 'unavailable') {
       Connect.showReconnectBanner({
         title: 'Host session not found',
@@ -927,6 +1082,22 @@ function renderRealQr(container, dataUri) {
       document.body.setAttribute('data-reconnect-target', '../../index.html');
     }
   } catch (e) { /* ignore */ }
+
+  // No usable game context -> show an explicit "Game session not found"
+  // state (NOT the misleading "No Teams Yet"), and give a way back.
+  if (!gameId) {
+    console.warn('[teams] no host game session; showing "Game session not found"', { diagGameId, diagHostGameId });
+    showNoSessionState();
+    return;
+  }
+
+  // Persist the resolved game_id so later roster refreshes / actions
+  // (approve/decline, add member) target the same game.
+  if (!diagGameId && gameId) {
+    API.setGameId(gameId);
+    API.setHostGameId(gameId);
+    rosterGameId = gameId;
+  }
 
   const code = API.getGameCode();
   if (code) {
@@ -937,34 +1108,14 @@ function renderRealQr(container, dataUri) {
     });
   }
 
-  // Load the real team roster from the backend and seed STATE.teams so the
-  // page shows live data instead of a static demo roster.
-  function gameplayRole(role) {
-    return String(role || '').toUpperCase() === 'MANGHUHULA' ? 'Manghuhula' : 'Tagasagot';
-  }
-  function seedRoster(teams) {
-    STATE.teams = (teams || []).map(team => ({
-      id: team.team_id,
-      name: team.team_name || 'Team ' + team.team_id,
-      status: (team.members || []).some(m => m.is_connected)
-        ? 'connected'
-        : ((team.members || []).length ? 'waiting' : 'none'),
-      members: (team.members || []).map(m => ({
-        id: m.member_id,
-        name: m.username,
-        role: gameplayRole(m.gameplay_role),
-        status: m.is_connected ? 'connected' : 'disconnected',
-      })),
-    }));
-    // Keep known teams in sync for other setup pages (words/match filters).
-    (teams || []).forEach(t => {
-      if (API.addKnownTeam) API.addKnownTeam(t.team_id, t.team_name);
-    });
-    render();
-  }
+  rosterGameId = gameId;
 
   try {
     const roster = await TeamAPI.listTeams(gameId);
+    console.log('[teams] roster response', {
+      game_id: gameId,
+      count: (roster && Array.isArray(roster.teams)) ? roster.teams.length : 0,
+    });
     seedRoster((roster && Array.isArray(roster.teams)) ? roster.teams : []);
   } catch (e) { console.warn('[teams] roster offline', e.message); }
 
@@ -989,6 +1140,7 @@ function renderRealQr(container, dataUri) {
 (function realtimePresence() {
   const rt = window.Realtime;
   const gameId = API.getGameId();
+  rosterGameId = rosterGameId || gameId; // keep roster refreshes targetable
   if (!rt || !gameId) return; // no realtime lib or no game -> skip
 
   function gameplayRole(role) {
@@ -997,7 +1149,7 @@ function renderRealQr(container, dataUri) {
   function ensureTeam(teamId) {
     let team = STATE.teams.find(t => String(t.id) === String(teamId));
     if (!team) {
-      team = { id: teamId, name: 'Team ' + teamId, status: 'waiting', members: [] };
+      team = applyConnectionStatus({ id: teamId, name: 'Team ' + teamId, members: [] }, 'NOT_CONNECTED');
       STATE.teams.push(team);
     }
     return team;
@@ -1016,9 +1168,15 @@ function renderRealQr(container, dataUri) {
     m.status = payload.is_connected ? 'connected' : 'disconnected';
     return m;
   }
+  // Team card status is governed by the host-connection approval state,
+  // NOT by member device presence. Member presence only flips the dots.
   function recomputeTeamStatus(team) {
-    const anyConnected = team.members.some(m => m.status === 'connected');
-    team.status = anyConnected ? 'connected' : (team.members.length ? 'waiting' : 'none');
+    if (team.connectionStatus) {
+      team.status = connectionToCardStatus(team.connectionStatus);
+    } else {
+      const anyConnected = team.members.some(m => m.status === 'connected');
+      team.status = anyConnected ? 'connected' : (team.members.length ? 'waiting' : 'none');
+    }
   }
 
   const reRender = () => {
@@ -1071,11 +1229,97 @@ function renderRealQr(container, dataUri) {
     reRender();
   });
 
-  // Connect the host socket; on (re)connect re-render presence.
+  /* ------------------------------------------------------------
+     HOST-CONNECTION EVENTS (client -> host approval flow)
+     ------------------------------------------------------------ */
+  let approvalTeamId = null; // team the approval modal is currently showing
+  let approvalBusy   = false; // guards double-submit of the approval modal
+  function openApprovalModal(payload) {
+    const team = ensureTeam(payload.team_id);
+    if (payload.team_name) team.name = payload.team_name;
+    applyConnectionStatus(team, payload.connection_status || 'CONNECTION_REQUESTED');
+
+    const leader = (payload.leader && payload.leader.username) || '—';
+    $('approve-team-name').textContent = team.name;
+    $('approve-leader-name').textContent = leader;
+    $('approve-member-count').textContent = (payload.member_count != null)
+      ? String(payload.member_count)
+      : String(team.members.length);
+    $('approve-connection-details').textContent =
+      `"${team.name}" is requesting to join the host screen for this game.`;
+    approvalBusy = false;
+    reRender();
+    openModal($('modal-approve-connection'));
+  }
+  async function decideConnection(teamId, approve) {
+    if (approvalBusy) return;
+    approvalBusy = true;
+    const overlay = $('modal-approve-connection');
+    try {
+      $('btn-approve-connection').disabled = true;
+      $('btn-decline-connection').disabled = true;
+      const res = approve
+        ? await TeamAPI.approveConnection(API.getGameId(), teamId)
+        : await TeamAPI.declineConnection(API.getGameId(), teamId);
+      const team = ensureTeam(teamId);
+      applyConnectionStatus(team, res.connection_status || (approve ? 'CONNECTED' : 'DECLINED'));
+      if (approvalTeamId === team.id) approvalTeamId = null;
+      closeModal(overlay);
+      reRender();
+      showToast(approve ? `Connected "${team.name}" to the host` : `Declined "${team.name}"`);
+    } catch (err) {
+      console.error('[teams] connection decision failed', err);
+      closeModal(overlay);
+      showToast(err.message || 'Action failed');
+    } finally {
+      approvalBusy = false;
+      $('btn-approve-connection').disabled = false;
+      $('btn-decline-connection').disabled = false;
+    }
+  }
+
+  $('btn-approve-connection').addEventListener('click', () => {
+    if (approvalTeamId != null) decideConnection(approvalTeamId, true);
+  });
+  $('btn-decline-connection').addEventListener('click', () => {
+    if (approvalTeamId != null) decideConnection(approvalTeamId, false);
+  });
+  $('close-approve-connection').addEventListener('click', () => closeModal($('modal-approve-connection')));
+
+  rt.on('connection_requested', (p) => {
+    if (!p || !p.team_id) return;
+    approvalTeamId = p.team_id;
+    openApprovalModal(p);
+  });
+  rt.on('connection_approved', (p) => {
+    if (!p || !p.team_id) return;
+    const team = ensureTeam(p.team_id);
+    applyConnectionStatus(team, p.connection_status || 'CONNECTED');
+    if (approvalTeamId === team.id) { closeModal($('modal-approve-connection')); approvalTeamId = null; }
+    reRender();
+    showToast(`"${team.name}" is now connected`);
+  });
+  rt.on('connection_declined', (p) => {
+    if (!p || !p.team_id) return;
+    const team = ensureTeam(p.team_id);
+    applyConnectionStatus(team, p.connection_status || 'DECLINED');
+    if (approvalTeamId === team.id) { closeModal($('modal-approve-connection')); approvalTeamId = null; }
+    reRender();
+  });
+  rt.on('connection_disconnected', (p) => {
+    if (!p || !p.team_id) return;
+    const team = ensureTeam(p.team_id);
+    applyConnectionStatus(team, p.connection_status || 'DISCONNECTED');
+    reRender();
+  });
+
+  // Connect the host socket; on (re)connect re-fetch the roster so teams
+  // that joined/approved while this page was closed or the socket was down
+  // show up even if events were missed.
   if (!rt.getSocket()) {
     rt.connect({ mode: 'host' });
-    rt.onConnect(() => { reRender(); showToast('Realtime connected'); });
-    rt.onReconnect(() => { reRender(); showToast('Realtime reconnected'); });
+    rt.onConnect(() => { refreshRoster(); reRender(); showToast('Realtime connected'); });
+    rt.onReconnect(() => { refreshRoster(); reRender(); showToast('Realtime reconnected'); });
     rt.onDisconnect(() => { showToast('Realtime disconnected'); });
   }
 })();

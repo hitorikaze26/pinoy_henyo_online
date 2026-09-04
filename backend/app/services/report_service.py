@@ -238,11 +238,72 @@ def game_history(game):
 
 
 def games_history_for_host(host_token):
-    """History for the game owned by a given host session token."""
-    game = Game.query.filter_by(host_session_token=host_token).first()
-    if game is None:
-        return []
-    return [game_history(game)]
+    """History for ALL games owned by a given host session token."""
+    games = (
+        Game.query.filter_by(host_session_token=host_token)
+        .order_by(Game.created_at.desc())
+        .all()
+    )
+    return [game_history(g) for g in games]
+
+
+def game_state(game):
+    """Recoverable resume snapshot for a host returning to a paused/active game.
+
+    The database is the source of truth: status, round, teams/members, the
+    scoreboard, and the live (or most recent) match/turn are all read back from
+    the DB. The timer is recomputed server-side (``turn_play_payload``) and is
+    never trusted from a browser. Secrets (word text) are included because the
+    host controls the game and needs the current word to restore the UI.
+    """
+    from ..services.turn_service import turn_play_payload
+
+    categories = (
+        Category.query.filter_by(game_id=game.id).order_by(Category.id).all()
+    )
+    current_round = None
+    if game.current_round is not None:
+        current_round = Round.query.filter_by(
+            game_id=game.id, round_number=game.current_round
+        ).first()
+    resume_turn = None
+    if game.current_match_id is not None:
+        match = db.session.get(Match, game.current_match_id)
+        if match is not None:
+            active = next(
+                (t for t in match.turns if t.status == Turn.STATUS_ACTIVE),
+                None,
+            )
+            resumed = active if active is not None else (
+                next(
+                    reverted
+                    for reverted in sorted(
+                        match.turns, key=lambda t: t.turn_order
+                    )
+                )
+                if match.turns
+                else None
+            )
+            if resumed is not None:
+                resume_turn = turn_play_payload(resumed)
+
+    return {
+        "game_id": game.id,
+        "game_code": game.game_code,
+        "status": game.status,
+        "current_round": game.current_round,
+        "current_match_id": game.current_match_id,
+        "created_at": _tz_iso(game.created_at),
+        "started_at": _tz_iso(game.started_at),
+        "ended_at": _tz_iso(game.ended_at),
+        "teams": [_team_payload(t) for t in game.teams],
+        "categories": [
+            {"category_id": c.id, "name": c.name} for c in categories
+        ],
+        "scoreboard": leaderboard(game),
+        "round": _round_payload(current_round) if current_round else None,
+        "resume_turn": resume_turn,
+    }
 
 
 def leaderboard(game):

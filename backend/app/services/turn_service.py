@@ -614,6 +614,112 @@ def adjust_time(turn, seconds, reason=None, mode=None):
     return turn
 
 
+def get_penalties_for_turn(turn_id):
+    """Return all penalties for a turn as a list of dicts."""
+    penalties = Penalty.query.filter_by(turn_id=turn_id).order_by(Penalty.id).all()
+    return [
+        {
+            "penalty_id": p.id,
+            "turn_id": p.turn_id,
+            "team_id": p.team_id,
+            "seconds": p.seconds,
+            "type": p.type,
+            "reason": p.reason,
+            "created_at": p.created_at,
+        }
+        for p in penalties
+    ]
+
+
+def revert_penalty(penalty_id, reason=None):
+    """Revert a previously applied penalty.
+
+    Adds a REVERSAL entry that offsets the original penalty, and adjusts
+    the turn's timer and score accordingly.
+    """
+    penalty = db.session.get(Penalty, penalty_id)
+    if penalty is None:
+        raise TurnServiceError("Penalty not found.")
+    turn = db.session.get(Turn, penalty.turn_id)
+    if turn is None:
+        raise TurnServiceError("Turn not found.")
+    if turn.status not in (Turn.STATUS_ACTIVE, Turn.STATUS_PAUSED):
+        raise TurnNotActiveError("Turn is not active or paused.")
+
+    # Determine reversal delta: ADD_TIME penalties are reversed by removing time
+    # and vice-versa.
+    if penalty.type == Penalty.TYPE_ADD_TIME:
+        reversal_delta = -penalty.seconds
+    elif penalty.type == Penalty.TYPE_REMOVE_TIME:
+        reversal_delta = penalty.seconds
+    else:
+        raise TurnServiceError("This penalty type cannot be reverted.")
+
+    reversal = Penalty(
+        turn_id=turn.id,
+        team_id=turn.team_id,
+        seconds=penalty.seconds,
+        type=Penalty.TYPE_REVERSAL,
+        reason=reason or "Reverted: {}".format(penalty.reason or penalty.type),
+    )
+    db.session.add(reversal)
+    turn.timer_adjustment_seconds = _net_adjustment(turn) + reversal_delta
+    current = _remaining_seconds(turn)
+    turn.remaining_seconds = max(0, current + reversal_delta)
+
+    score = _get_or_create_score(turn)
+    if reversal_delta < 0:
+        score.time_bonus_seconds += abs(reversal_delta)
+    else:
+        score.penalty_seconds += reversal_delta
+
+    _record_event(
+        turn.match.game_id,
+        "PENALTY_REVERTED",
+        {
+            "turn_id": turn.id,
+            "original_penalty_id": penalty.id,
+            "reversal_id": reversal.id,
+            "seconds": penalty.seconds,
+            "type": penalty.type,
+        },
+        team_id=turn.team_id,
+    )
+    return reversal
+
+
+def increment_score(turn, points, correct=0, passed=0, failed=0):
+    """Manually adjust a team's score for a turn.
+
+    Validates the totals do not exceed turn limits.
+    """
+    if turn.status not in (Turn.STATUS_ACTIVE, Turn.STATUS_PAUSED,
+                           Turn.STATUS_COMPLETED, Turn.STATUS_TIMEOUT):
+        raise TurnNotActiveError("Turn is not in a scoreable state.")
+
+    score = _get_or_create_score(turn)
+    score.points += points
+    score.correct_words += correct
+    score.passed_words += passed
+    score.failed_words += failed
+
+    _record_event(
+        turn.match.game_id,
+        "SCORE_UPDATED",
+        {
+            "turn_id": turn.id,
+            "score_id": score.id,
+            "team_id": turn.team_id,
+            "points_added": points,
+            "correct_added": correct,
+            "passed_added": passed,
+            "failed_added": failed,
+        },
+        team_id=turn.team_id,
+    )
+    return score
+
+
 # ---------------------------------------------------------------------------
 # Tie detection & tie-breaker
 # ---------------------------------------------------------------------------

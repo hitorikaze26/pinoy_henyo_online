@@ -1,0 +1,6 @@
+PASS - T1 host create game -> dashboard navigates 
+PASS - T1b host game context present id=1 code=PHA9FU
+PASS - T1c host team created with connection_status CONNECTED CONNECTED
+PASS - T2 host teams page loads w/o console errors 
+PASS - T2b host teams page shows CONNECTED badge badges=1
+PASS - T3 connect-count reflects connected team count=1

@@ -11,6 +11,7 @@ const TeamAPI = (() => {
     const data = await API.request(`/games/${gameId}/teams`, {
       method: 'POST',
       body: { team_name: teamName, username },
+      host: true,
     });
     API.setMemberIdentity(data.leader, {
       team_id: data.team_id,
@@ -40,7 +41,11 @@ const TeamAPI = (() => {
     const body = { username };
     if (teamName) body.team_name = teamName;
     if (teamCode) body.team_code = teamCode;
-    const data = await API.request(`/games/${gameId}/join`, { method: 'POST', body });
+    const data = await API.request(`/games/${gameId}/join`, {
+      method: 'POST',
+      body,
+      host: true,
+    });
     if (data.member_id) {
       API.setMemberIdentity(data);
     } else if (data.team_id) {
@@ -105,9 +110,47 @@ const TeamAPI = (() => {
     });
   }
 
-  // GET /api/teams/<team_id>/qr
+  // GET /api/teams/<team_id>/qr  (team-leader session or host token)
   function teamQr(teamId) {
-    return API.request(`/teams/${teamId}/qr`, { host: true });
+    return API.request(`/teams/${teamId}/qr`, { session: true });
+  }
+
+  // POST /api/games/<game_id>/connection-request
+  // Asks the host to approve this team. The team leader's session token is
+  // sent in the header; when a raw connection token is available it is sent
+  // in the body as well (the backend accepts either).
+  function requestConnection(gameId, connectionToken) {
+    const body = {};
+    if (connectionToken) body.connection_token = connectionToken;
+    return API.request(`/games/${gameId}/connection-request`, {
+      method: 'POST',
+      body,
+      session: true,
+    });
+  }
+
+  // POST /api/games/<game_id>/connection-requests/<team_id>/approve
+  function approveConnection(gameId, teamId) {
+    return API.request(`/games/${gameId}/connection-requests/${teamId}/approve`, {
+      method: 'POST',
+      host: true,
+    });
+  }
+
+  // POST /api/games/<game_id>/connection-requests/<team_id>/decline
+  function declineConnection(gameId, teamId) {
+    return API.request(`/games/${gameId}/connection-requests/${teamId}/decline`, {
+      method: 'POST',
+      host: true,
+    });
+  }
+
+  // POST /api/games/<game_id>/connection-requests/<team_id>/disconnect
+  function disconnectConnection(gameId, teamId) {
+    return API.request(`/games/${gameId}/connection-requests/${teamId}/disconnect`, {
+      method: 'POST',
+      host: true,
+    });
   }
 
   // GET /api/games/<game_id>/teams
@@ -128,6 +171,10 @@ const TeamAPI = (() => {
     updateUsername,
     teamQr,
     listTeams,
+    requestConnection,
+    approveConnection,
+    declineConnection,
+    disconnectConnection,
   };
 })();
 

@@ -1,4 +1,4 @@
-from flask import Blueprint
+from flask import Blueprint, request
 
 from ..extensions import db
 from ..services import game_service, realtime, report_service
@@ -101,6 +101,60 @@ def resume_game(game):
 @require_host
 def end_game(game):
     return _execute(game_service.end_game, game, realtime.emit_game_completed)
+
+
+@games_bp.post("/<int:game_id>/save")
+@require_host
+def save_game(game):
+    """Manually persist the current game state (never creates duplicates)."""
+    data = game_service.save_game(game)
+    db.session.commit()
+    return success_response(data=data)
+
+
+@games_bp.get("/<int:game_id>/state")
+@require_host
+def game_state(game):
+    """Load the recoverable game state for a returning host to resume."""
+    return success_response(data=report_service.game_state(game))
+
+
+@games_bp.post("/<int:game_id>/leave")
+@require_host
+def leave_game(game):
+    """Host ends its device session and steps away; game stays available."""
+    try:
+        data = game_service.leave_game(game)
+    except game_service.GameStateError as exc:
+        return error_response(str(exc), code="INVALID_OPERATION", status=409)
+    db.session.commit()
+    realtime.emit_game_paused(game)
+    return success_response(data=data)
+
+
+@games_bp.delete("/<int:game_id>")
+@require_host
+def delete_game(game):
+    """Delete a completed/cancelled/expired game (host history cleanup).
+
+    Deleting a game is permanent and requires explicit confirmation
+    (``confirm=true``) to guard against accidental data loss.
+    """
+    body = request.get_json(silent=True) or {}
+    if not body.get("confirm"):
+        return error_response(
+            "Confirmation required to permanently delete this game.",
+            code="WITH_CONFIRMATION_REQUIRED",
+            status=400,
+        )
+    try:
+        game_service.delete_game(game)
+    except game_service.GameStateError as exc:
+        return error_response(str(exc), code="INVALID_OPERATION", status=409)
+    except game_service.GameFrozenError as exc:
+        return error_response(str(exc), code="GAME_FROZEN", status=409)
+    db.session.commit()
+    return success_response(data={"game_id": game.id, "deleted": True})
 
 
 def _game_summary(game):

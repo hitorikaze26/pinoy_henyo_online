@@ -13,10 +13,15 @@
    ============================================================ */
 
 const API = (() => {
-  // Default to the Flask dev server (CORS is enabled with "*").
-  // Override by setting window.PINOY_API_BASE before loading this file,
-  // or by calling API.setBaseUrl(...) at runtime.
-  const DEFAULT_BASE = 'http://localhost:5000/api';
+  // Derive the default base from the current page origin. Flask serves the
+  // frontend, REST API, and Socket.IO from the same origin, so this is correct
+  // both for local dev (http://localhost:5000) and behind a Cloudflare Tunnel
+  // / custom domain (https://your-host). Override by setting
+  // window.PINOY_API_BASE before loading this file, or by calling
+  // API.setBaseUrl(...) at runtime.
+  const DEFAULT_BASE =
+    (window.PINOY_API_BASE) ||
+    (((window.location && window.location.origin) || 'http://localhost:5000') + '/api');
 
   const SERVER_ERROR = { code: 'NETWORK_ERROR', message: 'Could not reach the server. Please try again.' };
 
@@ -142,8 +147,17 @@ const API = (() => {
       if (memberPayload.username) set('username', memberPayload.username);
       if (memberPayload.device_role) set('deviceRole', memberPayload.device_role);
       if (memberPayload.gameplay_role !== undefined) set('gameplayRole', memberPayload.gameplay_role);
-      if (memberPayload.device_role === 'TEAM_LEADER') set('role', 'team-leader');
-      else if (memberPayload.device_role === 'TEAM_MEMBER') set('role', 'team-member');
+      // Preserve the 'host' role if this member is the host's own device. The
+      // host creates a host-team AFTER setHostContext() flags role='host'; a
+      // TEAM_LEADER identity must not downgrade the host session to 'team-leader'
+      // (otherwise host pages lose their host context on restore).
+      if (ctx.role === 'host') {
+        // keep role = host
+      } else if (memberPayload.device_role === 'TEAM_LEADER') {
+        set('role', 'team-leader');
+      } else if (memberPayload.device_role === 'TEAM_MEMBER') {
+        set('role', 'team-member');
+      }
     }
     if (team) {
       if (team.team_id) set('teamId', team.team_id);

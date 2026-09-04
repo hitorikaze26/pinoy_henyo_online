@@ -57,11 +57,14 @@ def test_create_team_returns_expected_fields(client):
         "team_code",
         "team_name",
         "team_status",
+        "connection_status",
         "leader",
     }
     assert data["team_name"] == "Team Henyo"
     assert len(data["team_code"]) == 4
     assert data["team_status"] == "ACTIVE"
+    # Player-created teams start NOT_CONNECTED until the host approves them.
+    assert data["connection_status"] == "NOT_CONNECTED"
 
 
 def test_team_codes_unique_within_game(client):
@@ -530,3 +533,261 @@ def test_list_teams_requires_host(client):
 
 def test_list_teams_game_not_found(client):
     assert client.get("/api/games/999999/teams").status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Host connection approval workflow (connection_status state machine)
+# ---------------------------------------------------------------------------
+
+
+def _create_game_and_team(client, team_name="Team A", username="Juan"):
+    create_response = client.post("/api/games")
+    assert create_response.status_code == 201
+    game_data = create_response.get_json()["data"]
+    game_id = game_data["game_id"]
+    host_token = game_data["host_session_token"]
+    team = _create_team(client, game_id, team_name=team_name, username=username)
+    return game_id, host_token, team
+
+
+def _leader_session(client, team):
+    response = _connect(
+        client,
+        connection_token=team["leader"]["connection_token"],
+        device_id="dev-session",
+    )
+    assert response.status_code == 201
+    return response.get_json()["data"]["session_token"]
+
+
+def test_player_team_starts_not_connected(client):
+    create_response = client.post("/api/games")
+    assert create_response.status_code == 201
+    game_id = create_response.get_json()["data"]["game_id"]
+    assert _create_team(client, game_id)["connection_status"] == "NOT_CONNECTED"
+
+
+def test_host_team_starts_not_connected(client):
+    create_response = client.post("/api/games")
+    assert create_response.status_code == 201
+    game_id = create_response.get_json()["data"]["game_id"]
+    host_token = create_response.get_json()["data"]["host_session_token"]
+    response = client.post(
+        "/api/games/{}/teams".format(game_id),
+        json={"team_name": "Host Crew", "username": "Host"},
+        headers={"X-Host-Token": host_token},
+    )
+    assert response.status_code == 201
+    # Even a host-created team must not auto-connect; it starts NOT_CONNECTED.
+    assert response.get_json()["data"]["connection_status"] == "NOT_CONNECTED"
+
+
+def test_connection_request_requires_token_or_session(client):
+    game_id, host_token, team = _create_game_and_team(client)
+    response = client.post("/api/games/{}/connection-request".format(game_id), json={})
+    assert response.status_code == 400
+    assert response.get_json()["error"]["code"] == "CONNECTION_TOKEN_REQUIRED"
+
+
+def test_connection_request_non_leader_rejected(client):
+    game_id, host_token, team = _create_game_and_team(client)
+    member_resp = client.post(
+        "/api/teams/{}/members".format(team["team_id"]), json={"username": "Pedro"}
+    )
+    member = member_resp.get_json()["data"]
+    session = _connect(
+        client, connection_token=member["connection_token"], device_id="dev-pedro"
+    ).get_json()["data"]["session_token"]
+    response = client.post(
+        "/api/games/{}/connection-request".format(game_id),
+        headers={"X-Session-Token": session},
+    )
+    assert response.status_code == 403
+    assert response.get_json()["error"]["code"] == "NOT_TEAM_LEADER"
+
+
+def test_connection_request_with_leader_session(client):
+    game_id, host_token, team = _create_game_and_team(client)
+    session = _leader_session(client, team)
+    response = client.post(
+        "/api/games/{}/connection-request".format(game_id),
+        headers={"X-Session-Token": session},
+    )
+    assert response.status_code == 200
+    data = response.get_json()["data"]
+    assert data["connection_status"] == "CONNECTION_REQUESTED"
+    assert data["requested_now"] is True
+
+
+def test_connection_request_with_raw_token(client):
+    game_id, host_token, team = _create_game_and_team(client)
+    response = client.post(
+        "/api/games/{}/connection-request".format(game_id),
+        json={"connection_token": team["leader"]["connection_token"]},
+    )
+    assert response.status_code == 200
+    assert response.get_json()["data"]["connection_status"] == "CONNECTION_REQUESTED"
+
+
+def test_duplicate_connection_request_is_idempotent(client):
+    game_id, host_token, team = _create_game_and_team(client)
+    session = _leader_session(client, team)
+    first = client.post(
+        "/api/games/{}/connection-request".format(game_id),
+        headers={"X-Session-Token": session},
+    )
+    assert first.status_code == 200
+    assert first.get_json()["data"]["requested_now"] is True
+    # A pending request should not error; it just reports no change.
+    second = client.post(
+        "/api/games/{}/connection-request".format(game_id),
+        headers={"X-Session-Token": session},
+    )
+    assert second.status_code == 200
+    assert second.get_json()["data"]["requested_now"] is False
+
+
+def test_approve_requires_host_auth(client):
+    game_id, host_token, team = _create_game_and_team(client)
+    session = _leader_session(client, team)
+    client.post(
+        "/api/games/{}/connection-request".format(game_id),
+        headers={"X-Session-Token": session},
+    )
+    response = client.post(
+        "/api/games/{}/connection-requests/{}/approve".format(game_id, team["team_id"])
+    )
+    assert response.status_code == 401
+
+
+def test_approve_connection_flow(client):
+    game_id, host_token, team = _create_game_and_team(client)
+    team_id = team["team_id"]
+    client.post(
+        "/api/games/{}/connection-request".format(game_id),
+        json={"connection_token": team["leader"]["connection_token"]},
+    )
+    approved = client.post(
+        "/api/games/{}/connection-requests/{}/approve".format(game_id, team_id),
+        headers={"X-Host-Token": host_token},
+    )
+    assert approved.status_code == 200
+    assert approved.get_json()["data"]["connection_status"] == "CONNECTED"
+    # Approving an already-connected team stays CONNECTED (idempotent).
+    again = client.post(
+        "/api/games/{}/connection-requests/{}/approve".format(game_id, team_id),
+        headers={"X-Host-Token": host_token},
+    )
+    assert again.status_code == 200
+    assert again.get_json()["data"]["connection_status"] == "CONNECTED"
+
+
+def test_approve_team_from_other_game_404(client):
+    game_a, host_a, team_a = _create_game_and_team(client, team_name="Alpha")
+    game_b, host_b, team_b = _create_game_and_team(client, team_name="Beta")
+    response = client.post(
+        "/api/games/{}/connection-requests/{}/approve".format(game_a, team_b["team_id"]),
+        headers={"X-Host-Token": host_a},
+    )
+    assert response.status_code == 404
+    assert response.get_json()["error"]["code"] == "TEAM_NOT_IN_GAME"
+
+
+def test_decline_then_rerequest(client):
+    game_id, host_token, team = _create_game_and_team(client)
+    session = _leader_session(client, team)
+    client.post(
+        "/api/games/{}/connection-request".format(game_id),
+        headers={"X-Session-Token": session},
+    )
+    declined = client.post(
+        "/api/games/{}/connection-requests/{}/decline".format(game_id, team["team_id"]),
+        headers={"X-Host-Token": host_token},
+    )
+    assert declined.status_code == 200
+    assert declined.get_json()["data"]["connection_status"] == "DECLINED"
+    # After a decline the leader may request again.
+    retry = client.post(
+        "/api/games/{}/connection-request".format(game_id),
+        headers={"X-Session-Token": session},
+    )
+    assert retry.status_code == 200
+    assert retry.get_json()["data"]["connection_status"] == "CONNECTION_REQUESTED"
+
+
+def test_disconnect_connected_team(client):
+    game_id, host_token, team = _create_game_and_team(client)
+    client.post(
+        "/api/games/{}/connection-request".format(game_id),
+        json={"connection_token": team["leader"]["connection_token"]},
+    )
+    client.post(
+        "/api/games/{}/connection-requests/{}/approve".format(game_id, team["team_id"]),
+        headers={"X-Host-Token": host_token},
+    )
+    disconnected = client.post(
+        "/api/games/{}/connection-requests/{}/disconnect".format(
+            game_id, team["team_id"]
+        ),
+        headers={"X-Host-Token": host_token},
+    )
+    assert disconnected.status_code == 200
+    assert disconnected.get_json()["data"]["connection_status"] == "DISCONNECTED"
+
+
+def test_roster_payload_includes_connection_status(client):
+    game_id, host_token, team = _create_game_and_team(client)
+    client.post(
+        "/api/games/{}/connection-request".format(game_id),
+        json={"connection_token": team["leader"]["connection_token"]},
+    )
+    roster = client.get(
+        "/api/games/{}/teams".format(game_id), headers={"X-Host-Token": host_token}
+    ).get_json()["data"]["teams"]
+    assert roster[0]["connection_status"] == "CONNECTION_REQUESTED"
+
+
+def test_connection_status_is_persisted_not_device_presence(client):
+    """A team never appears CONNECTED merely because it opened a page or
+    connected a device; connection follows the persisted Team.connection_status
+    and only becomes CONNECTED through the host approval flow."""
+    game_id, host_token, team = _create_game_and_team(client)
+
+    # Leader opens a device session (device presence) but is NOT approved yet.
+    session = _connect(
+        client,
+        connection_token=team["leader"]["connection_token"],
+        device_id="dev-a",
+    ).get_json()["data"]
+
+    roster = client.get(
+        "/api/games/{}/teams".format(game_id),
+        headers={"X-Host-Token": host_token},
+    ).get_json()["data"]["teams"]
+    # Device is connected but the team is unapproved -> still NOT_CONNECTED.
+    assert roster[0]["connection_status"] == "NOT_CONNECTED"
+    assert (
+        roster[0]["leader"]["is_connected"] is True
+        or client.post(
+            "/api/devices/heartbeat",
+            json={"session_token": session["session_token"]},
+        ).status_code
+        == 200
+    )
+
+    # Now request + approve: the roster reflects CONNECTED.
+    client.post(
+        "/api/games/{}/connection-request".format(game_id),
+        json={"connection_token": team["leader"]["connection_token"]},
+    )
+    client.post(
+        "/api/games/{}/connection-requests/{}/approve".format(
+            game_id, team["team_id"]
+        ),
+        headers={"X-Host-Token": host_token},
+    )
+    roster = client.get(
+        "/api/games/{}/teams".format(game_id),
+        headers={"X-Host-Token": host_token},
+    ).get_json()["data"]["teams"]
+    assert roster[0]["connection_status"] == "CONNECTED"

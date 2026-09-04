@@ -1,4 +1,4 @@
-from flask import request
+from flask import current_app, request
 
 from ..extensions import db, socketio
 from ..models import DeviceSession, Game, TeamMember, Turn
@@ -7,6 +7,7 @@ from ..utils.time import utcnow
 
 
 USER_AUTH_REFUSED = "USER_AUTH_REFUSED"
+CONNECT_INTERNAL_ERROR = "CONNECT_INTERNAL_ERROR"
 
 
 def _token_from_auth(auth):
@@ -27,7 +28,21 @@ def handle_connect(auth=None):
     token = _token_from_auth(auth)
     if not token:
         raise ConnectionRefusedError(USER_AUTH_REFUSED)
+    try:
+        _authorize_and_join(token)
+    except ConnectionRefusedError:
+        raise
+    except Exception:
+        # A failure while authorizing must never surface as an opaque HTTP
+        # 500 to the socket client. Log the real cause and refuse gracefully.
+        current_app.logger.exception(
+            "Socket connect handler failed for device_id=%r",
+            _device_id_from_request(),
+        )
+        raise ConnectionRefusedError(CONNECT_INTERNAL_ERROR)
 
+
+def _authorize_and_join(token):
     game = Game.query.filter_by(host_session_token=token).first()
     if game is not None:
         if game.status == Game.STATUS_CANCELLED:

@@ -78,6 +78,31 @@ class UnauthorizedDeviceError(TeamServiceError):
     code = "UNAUTHORIZED"
 
 
+class NotTeamLeaderError(TeamServiceError):
+    status = 403
+    code = "NOT_TEAM_LEADER"
+
+
+class ConnectionRequestInvalidError(TeamServiceError):
+    status = 403
+    code = "CONNECTION_REQUEST_INVALID"
+
+
+class ConnectionAlreadyConnectedError(TeamServiceError):
+    status = 409
+    code = "ALREADY_CONNECTED"
+
+
+class ConnectionRequestPendingError(TeamServiceError):
+    status = 409
+    code = "REQUEST_PENDING"
+
+
+class NoPendingRequestError(TeamServiceError):
+    status = 409
+    code = "NO_PENDING_REQUEST"
+
+
 def _record_event(game, event_type, data=None):
     db.session.add(
         GameEvent(game_id=game.id, event_type=event_type, event_data=data)
@@ -121,14 +146,19 @@ def get_team(team_id):
     return db.session.get(Team, team_id)
 
 
-def create_team(game, team_name, username):
+def create_team(game, team_name, username, connection_status=None):
     team_name = _validate_team_name(team_name)
     username = _validate_username(username)
+    if connection_status is None:
+        connection_status = Team.CONNECTION_NOT_CONNECTED
+    elif connection_status not in Team.CONNECTION_STATUSES:
+        raise TeamServiceError("Invalid connection status.")
     for _ in range(MAX_TEAM_CODE_ATTEMPTS):
         team = Team(
             game_id=game.id,
             team_code=generate_team_code(),
             team_name=team_name,
+            connection_status=connection_status,
         )
         db.session.add(team)
         try:
@@ -222,9 +252,50 @@ def add_member(team, username):
     return member
 
 
-def join_game(game, username, team_name=None, team_code=None):
+def remove_member(member):
+    """Remove a member from a team.
+
+    The team leader cannot be removed (transfer leadership first).
+    Disconnecting does not delete — use this only for explicit removal.
+    """
+    team = member.team
+    if team.leader_member_id == member.id:
+        raise NotTeamLeaderError(
+            "Cannot remove the team leader. Transfer leadership first."
+        )
+    _record_event(
+        team.game,
+        "MEMBER_LEFT",
+        {
+            "team_id": team.id,
+            "member_id": member.id,
+            "username": member.username,
+        },
+    )
+    db.session.delete(member)
+
+
+def delete_team(team):
+    """Delete a team and cascade to its members, words, scores, etc.
+
+    Connected teams should not be casually deleted during gameplay.
+    """
+    if team.connection_status == Team.CONNECTION_CONNECTED:
+        raise TeamServiceError(
+            "Cannot delete a connected team during gameplay. Disconnect first."
+        )
+    game = team.game
+    _record_event(
+        game,
+        "TEAM_DELETED",
+        {"team_id": team.id, "team_code": team.team_code},
+    )
+    db.session.delete(team)
+
+
+def join_game(game, username, team_name=None, team_code=None, connection_status=None):
     if team_name:
-        team = create_team(game, team_name, username)
+        team = create_team(game, team_name, username, connection_status=connection_status)
         return {"joined_as_member": False, "team": team}
     if team_code:
         team = Team.query.filter_by(
@@ -243,6 +314,121 @@ def join_game(game, username, team_name=None, team_code=None):
 
 def join_team(team, username):
     return add_member(team, username)
+
+
+def resolve_leader_by_connection_token(connection_token):
+    """Resolve the team leader from a connection token, if valid."""
+    if not connection_token:
+        raise ConnectionTokenRequiredError("connection_token is required.")
+    member = TeamMember.query.filter_by(
+        connection_token=connection_token
+    ).first()
+    if member is None:
+        raise ConnectionTokenInvalidError("Invalid connection token.")
+    if member.device_role != TeamMember.DEVICE_ROLE_TEAM_LEADER:
+        raise NotTeamLeaderError("Only the team leader can request connection.")
+    return member
+
+
+# ---------------------------------------------------------------------------
+# Host connection (approval) state machine
+# ---------------------------------------------------------------------------
+# A team is created NOT_CONNECTED. The team leader must explicitly request a
+# connection (scanning the host QR or entering the host code), and the host
+# must approve it. The decision is team-scoped and stored in
+# ``Team.connection_status``, independent of any single member's live socket.
+
+
+def request_connection(member):
+    """Transition a team to CONNECTION_REQUESTED (idempotent-request).
+
+    Returns True if the state actually changed to REQUESTED; False if the
+    request was already pending (no duplicate state machine rotation).
+    """
+    team = member.team
+    if team.game is None:
+        raise TeamServiceError("Team has no game.")
+    if member.device_role != TeamMember.DEVICE_ROLE_TEAM_LEADER:
+        raise NotTeamLeaderError("Only the team leader can request connection.")
+    if team.connection_status == Team.CONNECTION_CONNECTED:
+        raise ConnectionAlreadyConnectedError("This team is already connected.")
+    if team.connection_status == Team.CONNECTION_REQUESTED:
+        return False
+    if team.connection_status in (
+        Team.CONNECTION_NOT_CONNECTED,
+        Team.CONNECTION_DECLINED,
+        Team.CONNECTION_DISCONNECTED,
+    ):
+        team.connection_status = Team.CONNECTION_REQUESTED
+        _record_event(
+            team.game,
+            "CONNECTION_REQUESTED",
+            {
+                "team_id": team.id,
+                "member_id": member.id,
+                "username": member.username,
+            },
+        )
+        return True
+    raise ConnectionRequestInvalidError(
+        "Cannot request connection from this team state."
+    )
+
+
+def approve_connection(team, actor_member=None):
+    """Host approves a pending request: REQUESTED -> CONNECTED.
+
+    Idempotent if the team is already CONNECTED (double-click safe).
+    """
+    if team.connection_status == Team.CONNECTION_CONNECTED:
+        return False
+    if team.connection_status != Team.CONNECTION_REQUESTED:
+        raise NoPendingRequestError("This team has no pending connection request.")
+    team.connection_status = Team.CONNECTION_CONNECTED
+    _record_event(
+        team.game,
+        "CONNECTION_APPROVED",
+        {
+            "team_id": team.id,
+            "member_id": actor_member.id if actor_member is not None else None,
+        },
+    )
+    return True
+
+
+def decline_connection(team, actor_member=None):
+    """Host declines a pending request: REQUESTED -> DECLINED."""
+    if team.connection_status != Team.CONNECTION_REQUESTED:
+        raise NoPendingRequestError("This team has no pending connection request.")
+    team.connection_status = Team.CONNECTION_DECLINED
+    _record_event(
+        team.game,
+        "CONNECTION_DECLINED",
+        {
+            "team_id": team.id,
+            "member_id": actor_member.id if actor_member is not None else None,
+        },
+    )
+    return True
+
+
+def disconnect_connection(team, actor_member=None):
+    """Host disconnects a connected (or pending) team: -> DISCONNECTED."""
+    if team.connection_status in (
+        Team.CONNECTION_NOT_CONNECTED,
+        Team.CONNECTION_DISCONNECTED,
+    ):
+        return False
+    team.connection_status = Team.CONNECTION_DISCONNECTED
+    _record_event(
+        team.game,
+        "CONNECTION_DISCONNECTED",
+        {
+            "team_id": team.id,
+            "member_id": actor_member.id if actor_member is not None else None,
+        },
+    )
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -418,6 +604,7 @@ def team_payload(team, include_leader=False):
         "team_code": team.team_code,
         "team_name": team.team_name,
         "team_status": team.status,
+        "connection_status": team.connection_status,
     }
     if include_leader:
         data["leader"] = member_payload(team.leader) if team.leader else None
@@ -443,6 +630,7 @@ def team_roster_payload(team):
         "team_code": team.team_code,
         "team_name": team.team_name,
         "team_status": team.status,
+        "connection_status": team.connection_status,
         "leader": (member_payload(team.leader) if team.leader else None),
         "members": sorted(
             [member_payload(m) for m in team.members],

@@ -9,6 +9,22 @@ class Team(db.Model):
     STATUS_ELIMINATED = "ELIMINATED"
     STATUSES = (STATUS_ACTIVE, STATUS_ELIMINATED)
 
+    # Host-connection state of the team (distinct from gameplay ``status``).
+    # A team is created as NOT_CONNECTED; the team leader requests connection,
+    # and the host must approve it before gameplay can begin.
+    CONNECTION_NOT_CONNECTED = "NOT_CONNECTED"
+    CONNECTION_REQUESTED = "CONNECTION_REQUESTED"
+    CONNECTION_CONNECTED = "CONNECTED"
+    CONNECTION_DECLINED = "DECLINED"
+    CONNECTION_DISCONNECTED = "DISCONNECTED"
+    CONNECTION_STATUSES = (
+        CONNECTION_NOT_CONNECTED,
+        CONNECTION_REQUESTED,
+        CONNECTION_CONNECTED,
+        CONNECTION_DECLINED,
+        CONNECTION_DISCONNECTED,
+    )
+
     id = db.Column(db.Integer, primary_key=True)
     game_id = db.Column(
         db.Integer, db.ForeignKey("games.id"), nullable=False, index=True
@@ -26,6 +42,13 @@ class Team(db.Model):
         nullable=False,
         default=STATUS_ACTIVE,
         server_default=STATUS_ACTIVE,
+    )
+    connection_status = db.Column(
+        db.String(24),
+        nullable=False,
+        default=CONNECTION_NOT_CONNECTED,
+        server_default=CONNECTION_NOT_CONNECTED,
+        index=True,
     )
     created_at = db.Column(
         db.DateTime, nullable=False, server_default=db.text("CURRENT_TIMESTAMP")

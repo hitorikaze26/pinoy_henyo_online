@@ -490,6 +490,14 @@ ol, ul { list-style: none; }
   background: var(--accent-1-400);
   animation: statusPulse 1.2s ease-in-out infinite;
 }
+.status-badge--pending {
+  background: rgba(238,147,38,0.22); color: var(--accent-1-400);
+  border: 1.5px solid rgba(238,147,38,0.55);
+}
+.status-badge--pending .status-badge__dot {
+  background: var(--accent-1-400);
+  animation: statusPulse 0.7s ease-in-out infinite;
+}
 .status-badge--disconnected {
   background: rgba(184,3,30,0.12); color: var(--accent-2-400);
   border: 1px solid rgba(184,3,30,0.2);
@@ -630,6 +638,14 @@ ol, ul { list-style: none; }
 }
 .empty-state__sub { font-size: 0.875rem; color: rgba(255,255,255,0.3); max-width: 300px; line-height: 1.6; }
 .empty-state__btn { margin-top: 0.5rem; }
+.empty-state--nosession {
+  border-color: rgba(224,181,75,0.35);
+  background: rgba(224,181,75,0.04);
+}
+.empty-state--nosession .empty-state__icon {
+  background: rgba(224,181,75,0.12); border-color: rgba(224,181,75,0.3); color: #e0b54b;
+}
+.empty-state--nosession .empty-state__title { color: #e0b54b; }
 
 /* ============================================================
    CONNECT SECTION
@@ -849,6 +865,21 @@ ol, ul { list-style: none; }
   display: flex; align-items: center; justify-content: flex-end;
   gap: 0.6rem; margin-top: 1.25rem;
 }
+
+/* Team-connection request summary (approval modal) */
+.request-summary {
+  display: flex; flex-direction: column; gap: 0.55rem;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: var(--r-md);
+  padding: 0.85rem 1rem;
+}
+.request-summary__row {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 0.85rem;
+}
+.request-summary__label { color: rgba(255,255,255,0.45); font-weight: 600; }
+.request-summary__value { color: rgba(255,255,255,0.9); font-weight: 700; text-align: right; }
 
 /* Form elements */
 .modal__form { display: flex; flex-direction: column; gap: 1.1rem; }

@@ -390,6 +390,44 @@ def emit_team_updated(team):
     )
 
 
+def _connection_event_data(team):
+    from ..services import team_service
+
+    payload = team_service.team_payload(team)
+    payload["game_id"] = team.game_id
+    return payload
+
+
+def emit_connection_requested(team, member=None):
+    data = _connection_event_data(team)
+    data["leader"] = (
+        public_member(team.leader) if team.leader is not None else None
+    )
+    data["member_count"] = len(team.members)
+    if member is not None:
+        data["requester"] = public_member(member)
+    _emit(team_room(team.id), "connection_requested", data)
+    _emit(game_room(team.game_id), "connection_requested", data)
+
+
+def emit_connection_approved(team):
+    data = _connection_event_data(team)
+    _emit(team_room(team.id), "connection_approved", data)
+    _emit(game_room(team.game_id), "connection_approved", data)
+
+
+def emit_connection_declined(team):
+    data = _connection_event_data(team)
+    _emit(team_room(team.id), "connection_declined", data)
+    _emit(game_room(team.game_id), "connection_declined", data)
+
+
+def emit_connection_disconnected(team):
+    data = _connection_event_data(team)
+    _emit(team_room(team.id), "connection_disconnected", data)
+    _emit(game_room(team.game_id), "connection_disconnected", data)
+
+
 # ---------------------------------------------------------------------------
 # Turn room membership rules
 # ---------------------------------------------------------------------------

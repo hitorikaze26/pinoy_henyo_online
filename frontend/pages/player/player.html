@@ -150,6 +150,13 @@
             <span class="conn-dot conn-dot--connected"></span>
             <span id="team-conn-status-text">Host Connected</span>
           </div>
+          <p class="conn-status-hint" id="team-conn-status-hint"></p>
+          <p class="conn-status-hint conn-status-hint--pending" id="team-conn-pending-box" hidden>
+            Waiting for the host on the host screen. It usually takes just a few seconds.
+          </p>
+          <button class="player-btn player-btn--primary" id="btn-connect-host" hidden>
+            <i class="fa-solid fa-link"></i> Connect to Host
+          </button>
           <div class="player-btn-row">
             <button class="player-btn player-btn--outline" id="btn-generate-qr">
               <i class="fa-solid fa-qrcode"></i> Generate QR
@@ -620,6 +627,7 @@
   <div class="player-toast" id="player-toast" aria-live="polite"></div>
 
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
   <script src="../../js/api/api.js"></script>
   <script src="../../js/api/game-api.js"></script>
   <script src="../../js/api/team-api.js"></script>
@@ -627,6 +635,7 @@
   <script src="../../js/api/device-api.js"></script>
   <script src="../../js/api/connect.js"></script>
   <script src="../../js/api/realtime.js"></script>
+  <script src="../../js/qr/scanner.js"></script>
   <script src="../../js/player/player.js"></script>
 </body>
 </html>

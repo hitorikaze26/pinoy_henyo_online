@@ -1,7 +1,7 @@
 from flask import Blueprint, request
 
 from ..extensions import db, socketio
-from ..models import DeviceSession, TeamMember
+from ..models import DeviceSession, Team, TeamMember
 from ..services import gameplay_service, qr_service, realtime, team_service
 from ..services.game_service import get_game
 from ..utils.auth import host_authorized, host_token_from_request
@@ -66,6 +66,17 @@ def _session_member_for_team(team):
     return session.member
 
 
+def _creation_connection_status(game):
+    """Teams always start NOT_CONNECTED regardless of creator.
+
+    A team must never appear connected merely because it was created (or
+    because the host created it). Even a host-created team's leader must go
+    through the connection request + host approval flow before it is
+    CONNECTED, matching the Part 5 contract.
+    """
+    return Team.CONNECTION_NOT_CONNECTED
+
+
 @teams_bp.post("/games/<int:game_id>/teams")
 def create_team(game_id):
     body = request.get_json(silent=True) or {}
@@ -77,7 +88,10 @@ def create_team(game_id):
         return frozen
     try:
         team = team_service.create_team(
-            game, body.get("team_name"), body.get("username")
+            game,
+            body.get("team_name"),
+            body.get("username"),
+            connection_status=_creation_connection_status(game),
         )
         db.session.commit()
     except team_service.TeamServiceError as exc:
@@ -208,6 +222,56 @@ def update_member(member_id):
     return success_response(data=team_service.member_payload(member))
 
 
+@teams_bp.delete("/teams/<int:team_id>")
+def delete_team(team_id):
+    """Delete a team (host only, not connected)."""
+    team, error = _team_or_404(team_id)
+    if error is not None:
+        return error
+    token = host_token_from_request()
+    if token is None or not host_authorized(team.game):
+        return error_response(
+            "Host token required.", code="UNAUTHORIZED", status=401
+        )
+    try:
+        team_service.delete_team(team)
+        db.session.commit()
+    except team_service.TeamServiceError as exc:
+        db.session.rollback()
+        return _handle(exc)
+    return success_response(data={"team_id": team_id, "deleted": True})
+
+
+@teams_bp.delete("/members/<int:member_id>")
+def remove_member(member_id):
+    """Remove a member from a team (host or team leader)."""
+    member = db.session.get(TeamMember, member_id)
+    if member is None:
+        return error_response(
+            "Member not found.", code="MEMBER_NOT_FOUND", status=404
+        )
+    token = host_token_from_request()
+    is_host = token is not None and host_authorized(member.team.game)
+    if not is_host:
+        session_token = request.headers.get("X-Session-Token")
+        if not gameplay_service.session_is_team_leader(member.team, session_token):
+            return error_response(
+                "Host token or team leader session required.",
+                code="UNAUTHORIZED",
+                status=401,
+            )
+    try:
+        realtime.emit_member_left(member.team.game_id, member.team.id, member.id)
+        team_service.remove_member(member)
+        db.session.commit()
+    except team_service.TeamServiceError as exc:
+        db.session.rollback()
+        return _handle(exc)
+    return success_response(
+        data={"member_id": member_id, "deleted": True}
+    )
+
+
 @teams_bp.post("/games/<int:game_id>/join")
 def join_game(game_id):
     body = request.get_json(silent=True) or {}
@@ -223,6 +287,7 @@ def join_game(game_id):
             body.get("username"),
             team_name=body.get("team_name"),
             team_code=body.get("team_code"),
+            connection_status=_creation_connection_status(game),
         )
         db.session.commit()
     except team_service.TeamServiceError as exc:
@@ -254,6 +319,170 @@ def join_team(team_id):
     realtime.emit_member_joined(team, member)
     return success_response(
         data=team_service.member_payload(member), status=201
+    )
+
+
+# ---------------------------------------------------------------------------
+# Host connection / approval flow
+# ---------------------------------------------------------------------------
+
+
+def _leader_from_request(game):
+    """Resolve the team leader making a request: prefer the X-Session-Token of
+    a leader member of ``game``, else the leader connection_token in the body.
+    Returns (member, error_response_or_None)."""
+    session_token = request.headers.get("X-Session-Token")
+    if session_token:
+        session = DeviceSession.query.filter_by(
+            game_id=game.id,
+            session_token=session_token,
+            disconnected_at=None,
+        ).first()
+        session_member = session.member if session is not None else None
+        if session_member is not None and session_member.team_id is not None:
+            if (
+                session_member.device_role == TeamMember.DEVICE_ROLE_TEAM_LEADER
+                and session_member.team.game_id == game.id
+            ):
+                return session_member, None
+        body = request.get_json(silent=True) or {}
+        has_body_token = bool(body.get("connection_token"))
+        if session_member is not None and not has_body_token:
+            return None, error_response(
+                "Only the team leader can request connection.",
+                code="NOT_TEAM_LEADER",
+                status=403,
+            )
+    body = request.get_json(silent=True) or {}
+    try:
+        member = team_service.resolve_leader_by_connection_token(
+            body.get("connection_token")
+        )
+    except team_service.TeamServiceError as exc:
+        return None, _handle(exc)
+    if member.team.game_id != game.id:
+        return None, error_response(
+            "This connection token belongs to another game.",
+            code="CONNECTION_TOKEN_INVALID",
+            status=404,
+        )
+    return member, None
+
+
+@teams_bp.post("/games/<int:game_id>/connection-request")
+def request_connection(game_id):
+    body = request.get_json(silent=True) or {}
+    game, error = _load_game(game_id)
+    if error is not None:
+        return error
+    frozen = _ensure_mutable(game)
+    if frozen is not None:
+        return frozen
+    if body.get("connection_token") is None and not request.headers.get(
+        "X-Session-Token"
+    ):
+        return error_response(
+            "connection_token or a leader session is required.",
+            code="CONNECTION_TOKEN_REQUIRED",
+            status=400,
+        )
+    member, error = _leader_from_request(game)
+    if error is not None:
+        return error
+    try:
+        changed = team_service.request_connection(member)
+        db.session.commit()
+    except team_service.TeamServiceError as exc:
+        db.session.rollback()
+        return _handle(exc)
+    team = member.team
+    realtime.emit_connection_requested(team, member=member)
+    return success_response(
+        data={
+            "team_id": team.id,
+            "connection_status": team.connection_status,
+            "requested_now": changed,
+        }
+    )
+
+
+def _host_decision_endpoint(game_id, team_id, action):
+    game, error = _load_game(game_id)
+    if error is not None:
+        return error
+    token = host_token_from_request()
+    if token is None or not host_authorized(game):
+        return error_response(
+            "Invalid or missing host session token.",
+            code="UNAUTHORIZED",
+            status=401,
+        )
+    team, error = _team_or_404(team_id)
+    if error is not None:
+        return error
+    if team.game_id != game.id:
+        return error_response(
+            "Team does not belong to this game.",
+            code="TEAM_NOT_IN_GAME",
+            status=404,
+        )
+    try:
+        changed = action(team)
+        db.session.commit()
+    except team_service.TeamServiceError as exc:
+        db.session.rollback()
+        return _handle(exc)
+    return changed
+
+
+@teams_bp.post("/games/<int:game_id>/connection-requests/<int:team_id>/approve")
+def approve_connection(game_id, team_id):
+    _changed = _host_decision_endpoint(
+        game_id, team_id, team_service.approve_connection
+    )
+    if isinstance(_changed, tuple):
+        return _changed
+    team = team_service.get_team(team_id)
+    realtime.emit_connection_approved(team)
+    return success_response(
+        data={
+            "team_id": team.id,
+            "connection_status": team.connection_status,
+        }
+    )
+
+
+@teams_bp.post("/games/<int:game_id>/connection-requests/<int:team_id>/decline")
+def decline_connection(game_id, team_id):
+    _changed = _host_decision_endpoint(
+        game_id, team_id, team_service.decline_connection
+    )
+    if isinstance(_changed, tuple):
+        return _changed
+    team = team_service.get_team(team_id)
+    realtime.emit_connection_declined(team)
+    return success_response(
+        data={
+            "team_id": team.id,
+            "connection_status": team.connection_status,
+        }
+    )
+
+
+@teams_bp.post("/games/<int:game_id>/connection-requests/<int:team_id>/disconnect")
+def disconnect_connection(game_id, team_id):
+    _changed = _host_decision_endpoint(
+        game_id, team_id, team_service.disconnect_connection
+    )
+    if isinstance(_changed, tuple):
+        return _changed
+    team = team_service.get_team(team_id)
+    realtime.emit_connection_disconnected(team)
+    return success_response(
+        data={
+            "team_id": team.id,
+            "connection_status": team.connection_status,
+        }
     )
 
 
