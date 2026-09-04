@@ -115,6 +115,17 @@ const DOM = {
   closeQrDisplay: $('close-qr-display'),
   btnCloseQrDisplay: $('btn-close-qr-display'),
 
+  // Connection Approval Modal
+  modalApproveConnection: $('modal-approve-connection'),
+  approveConnectionTitle: $('approve-connection-title'),
+  approveConnectionDetails: $('approve-connection-details'),
+  approveTeamName:  $('approve-team-name'),
+  approveLeaderName: $('approve-leader-name'),
+  approveMemberCount: $('approve-member-count'),
+  btnApproveConnection: $('btn-approve-connection'),
+  btnDeclineConnection: $('btn-decline-connection'),
+  closeApproveConnection: $('close-approve-connection'),
+
   // Sidebar nav
   btnBackLobby: $('btn-back-lobby'),
 };
@@ -997,6 +1008,12 @@ function renderRealQr(container, dataUri) {
     return !!(r.members || []).some((m) => m.is_connected);
   }
 
+  function teamConnectionStatus(teamId) {
+    const r = roster.find((t) => t.team_id === teamId);
+    if (!r || typeof r.connection_status !== 'string') return 'OFFLINE';
+    return r.connection_status;
+  }
+
   function allRosterTeams() {
     return roster.slice().sort((a, b) => a.team_id - b.team_id);
   }
@@ -1254,6 +1271,7 @@ function renderRealQr(container, dataUri) {
   function renderConnections() {
     const teams = allRosterTeams();
     const connected = teams.filter((t) => teamConnected(t.team_id)).length;
+    const pending   = teams.filter((t) => teamConnectionStatus(t.team_id) === 'CONNECTION_REQUESTED').length;
     const connEl = $('connected-count');
     const totalEl = $('total-count');
     const chipsEl = $('connection-team-chips');
@@ -1261,8 +1279,10 @@ function renderRealQr(container, dataUri) {
     if (totalEl) totalEl.textContent = String(teams.length);
     if (chipsEl) {
       chipsEl.innerHTML = teams.map((t) => {
-        const online = teamConnected(t.team_id);
-        const dotClass = online ? 'conn-chip__dot--online' : 'conn-chip__dot--offline';
+        const status = teamConnectionStatus(t.team_id);
+        let dotClass = 'conn-chip__dot--offline';
+        if (status === 'CONNECTED')           dotClass = 'conn-chip__dot--online';
+        else if (status === 'CONNECTION_REQUESTED') dotClass = 'conn-chip__dot--pending';
         return '<div class="conn-chip">' +
           '<span class="conn-chip__dot ' + dotClass + '" aria-hidden="true"></span>' +
           t.team_name + '</div>';
@@ -1499,6 +1519,57 @@ function renderRealQr(container, dataUri) {
     });
   }
 
+  /* ---------- connection approval (dashboard) ----------
+     Mirrors the approval flow from teams.html/teams.js so hosts can
+     handle connection requests without leaving the dashboard. */
+  let approvalTeamId = null;
+  let approvalBusy   = false;
+
+  function openApprovalModal(payload) {
+    if (!DOM.modalApproveConnection) return;
+    const teamName = payload.team_name || 'Unknown';
+    const leader   = (payload.leader && payload.leader.username) || '\u2014';
+    const count    = payload.member_count != null ? String(payload.member_count) : '\u2014';
+    DOM.approveTeamName.textContent  = teamName;
+    DOM.approveLeaderName.textContent = leader;
+    DOM.approveMemberCount.textContent = count;
+    DOM.approveConnectionDetails.textContent =
+      '\u201c' + teamName + '\u201d is requesting to join the host screen for this game.';
+    approvalBusy = false;
+    openModal(DOM.modalApproveConnection);
+  }
+
+  async function decideConnection(teamId, approve) {
+    if (approvalBusy) return;
+    approvalBusy = true;
+    DOM.btnApproveConnection.disabled = true;
+    DOM.btnDeclineConnection.disabled = true;
+    try {
+      const res = approve
+        ? await TeamAPI.approveConnection(API.getGameId(), teamId)
+        : await TeamAPI.declineConnection(API.getGameId(), teamId);
+      if (approvalTeamId === teamId) { closeModal(DOM.modalApproveConnection); approvalTeamId = null; }
+      loadRoster().then(renderConnections).catch(() => {});
+      toast(approve ? 'Team connected to the host screen' : 'Connection declined');
+    } catch (err) {
+      console.error('[dashboard] connection decision failed', err);
+      if (approvalTeamId === teamId) { closeModal(DOM.modalApproveConnection); approvalTeamId = null; }
+      toast((err && err.message) || 'Action failed');
+    } finally {
+      approvalBusy = false;
+      DOM.btnApproveConnection.disabled = false;
+      DOM.btnDeclineConnection.disabled = false;
+    }
+  }
+
+  DOM.btnApproveConnection.addEventListener('click', () => {
+    if (approvalTeamId != null) decideConnection(approvalTeamId, true);
+  });
+  DOM.btnDeclineConnection.addEventListener('click', () => {
+    if (approvalTeamId != null) decideConnection(approvalTeamId, false);
+  });
+  DOM.closeApproveConnection.addEventListener('click', () => closeModal(DOM.modalApproveConnection));
+
   /* ---------- realtime socket bridge (host) ----------
      Connects the HOST socket. Because the backend only broadcasts a
      PUBLIC turn payload (word text blanked) to the game/turn rooms,
@@ -1558,6 +1629,30 @@ function renderRealQr(container, dataUri) {
     rt.on('member_joined', (p) => { if (p && p.member && p.member.team_id && p.member.username) teamNameOf.register(p.member.team_id, p.member.username); refreshPresence(); });
     rt.on('team_disconnected', (p) => { if (p && p.team_id) refreshPresence(); });
     rt.on('member_left', (p) => { if (p && p.team_id) refreshPresence(); });
+
+    // Connection request approval — show modal on request, dismiss on resolve.
+    rt.on('connection_requested', (p) => {
+      if (!p || !p.team_id) return;
+      approvalTeamId = p.team_id;
+      if (p.team_name) teamNameOf.register(p.team_id, p.team_name);
+      openApprovalModal(p);
+      refreshPresence();
+    });
+    rt.on('connection_approved', (p) => {
+      if (!p || !p.team_id) return;
+      if (approvalTeamId === p.team_id) { closeModal(DOM.modalApproveConnection); approvalTeamId = null; }
+      toast((p.team_name || 'Team') + ' connected');
+      refreshPresence();
+    });
+    rt.on('connection_declined', (p) => {
+      if (!p || !p.team_id) return;
+      if (approvalTeamId === p.team_id) { closeModal(DOM.modalApproveConnection); approvalTeamId = null; }
+      refreshPresence();
+    });
+    rt.on('connection_disconnected', (p) => {
+      if (!p || !p.team_id) return;
+      refreshPresence();
+    });
   }
 
   // Connect the host socket once. On (re)connect re-request state and

@@ -468,8 +468,46 @@
     </div>
   </div>
 
+  <!-- Connection Approval Modal -->
+  <div class="dash-modal-overlay" id="modal-approve-connection" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="approve-connection-title">
+    <div class="dash-modal">
+      <button class="dash-modal__close" id="close-approve-connection" aria-label="Close">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+      <h2 class="dash-modal__title" id="approve-connection-title">
+        <i class="fa-solid fa-handshake"></i>
+        Team Connection Request
+      </h2>
+      <p class="dash-modal__subtitle" id="approve-connection-details">A team wants to join the host screen.</p>
+      <div class="request-summary">
+        <div class="request-summary__row">
+          <span class="request-summary__label">Team</span>
+          <span class="request-summary__value" id="approve-team-name"></span>
+        </div>
+        <div class="request-summary__row">
+          <span class="request-summary__label">Leader</span>
+          <span class="request-summary__value" id="approve-leader-name"></span>
+        </div>
+        <div class="request-summary__row">
+          <span class="request-summary__label">Members</span>
+          <span class="request-summary__value" id="approve-member-count"></span>
+        </div>
+      </div>
+      <div class="dash-modal__actions">
+        <button class="dash-modal__cancel" id="btn-decline-connection">
+          <i class="fa-solid fa-xmark"></i> Decline
+        </button>
+        <button class="dash-modal__confirm" id="btn-approve-connection">
+          <i class="fa-solid fa-check"></i> Confirm
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Dashboard JS -->
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+  <script src="../../js/core/runtime-config.js"></script>
+  <script src="../../js/core/config.js"></script>
   <script src="../../js/api/api.js"></script>
   <script src="../../js/api/game-api.js"></script>
   <script src="../../js/api/team-api.js"></script>

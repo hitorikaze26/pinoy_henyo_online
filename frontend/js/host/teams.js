@@ -673,15 +673,32 @@ function openRemoveTeam(teamId) {
 $('close-remove-team').addEventListener('click',  () => closeModal($('modal-remove-team')));
 $('cancel-remove-team').addEventListener('click', () => closeModal($('modal-remove-team')));
 
-$('btn-confirm-remove').addEventListener('click', () => {
+$('btn-confirm-remove').addEventListener('click', async () => {
   const team = STATE.teams.find(t => t.id === STATE.pendingRemoveTeamId);
   if (!team) return;
   const name = team.name;
-  STATE.teams = STATE.teams.filter(t => t.id !== STATE.pendingRemoveTeamId);
-  STATE.pendingRemoveTeamId = null;
-  closeModal($('modal-remove-team'));
-  render();
-  showToast(`Team "${name}" removed`);
+  const teamId = team.id;
+  const btn = $('btn-confirm-remove');
+  const original = btn.innerHTML;
+  btn.disabled = true;
+  try {
+    await TeamAPI.deleteTeam(teamId);
+    STATE.teams = STATE.teams.filter(t => t.id !== teamId);
+    STATE.pendingRemoveTeamId = null;
+    closeModal($('modal-remove-team'));
+    render();
+    showToast(`Team "${name}" removed`);
+  } catch (err) {
+    btn.disabled = false;
+    const code = (err && err.code) || '';
+    if (code === 'TEAM_DELETE_BLOCKED_MATCH_REFERENCE') {
+      showToast(`Team "${name}" is in a match and cannot be removed.`, 4000);
+    } else {
+      showToast((err && err.message) || 'Could not remove team', 4000);
+    }
+  } finally {
+    btn.innerHTML = original;
+  }
 });
 
 /* ============================================================
@@ -710,14 +727,20 @@ function buildManageMemberRow(teamId, member) {
       </button>
     </div>`;
 
-  row.querySelector('.manage-member-row__btn--remove').addEventListener('click', () => {
+  row.querySelector('.manage-member-row__btn--remove').addEventListener('click', async () => {
     const team = STATE.teams.find(t => t.id === teamId);
     if (!team) return;
-    team.members = team.members.filter(m => m.id !== member.id);
-    renderManageMembersList(teamId);
-    renderStats();
-    renderTeams();
-    showToast(`${member.name} removed`);
+    if (!window.confirm(`Remove "${member.name}" from "${team.name}"?`)) return;
+    try {
+      await TeamAPI.removeMember(member.id);
+      team.members = team.members.filter(m => m.id !== member.id);
+      renderManageMembersList(teamId);
+      renderStats();
+      renderTeams();
+      showToast(`${member.name} removed`);
+    } catch (err) {
+      showToast((err && err.message) || 'Could not remove member', 4000);
+    }
   });
 
   return row;

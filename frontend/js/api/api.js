@@ -13,19 +13,19 @@
    ============================================================ */
 
 const API = (() => {
-  // Derive the default base from the current page origin. Flask serves the
-  // frontend, REST API, and Socket.IO from the same origin, so this is correct
-  // both for local dev (http://localhost:5000) and behind a Cloudflare Tunnel
-  // / custom domain (https://your-host). Override by setting
-  // window.PINOY_API_BASE before loading this file, or by calling
-  // API.setBaseUrl(...) at runtime.
+  // Centralized backend config — frontend/js/core/config.js is the SINGLE
+  // source of truth (window.PINOY_CONFIG.API_BASE_URL). It must load before
+  // this file on every page. The legacy window.PINOY_API_BASE override and the
+  // same-origin/localhost fallbacks below only apply if config.js is absent.
+  const _cfg = (typeof window !== 'undefined' && window.PINOY_CONFIG) || null;
   const DEFAULT_BASE =
+    (_cfg && _cfg.API_BASE_URL) ||
     (window.PINOY_API_BASE) ||
     (((window.location && window.location.origin) || 'http://localhost:5000') + '/api');
 
   const SERVER_ERROR = { code: 'NETWORK_ERROR', message: 'Could not reach the server. Please try again.' };
 
-  let baseUrl = window.PINOY_API_BASE || DEFAULT_BASE;
+  let baseUrl = (_cfg && _cfg.API_BASE_URL) || window.PINOY_API_BASE || DEFAULT_BASE;
 
   /* ============================================================
      Session store.

@@ -216,11 +216,6 @@ def timer_payload(turn):
     }
 
 
-def emit_timer_updated(turn):
-    _emit(game_room(turn.match.game_id), "timer_updated", timer_payload(turn))
-    _emit(turn_room(turn.id), "timer_updated", timer_payload(turn))
-
-
 def emit_timer_paused(turn):
     data = timer_payload(turn)
     data["paused_at"] = turn.paused_at

@@ -765,3 +765,19 @@ window.addEventListener('scroll', () => {
     navbar.style.borderBottomColor = 'rgba(255,255,255,0.07)';
   }
 }, { passive: true });
+
+/* ============================================================
+   DEEP-LINK JOIN — consume a shared game link (?code=...)
+   Pre-fills the Join modal when the landing page is opened from
+   a host "Share Link" (or a ?game=/?team= deep link).
+============================================================ */
+(function handleDeepLinkJoin() {
+  if (!window.Connect || !overlayJoin) return;
+  const parsed = Connect.parseLocation();
+  if (!parsed || !parsed.code) return;
+  const gameCodeInput = document.getElementById('input-gamecode');
+  if (gameCodeInput) {
+    gameCodeInput.value = parsed.code.toUpperCase().replace(/^PH/i, 'PH');
+  }
+  openModal(overlayJoin);
+})();

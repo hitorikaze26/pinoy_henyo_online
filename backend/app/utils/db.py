@@ -53,13 +53,22 @@ def execute(sql, params=None):
     return result.rowcount
 
 
-def insert(sql, params=None):
+def insert(sql, params=None, pk_column="id"):
     """Execute an INSERT and return the generated primary key (if any).
 
-    Uses ``db.session.execute`` which on MySQL populates
-    ``result.lastrowid``.
+    MySQL/SQLite expose the generated id via ``result.lastrowid``. PostgreSQL
+    (psycopg2) does not populate ``lastrowid`` for SERIAL/IDENTITY columns, so
+    a ``RETURNING <pk_column>`` clause is appended for the ``postgresql``
+    dialect instead. Override ``pk_column`` for tables whose primary key is not
+    named ``id``.
     """
-    result = db.session.execute(db.text(sql), params or {})
+    params = params or {}
+    if db.engine.dialect.name == "postgresql":
+        stmt = sql.rstrip().rstrip(";") + " RETURNING " + pk_column
+        result = db.session.execute(db.text(stmt), params)
+        row = result.first()
+        return row[pk_column] if row is not None else None
+    result = db.session.execute(db.text(sql), params)
     return result.lastrowid
 
 

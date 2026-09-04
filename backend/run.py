@@ -4,10 +4,14 @@ from app.extensions import socketio
 app = create_app()
 
 # --- Render (production) ---
-# Expose the Socket.IO-wrapped WSGI app for gunicorn. Real-time events would
-# not work if gunicorn served the bare `app` instead. Uncomment for Render.
-# Keep `socketio.run(app, ...)` below for local development.
-# socketio_app = socketio.WSGIApp(socketio, app)
+# Gunicorn entrypoint for Flask-SocketIO. Socket.IO traffic must go through the
+# WSGI middleware rather than the bare Flask app or real-time events break.
+# The factory is evaluated lazily so local dev (`python run.py`, threading
+# async mode) never constructs the wrapper at import time.
+# Render start command:
+#   gunicorn -k eventlet -w 1 run:gunicorn_app
+def gunicorn_app(environ, start_response):
+    return socketio.WSGIApp(socketio, app)(environ, start_response)
 
 if __name__ == "__main__":
     socketio.run(

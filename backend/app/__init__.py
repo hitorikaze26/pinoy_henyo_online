@@ -82,6 +82,23 @@ def _register_models():
     from . import models  # noqa: F401
 
 
+def _warn_production_cors(app):
+    if app.config.get("DEBUG"):
+        return
+    origins = app.config.get("CORS_ORIGINS") or []
+    if not origins:
+        app.logger.warning(
+            "Production CORS_ORIGINS is empty — the Vercel frontend cannot "
+            "reach the API or Socket.IO. Set CORS_ORIGINS (comma-separated "
+            "origins) in the Render environment."
+        )
+    elif "*" in origins:
+        app.logger.warning(
+            "Production CORS_ORIGINS contains '*' — restrict it to the Vercel "
+            "frontend origin, e.g. https://<app>.vercel.app."
+        )
+
+
 def create_app(config_name=None):
     if config_name is None:
         config_name = os.environ.get("FLASK_CONFIG", "development")
@@ -114,5 +131,6 @@ def create_app(config_name=None):
     _register_models()
     _register_sockets()
     _maybe_start_sweeper(app)
+    _warn_production_cors(app)
 
     return app

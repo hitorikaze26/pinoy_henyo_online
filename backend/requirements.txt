@@ -3,10 +3,13 @@ Flask-CORS>=4.0
 Flask-SQLAlchemy>=3.1
 Flask-Migrate>=4.0
 Flask-SocketIO>=5.3
-# eventlet>=0.33  # UNCOMMENT for Render (gunicorn -k eventlet worker).
-#                 # Leave commented for local dev so socketio.run stays on the
-#                 # default 'threading' async mode.
+# eventlet>=0.33  # PRODUCTION ONLY — see requirements-render.txt.
+#                 # Kept out of this file so local dev / pytest keep the default
+#                 # 'threading' async mode (eventlet changes Flask-SocketIO's
+#                 # async_mode as soon as it is installed).
 PyMySQL>=1.1
+psycopg2-binary>=2.9
+gunicorn>=21.2
 simple-websocket>=1.0
 python-dotenv>=1.0
 pytest>=8.0

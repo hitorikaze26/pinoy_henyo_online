@@ -555,7 +555,7 @@ def test_host_disables_word(client, app):
     assert category["ready"] is False
 
 
-def test_host_manages_word_after_game_locked(client, app):
+def test_host_cannot_add_word_after_game_locked(client, app):
     game_id, host_token = _create_game(client)
     team_id = _create_team(app, game_id, "A1")
     category_id = _create_category(client, game_id, host_token, "Food")
@@ -564,7 +564,8 @@ def test_host_manages_word_after_game_locked(client, app):
     added = _submit(
         client, game_id, category_id, team_id, "Adobo", token=host_token
     )
-    assert added.status_code == 201
+    assert added.status_code == 409
+    assert added.get_json()["error"]["code"] == "WORD_LOCKED"
 
 
 # ---------------------------------------------------------------------------
@@ -609,7 +610,7 @@ def test_edit_word_owner_and_other_team(client, app):
     assert denied.get_json()["error"]["code"] == "WORD_OWNERSHIP"
 
 
-def test_player_edit_locked_after_start_but_host_can(client, app):
+def test_player_and_host_edit_locked_after_start(client, app):
     game_id, host_token = _create_game(client)
     team_id, sess = _create_team(app, game_id, "A1")
     category_id = _create_category(client, game_id, host_token, "Food")
@@ -626,12 +627,13 @@ def test_player_edit_locked_after_start_but_host_can(client, app):
     assert denied.status_code == 409
     assert denied.get_json()["error"]["code"] == "WORD_LOCKED"
 
-    ok = client.patch(
+    host_denied = client.patch(
         "/api/words/{}".format(word_id),
         json={"word_text": "Sinigang"},
         headers={HOST_TOKEN_HEADER: host_token},
     )
-    assert ok.status_code == 200
+    assert host_denied.status_code == 409
+    assert host_denied.get_json()["error"]["code"] == "WORD_LOCKED"
 
 
 def test_delete_word_owner(client, app):

@@ -1,6 +1,9 @@
 """Device session repository — raw SQL for ``device_sessions``."""
 
+from datetime import timedelta
+
 from ..utils.db import query_one, query_all, execute, insert
+from ..utils.time import utcnow
 
 
 def find_by_session_token(token):
@@ -79,11 +82,11 @@ def disconnect(session_id):
 
 def expire_stale(timeout_seconds):
     """Mark sessions missing their heartbeat as disconnected."""
+    cutoff = utcnow() - timedelta(seconds=max(int(timeout_seconds), 0))
     return execute(
         "UPDATE device_sessions SET disconnected_at = CURRENT_TIMESTAMP "
-        "WHERE disconnected_at IS NULL "
-        "AND last_heartbeat < DATE_SUB(NOW(), INTERVAL :timeout SECOND)",
-        {"timeout": timeout_seconds},
+        "WHERE disconnected_at IS NULL AND last_heartbeat < :cutoff",
+        {"cutoff": cutoff},
     )
 
 

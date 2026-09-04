@@ -398,9 +398,19 @@ def test_create_round(client):
 
 def test_create_round_invalid_number(client):
     s = _basic_setup(client)
-    response = _create_round(client, s.game_id, s.host, 3)
+    response = _create_round(client, s.game_id, s.host, 4)
     assert response.status_code == 400
     assert response.get_json()["error"]["code"] == "ROUND_NUMBER_INVALID"
+
+
+def test_create_round_round_three(client):
+    s = _basic_setup(client)
+    response = _create_round(client, s.game_id, s.host, 3)
+    assert response.status_code == 201
+    data = response.get_json()["data"]
+    assert data["round_number"] == 3
+    assert data["status"] == "PENDING"
+    assert data["timer_seconds"] == 60
 
 
 def test_create_round_invalid_timer(client):

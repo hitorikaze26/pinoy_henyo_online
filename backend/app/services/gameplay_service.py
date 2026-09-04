@@ -18,7 +18,8 @@ from ..models import (
 
 ROUND_1 = 1
 ROUND_2 = 2
-ROUND_NUMBERS = (ROUND_1, ROUND_2)
+ROUND_3 = 3
+ROUND_NUMBERS = (ROUND_1, ROUND_2, ROUND_3)
 MAX_WORDS_PER_TURN = 5
 MAX_TIMER_SECONDS = 300
 
@@ -250,7 +251,7 @@ def assign_member_role(game, team, member_id, gameplay_role):
 def create_round(game, round_number, timer_seconds=60, timer_mode=None):
     if round_number not in ROUND_NUMBERS:
         raise RoundNumberInvalidError(
-            "round_number must be 1 or 2."
+            "round_number must be 1, 2, or 3."
         )
     if get_round(game, round_number) is not None:
         raise RoundExistsError(

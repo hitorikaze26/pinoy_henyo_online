@@ -5,10 +5,19 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-def _cors_origins():
-    raw = os.environ.get("CORS_ORIGINS", "*")
+def _cors_origins(allow_wildcard=True):
+    """Parse CORS_ORIGINS (comma-separated) into a list of origins.
+
+    Dev/testing fall back to ``["*"]`` when unset. Production
+    (``allow_wildcard=False``) must enumerate explicit origins: an unset or
+    empty CORS_ORIGINS yields an empty list so cross-origin browser requests
+    are refused rather than allowed from anywhere.
+    """
+    raw = os.environ.get("CORS_ORIGINS", "")
     origins = [origin.strip() for origin in raw.split(",") if origin.strip()]
-    return origins or ["*"]
+    if origins:
+        return origins
+    return ["*"] if allow_wildcard else []
 
 
 class BaseConfig:
@@ -42,6 +51,9 @@ class TestingConfig(BaseConfig):
 
 class ProductionConfig(BaseConfig):
     DEBUG = False
+    # No wildcard in production — CORS_ORIGINS must name the Vercel origin.
+    # Left empty, cross-origin browser requests (REST + Socket.IO) are refused.
+    CORS_ORIGINS = _cors_origins(allow_wildcard=False)
 
 
 config_by_name = {

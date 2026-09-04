@@ -3,8 +3,11 @@
 /* ============================================================
    Realtime — shared Socket.IO client (Pinoy Henyo Online)
    ------------------------------------------------------------
-   Bridges the pages to the backend Socket.IO server at
-   http://localhost:5000 (same origin as the REST API).
+   Bridges the pages to the backend Socket.IO server. In local
+   development the backend shares the page origin
+   (http://localhost:5000). In production the Socket.IO backend is
+   the Render backend, resolved from the centralized config
+   (window.PINOY_CONFIG.SOCKET_BASE_URL in js/core/config.js).
 
    Only listens to backend events that actually exist
    (see backend/app/services/realtime.py + sockets/events.py):
@@ -63,6 +66,8 @@ const Realtime = (() => {
 
   /* ---------- origin / socket setup ---------- */
   function socketOrigin() {
+    const cfg = (typeof window !== 'undefined' && window.PINOY_CONFIG) || null;
+    if (cfg && cfg.SOCKET_BASE_URL) return cfg.SOCKET_BASE_URL;
     if (window.PINOY_SOCKET_BASE) return window.PINOY_SOCKET_BASE;
     try {
       const u = new URL(API.getBaseUrl());

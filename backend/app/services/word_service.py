@@ -321,8 +321,7 @@ def submit_word(game, team, category_id, word_text, host=False):
     normalized = normalize_word(text)
     if team is None:
         raise TeamRequiredError("A submitting team is required.")
-    if not host:
-        _ensure_unlocked(game)
+    _ensure_unlocked(game)
 
     existing = Word.query.filter_by(
         game_id=game.id,
@@ -371,9 +370,9 @@ def submit_word(game, team, category_id, word_text, host=False):
 
 
 def _authorize_modify(game, word, actor):
+    _ensure_unlocked(game)
     if actor is None or actor.host:
         return
-    _ensure_unlocked(game)
     if actor.team_id != word.submitted_by_team_id:
         raise WordOwnershipError(
             "A team can only modify or delete its own submitted words."

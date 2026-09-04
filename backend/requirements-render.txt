@@ -1,0 +1,5 @@
+-r requirements.txt
+# Flask-SocketIO async mode for gunicorn on Render (eventlet). This pipeline
+# is what the Render build runs — installs everything plus eventlet, which is
+# deliberately split out so local dev and the test suite stay on 'threading'.
+eventlet>=0.33

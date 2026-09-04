@@ -110,9 +110,23 @@ const TeamAPI = (() => {
     });
   }
 
+  // DELETE /api/teams/<team_id>  (host only)
+  function deleteTeam(teamId) {
+    return API.request(`/teams/${teamId}`, { method: 'DELETE', host: true });
+  }
+
+  // DELETE /api/members/<member_id>  (host or team leader)
+  function removeMember(memberId) {
+    return API.request(`/members/${memberId}`, {
+      method: 'DELETE',
+      host: true,
+      session: true,
+    });
+  }
+
   // GET /api/teams/<team_id>/qr  (team-leader session or host token)
   function teamQr(teamId) {
-    return API.request(`/teams/${teamId}/qr`, { session: true });
+    return API.request(`/teams/${teamId}/qr`, { host: true, session: true });
   }
 
   // POST /api/games/<game_id>/connection-request
@@ -169,6 +183,8 @@ const TeamAPI = (() => {
     getMyTeam,
     updateTeamName,
     updateUsername,
+    deleteTeam,
+    removeMember,
     teamQr,
     listTeams,
     requestConnection,

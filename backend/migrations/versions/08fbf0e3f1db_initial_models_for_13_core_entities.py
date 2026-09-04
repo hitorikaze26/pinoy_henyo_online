@@ -112,7 +112,7 @@ def upgrade():
     sa.Column('username', sa.String(length=50), nullable=False),
     sa.Column('device_role', sa.String(length=20), nullable=False),
     sa.Column('gameplay_role', sa.String(length=20), nullable=True),
-    sa.Column('is_connected', sa.Boolean(), server_default=sa.text('0'), nullable=False),
+    sa.Column('is_connected', sa.Boolean(), server_default=sa.text('false'), nullable=False),
     sa.Column('connection_token', sa.String(length=64), nullable=False),
     sa.Column('created_at', sa.DateTime(), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=False),
     sa.Column('updated_at', sa.DateTime(), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=False),

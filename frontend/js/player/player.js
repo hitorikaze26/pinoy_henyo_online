@@ -420,16 +420,21 @@ function renderMemberList() {
 
   // Remove member buttons
   list.querySelectorAll('.member-row__remove').forEach(btn => {
-    btn.addEventListener('click', e => {
+    btn.addEventListener('click', async e => {
       e.stopPropagation();
       const id = +btn.dataset.id;
       const m  = STATE.members.find(x => x.id === id);
       if (!m) return;
       if (!confirm(`Remove "${m.name}" from the team?`)) return;
-      STATE.members = STATE.members.filter(x => x.id !== id);
-      renderTeamsTab();
-      renderHeader();
-      showToast(`${m.name} removed`);
+      try {
+        await TeamAPI.removeMember(id);
+        STATE.members = STATE.members.filter(x => x.id !== id);
+        renderTeamsTab();
+        renderHeader();
+        showToast(`${m.name} removed`);
+      } catch (err) {
+        showToast((err && err.message) || 'Could not remove member', 4000);
+      }
     });
   });
 }

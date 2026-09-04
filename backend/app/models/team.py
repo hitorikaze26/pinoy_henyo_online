@@ -121,7 +121,7 @@ class TeamMember(db.Model):
     device_role = db.Column(db.String(20), nullable=False)
     gameplay_role = db.Column(db.String(20), nullable=True)
     is_connected = db.Column(
-        db.Boolean, nullable=False, default=False, server_default=db.text("0")
+        db.Boolean, nullable=False, default=False, server_default=db.text("false")
     )
     connection_token = db.Column(db.String(64), nullable=False, unique=True, index=True)
     created_at = db.Column(

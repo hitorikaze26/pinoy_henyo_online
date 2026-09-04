@@ -4,7 +4,7 @@ from datetime import timedelta
 from sqlalchemy.exc import IntegrityError
 
 from ..extensions import db
-from ..models import DeviceSession, Game, GameEvent, Team, TeamMember, Word  # noqa: F401
+from ..models import DeviceSession, Game, GameEvent, Match, Team, TeamMember, Word  # noqa: F401
 from ..utils.codes import generate_team_code
 from ..utils.time import utcnow
 
@@ -101,6 +101,11 @@ class ConnectionRequestPendingError(TeamServiceError):
 class NoPendingRequestError(TeamServiceError):
     status = 409
     code = "NO_PENDING_REQUEST"
+
+
+class TeamDeleteBlockedMatchError(TeamServiceError):
+    status = 409
+    code = "TEAM_DELETE_BLOCKED_MATCH_REFERENCE"
 
 
 def _record_event(game, event_type, data=None):
@@ -272,6 +277,9 @@ def remove_member(member):
             "username": member.username,
         },
     )
+    # Keep historical events; detach their member FK so removal does not
+    # violate the FK and does not destroy audit history.
+    GameEvent.query.filter_by(member_id=member.id).update({"member_id": None})
     db.session.delete(member)
 
 
@@ -283,6 +291,15 @@ def delete_team(team):
     if team.connection_status == Team.CONNECTION_CONNECTED:
         raise TeamServiceError(
             "Cannot delete a connected team during gameplay. Disconnect first."
+        )
+    match_ref = Match.query.filter(
+        (Match.team_id == team.id)
+        | (Match.opponent_team_id == team.id)
+        | (Match.winner_team_id == team.id)
+    ).first()
+    if match_ref is not None:
+        raise TeamDeleteBlockedMatchError(
+            "This team is part of a match and cannot be deleted."
         )
     game = team.game
     _record_event(

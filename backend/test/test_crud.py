@@ -4,7 +4,22 @@ import pytest
 
 from app import create_app
 from app.extensions import db
-from app.models import DeviceSession, Game, Match, Penalty, Round, Score, Team, TeamMember, Turn
+from app.models import (
+    Category,
+    DeviceSession,
+    Game,
+    GameEvent,
+    Match,
+    Penalty,
+    Round,
+    RoundCategory,
+    Score,
+    Team,
+    TeamMember,
+    Turn,
+    TurnWord,
+    Word,
+)
 
 HOST_TOKEN_HEADER = "X-Host-Token"
 
@@ -152,6 +167,144 @@ def test_delete_completed_game_removes_all_cascades(client, app):
         assert db.session.get(Team, team_id) is None
 
 
+def test_delete_full_game_no_orphans(client, app):
+    """Delete a fully-played game and verify every FK-referencing child is
+    removed (rounds, matches with opponent/winner refs, turns, words, scores,
+    events, members, categories) with no orphan rows and no FK violation."""
+    g = _create_game(client)
+    game_id = g["game_id"]
+
+    with app.app_context():
+        game = db.session.get(Game, game_id)
+        game.status = Game.STATUS_ROUND_1
+
+        cat_a = Category(game_id=game_id, name="Food")
+        cat_b = Category(game_id=game_id, name="Places")
+        db.session.add_all([cat_a, cat_b])
+        db.session.flush()
+
+        # Teams with leaders.
+        team_a = Team(game_id=game_id, team_name="Alpha", team_code="AAA",
+                      connection_status=Team.CONNECTION_CONNECTED)
+        team_b = Team(game_id=game_id, team_name="Bravo", team_code="BBB",
+                      connection_status=Team.CONNECTION_CONNECTED)
+        db.session.add_all([team_a, team_b])
+        db.session.flush()
+
+        leader_a = TeamMember(team_id=team_a.id, username="ALead",
+                              device_role=TeamMember.DEVICE_ROLE_TEAM_LEADER,
+                              connection_token="tok-a")
+        leader_b = TeamMember(team_id=team_b.id, username="BLead",
+                              device_role=TeamMember.DEVICE_ROLE_TEAM_LEADER,
+                              connection_token="tok-b")
+        member_a = TeamMember(team_id=team_a.id, username="AMem",
+                              device_role=TeamMember.DEVICE_ROLE_TEAM_MEMBER,
+                              connection_token="tok-aa")
+        db.session.add_all([leader_a, leader_b, member_a])
+        db.session.flush()
+        team_a.leader_member_id = leader_a.id
+        team_b.leader_member_id = leader_b.id
+
+        # Words submitted by both teams.
+        w1 = Word(game_id=game_id, category_id=cat_a.id,
+                  submitted_by_team_id=team_a.id, word_text="Apple",
+                  normalized_word="apple")
+        w2 = Word(game_id=game_id, category_id=cat_a.id,
+                  submitted_by_team_id=team_b.id, word_text="Banana",
+                  normalized_word="banana")
+        db.session.add_all([w1, w2])
+        db.session.flush()
+
+        # Round 1 + matches capturing both opponent and winner references.
+        r1 = Round(game_id=game_id, round_number=1, status=Round.STATUS_COMPLETED,
+                   timer_seconds=60, timer_mode=Round.TIMER_MODE_COUNTDOWN)
+        r2 = Round(game_id=game_id, round_number=2, status=Round.STATUS_COMPLETED,
+                   timer_seconds=60, timer_mode=Round.TIMER_MODE_COUNTDOWN)
+        db.session.add_all([r1, r2])
+        db.session.flush()
+
+        round_cat_a = RoundCategory(round_id=r1.id, category_id=cat_a.id)
+        round_cat_b = RoundCategory(round_id=r2.id, category_id=cat_b.id)
+        db.session.add_all([round_cat_a, round_cat_b])
+
+        m1 = Match(game_id=game_id, round_id=r1.id, match_order=1,
+                   team_id=team_a.id, opponent_team_id=team_b.id,
+                   winner_team_id=team_a.id,
+                   status=Match.STATUS_COMPLETED)
+        m2 = Match(game_id=game_id, round_id=r2.id, match_order=2,
+                   team_id=team_b.id, opponent_team_id=team_a.id,
+                   winner_team_id=team_a.id,
+                   status=Match.STATUS_COMPLETED)
+        db.session.add_all([m1, m2])
+        db.session.flush()
+        game.current_match_id = m1.id
+
+        # A turn with turn words + a penalty.
+        t = Turn(match_id=m1.id, team_id=team_a.id, round_id=r1.id,
+                 turn_order=1, status=Turn.STATUS_COMPLETED,
+                 starting_seconds=60, remaining_seconds=0)
+        db.session.add(t)
+        db.session.flush()
+        db.session.add(TurnWord(turn_id=t.id, word_id=w1.id, sequence=1,
+                                result=TurnWord.RESULT_CORRECT))
+        db.session.add(Penalty(turn_id=t.id, team_id=team_b.id, seconds=3,
+                               type=Penalty.TYPE_ADD_TIME, reason="Late"))
+
+        # Scores + devices + events.
+        db.session.add(Score(game_id=game_id, team_id=team_a.id, round_id=r1.id,
+                             match_id=m1.id, points=5, correct_words=5))
+        db.session.add(DeviceSession(game_id=game_id, team_id=team_a.id,
+                                     device_id="dev-a",
+                                     session_token="sess-a",
+                                     device_type=DeviceSession.DEVICE_TYPE_TEAM_LEADER))
+        db.session.add(GameEvent(game_id=game_id, team_id=team_a.id,
+                                 member_id=member_a.id, event_type="MEMBER_JOINED"))
+
+        game.status = Game.STATUS_GAME_COMPLETE
+        db.session.commit()
+
+        ids = {
+            "round": [r1.id, r2.id],
+            "match": [m1.id, m2.id],
+            "turn": [t.id],
+            "word": [w1.id, w2.id],
+            "team": [team_a.id, team_b.id],
+            "member": [leader_a.id, leader_b.id, member_a.id],
+            "score": [],
+            "event": [],
+            "device": [],
+            "category": [cat_a.id, cat_b.id],
+        }
+        ids["score"].append(
+            Score.query.filter_by(game_id=game_id).all()[0].id)
+        ids["event"].append(
+            GameEvent.query.filter_by(game_id=game_id).all()[0].id)
+        ids["device"].append(
+            DeviceSession.query.filter_by(game_id=game_id).all()[0].id)
+
+    response = client.delete(
+        "/api/games/{}".format(game_id),
+        json={"confirm": True},
+        headers={HOST_TOKEN_HEADER: g["host_session_token"]},
+    )
+    assert response.status_code == 200
+
+    with app.app_context():
+        assert db.session.get(Game, game_id) is None
+        for model, key in [
+            (Round, "round"), (Match, "match"), (Turn, "turn"),
+            (Word, "word"), (Team, "team"), (TeamMember, "member"),
+            (Category, "category"),
+        ]:
+            for cid in ids[key]:
+                assert db.session.get(model, cid) is None, (model, cid)
+        for key in ("score", "event", "device"):
+            for cid in ids[key]:
+                assert db.session.get(
+                    {"score": Score, "event": GameEvent,
+                     "device": DeviceSession}[key], cid) is None
+
+
 # ---------------------------------------------------------------------------
 # Team deletion
 # ---------------------------------------------------------------------------
@@ -198,6 +351,46 @@ def test_delete_connected_team_rejected(client, app):
     assert response.status_code == 400
 
 
+def test_delete_team_referenced_by_match_rejected(client, app):
+    g = _create_game(client)
+    team_x = _create_team(client, g["game_id"], team_name="Team X")
+    team_y = _create_team(client, g["game_id"], team_name="Team Y")
+    team_x_id = team_x["team_id"]
+
+    assert client.post(
+        "/api/games/{}/rounds".format(g["game_id"]),
+        json={"round_number": 1},
+        headers={HOST_TOKEN_HEADER: g["host_session_token"]},
+    ).status_code == 201
+    resp = client.post(
+        "/api/games/{}/matches".format(g["game_id"]),
+        json={
+            "round_number": 1,
+            "matches": [
+                {"team_id": team_y["team_id"],
+                 "opponent_team_id": team_x_id}
+            ],
+        },
+        headers={HOST_TOKEN_HEADER: g["host_session_token"]},
+    )
+    assert resp.status_code == 201
+
+    # Deleting a team referenced by a match must fail cleanly (no raw FK error).
+    response = client.delete(
+        "/api/teams/{}".format(team_x_id),
+        headers={HOST_TOKEN_HEADER: g["host_session_token"]},
+    )
+    assert response.status_code == 409
+    body = response.get_json()["error"]
+    assert body["code"] == "TEAM_DELETE_BLOCKED_MATCH_REFERENCE"
+
+    # The team and the match remain untouched.
+    with app.app_context():
+        assert db.session.get(Team, team_x_id) is not None
+        assert Team.query.filter_by(id=team_x_id).count() == 1
+        assert Match.query.filter_by(opponent_team_id=team_x_id).count() == 1
+
+
 # ---------------------------------------------------------------------------
 # Member removal
 # ---------------------------------------------------------------------------
@@ -220,6 +413,38 @@ def test_remove_member(client, app):
     with app.app_context():
         assert db.session.get(TeamMember, member_id) is None
 
+
+def test_remove_member_detaches_game_events(client, app):
+    g = _create_game(client)
+    team = _create_team(client, g["game_id"])
+    member = _add_member(client, team["team_id"], username="Elena")
+    member_id = member["member_id"]
+
+    with app.app_context():
+        ev = GameEvent(
+            game_id=g["game_id"],
+            team_id=team["team_id"],
+            member_id=member_id,
+            event_type="TEST_EVENT",
+        )
+        db.session.add(ev)
+        db.session.commit()
+        event_id = ev.id
+
+    leader_session = _leader_session(client, team)
+    response = client.delete(
+        "/api/members/{}".format(member_id),
+        headers={"X-Session-Token": leader_session},
+    )
+    assert response.status_code == 200
+
+    with app.app_context():
+        assert db.session.get(TeamMember, member_id) is None
+        event = db.session.get(GameEvent, event_id)
+        # Historical event is retained and its member FK is detached (NULL).
+        assert event is not None
+        assert event.event_type == "TEST_EVENT"
+        assert event.member_id is None
 
 def test_remove_team_leader_rejected(client):
     g = _create_game(client)

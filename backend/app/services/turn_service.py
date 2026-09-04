@@ -802,6 +802,16 @@ def maybe_resolve_pairing(match):
     )
     db.session.add(tie_match)
     db.session.flush()
+    _record_event(
+        game.id,
+        "TIE_BREAK_CREATED",
+        {
+            "team_a_id": first_id,
+            "team_b_id": second_id,
+            "tie_breaker_round": TIE_BREAKER_ROUND_NUMBER,
+            "tie_breaker_match_id": tie_match.id,
+        },
+    )
     return {
         "tie": True,
         "tie_breaker_match_id": tie_match.id,

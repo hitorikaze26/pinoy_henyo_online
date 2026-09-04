@@ -34,12 +34,18 @@ const Connect = (() => {
   }
 
   /* ---------- Reconnect decoding (page deep-links) ----------
-     The frontend router pages may load with a deep-link that carries
-     the SAME codes (no code->id resolution endpoint exists in the
-     backend, so a full scan-and-connect cannot complete today). */
+     The landing page / player pages may load with a deep-link that
+     carries the same PUBLIC codes. Supported query shapes:
+       ?code=PHABCD12            (game code, e.g. host "Share Link")
+       ?game=PHABCD12            (game code)
+       ?team=ABCD&?game=PHABCD12 (team code + game code) */
   function parseLocation() {
     const raw = window.location.href;
-    const match = raw.match(/[?&](game|team)=([^&]+)/);
+    let match = raw.match(/[?&]code=([^&]+)/);
+    if (match) {
+      return { type: 'game', code: decodeURIComponent(match[1]) };
+    }
+    match = raw.match(/[?&](game|team)=([^&]+)/);
     if (match) {
       return { type: match[1], code: decodeURIComponent(match[2]) };
     }

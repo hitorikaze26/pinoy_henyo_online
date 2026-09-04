@@ -4,7 +4,7 @@ import pytest
 
 from app import create_app
 from app.extensions import db
-from app.models import Game, Match, Score, TeamMember, Turn, TurnWord
+from app.models import Game, GameEvent, Match, Score, TeamMember, Turn, TurnWord
 from app.utils.time import utcnow
 
 HOST_TOKEN_HEADER = "X-Host-Token"
@@ -762,6 +762,36 @@ def test_tie_break_created_when_both_win(client):
     assert tie["round_number"] == 3
     assert tie["team_id"] == s.team_a["team_id"]
     assert tie["opponent_team_id"] == s.team_b["team_id"]
+
+
+def test_tie_break_created_event_recorded(client, app):
+    s = _setup(client)
+    _play_match(client, s, s.match_a, "correct", words=s.words_b0[:3])
+    donor = s.words_a0[:3]
+    turn = _assign_turn_words(
+        client, s.host, s.match_b["match_id"], word_ids=donor
+    ).get_json()["data"]
+    client.post(
+        "/api/matches/{}/turn/start".format(s.match_b["match_id"]),
+        headers={HOST_TOKEN_HEADER: s.host},
+    )
+    last = None
+    for _ in range(3):
+        last = client.post(
+            "/api/turns/{}/correct".format(turn["turn_id"]),
+            headers={HOST_TOKEN_HEADER: s.host},
+        )
+    tie_id = last.get_json()["data"]["outcome"]["pairing"]["tie_breaker_match_id"]
+
+    with app.app_context():
+        event = GameEvent.query.filter_by(
+            game_id=s.game_id, event_type="TIE_BREAK_CREATED"
+        ).first()
+        assert event is not None
+        assert event.event_data["tie_breaker_match_id"] == tie_id
+        assert event.event_data["tie_breaker_round"] == 3
+        assert event.event_data["team_a_id"] == s.team_a["team_id"]
+        assert event.event_data["team_b_id"] == s.team_b["team_id"]
 
 
 def test_tie_breaker_match_is_playable(client):
