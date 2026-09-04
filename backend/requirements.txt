@@ -9,6 +9,9 @@ Flask-SocketIO>=5.3
 #                 # async_mode as soon as it is installed).
 PyMySQL>=1.1
 psycopg2-binary>=2.9
+# gunicorn is optional (local experimentation only). The app is served on
+# Render with `python run.py`; gunicorn 26 removed the eventlet worker, so
+# `gunicorn -k eventlet` must NOT be used.
 gunicorn>=21.2
 simple-websocket>=1.0
 python-dotenv>=1.0
