@@ -105,6 +105,7 @@ def _handle_submit(game, body, team, host_mode):
         category_id=body.get("category_id"),
         word_text=body.get("word_text"),
         host=host_mode,
+        assigned_round=body.get("assigned_round"),
     )
     db.session.commit()
     return success_response(data=word_service.word_payload(word), status=201)
@@ -205,6 +206,29 @@ def disable_word(word_id):
         return error
     try:
         word = word_service.disable_word(word, word.game, actor)
+        db.session.commit()
+    except word_service.WordServiceError as exc:
+        db.session.rollback()
+        return _handle(exc)
+    return success_response(data=word_service.word_payload(word))
+
+
+@words_bp.patch("/words/<int:word_id>/round")
+def set_word_round(word_id):
+    body = request.get_json(silent=True) or {}
+    word, error = _word_or_404(word_id)
+    if error is not None:
+        return error
+    frozen = _ensure_mutable(word.game)
+    if frozen is not None:
+        return frozen
+    actor, error = _resolve_actor(word.game, body)
+    if error is not None:
+        return error
+    try:
+        word = word_service.set_word_round(
+            word, word.game, actor, body.get("assigned_round")
+        )
         db.session.commit()
     except word_service.WordServiceError as exc:
         db.session.rollback()

@@ -49,11 +49,12 @@ const WordAPI = (() => {
   }
 
   // POST /api/games/<game_id>/words
-  //   host:   { category_id, word_text, team_id }
+  //   host:   { category_id, word_text, team_id, assigned_round? }
   //   player: { category_id, word_text }  (uses X-Session-Token)
-  function createWord(gameId, { categoryId, wordText, teamId, asHost = true }) {
+  function createWord(gameId, { categoryId, wordText, teamId, asHost = true, assignedRound }) {
     const body = { category_id: categoryId, word_text: wordText };
     if (teamId) body.team_id = teamId;
+    if (assignedRound) body.assigned_round = assignedRound;
     return API.request(`/games/${gameId}/words`, {
       method: 'POST',
       body,
@@ -92,6 +93,15 @@ const WordAPI = (() => {
     });
   }
 
+  // PATCH /api/words/<word_id>/round  { assigned_round: 1 | 2 }
+  function setWordRound(wordId, assignedRound) {
+    return API.request(`/words/${wordId}/round`, {
+      method: 'PATCH',
+      body: { assigned_round: assignedRound },
+      host: true,
+    });
+  }
+
   return {
     listCategories,
     createCategory,
@@ -103,6 +113,7 @@ const WordAPI = (() => {
     updateWord,
     deleteWord,
     disableWord,
+    setWordRound,
   };
 })();
 

@@ -100,6 +100,11 @@ class WordLockedError(WordServiceError):
     code = "WORD_LOCKED"
 
 
+class WordRoundInvalidError(WordServiceError):
+    status = 400
+    code = "WORD_ROUND_INVALID"
+
+
 class WordOwnershipError(WordServiceError):
     status = 409
     code = "WORD_OWNERSHIP"
@@ -350,7 +355,21 @@ def get_word(word_id):
     return db.session.get(Word, word_id)
 
 
-def submit_word(game, team, category_id, word_text, host=False):
+def _validate_assigned_round(assigned_round):
+    if assigned_round is None:
+        assigned_round = Word.ROUND_1
+    if (
+        not isinstance(assigned_round, int)
+        or isinstance(assigned_round, bool)
+        or assigned_round not in Word.ROUNDS
+    ):
+        raise WordRoundInvalidError(
+            "assigned_round must be 1 or 2."
+        )
+    return assigned_round
+
+
+def submit_word(game, team, category_id, word_text, host=False, assigned_round=None):
     if category_id is None:
         raise CategoryRequiredError("A category is required.")
     category = db.session.get(Category, category_id)
@@ -360,6 +379,7 @@ def submit_word(game, team, category_id, word_text, host=False):
         )
     text = _validate_word_text(word_text)
     normalized = normalize_word(text)
+    assigned_round = _validate_assigned_round(assigned_round)
     if team is None and not host:
         raise TeamRequiredError("A submitting team is required.")
     _ensure_unlocked(game)
@@ -388,6 +408,7 @@ def submit_word(game, team, category_id, word_text, host=False):
         game_id=game.id,
         category_id=category.id,
         submitted_by_team_id=(team.id if team is not None else None),
+        assigned_round=assigned_round,
         word_text=text,
         normalized_word=normalized,
     )
@@ -406,6 +427,7 @@ def submit_word(game, team, category_id, word_text, host=False):
             "word_id": word.id,
             "category_id": category.id,
             "team_id": word.submitted_by_team_id,
+            "assigned_round": word.assigned_round,
         },
     )
     return word
@@ -459,6 +481,24 @@ def update_word(word, game, new_text, actor, category_id=None):
     return word
 
 
+def set_word_round(word, game, actor, assigned_round):
+    """Reassign a word to Round 1 or Round 2."""
+    _authorize_modify(game, word, actor)
+    assigned_round = _validate_assigned_round(assigned_round)
+    word.assigned_round = assigned_round
+    _record_event(
+        game,
+        "WORD_ROUND_CHANGED",
+        {
+            "word_id": word.id,
+            "category_id": word.category_id,
+            "team_id": word.submitted_by_team_id,
+            "assigned_round": word.assigned_round,
+        },
+    )
+    return word
+
+
 def disable_word(word, game, actor):
     _authorize_modify(game, word, actor)
     word.status = Word.STATUS_DISABLED
@@ -505,6 +545,7 @@ def word_payload(word, with_relations=False):
         "normalized_word": word.normalized_word,
         "status": word.status,
         "category_id": word.category_id,
+        "assigned_round": word.assigned_round,
         "submitted_by_team_id": word.submitted_by_team_id,
         "is_host": word.submitted_by_team_id is None,
         "game_id": word.game_id,

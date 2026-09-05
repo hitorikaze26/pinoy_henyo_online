@@ -636,6 +636,85 @@ ul, ol { list-style: none; }
 .bulk-btn--danger { background: rgba(184,3,30,0.12); color: var(--accent-2-400); border-color: rgba(184,3,30,0.2); }
 .bulk-btn--danger:hover { background: rgba(184,3,30,0.2); }
 
+/* Round assignment dropdown (per-word) */
+.round-select {
+  appearance: none; -webkit-appearance: none;
+  padding: 0.28rem 1.5rem 0.28rem 0.6rem;
+  border-radius: var(--r-full);
+  font-family: 'Baloo 2', sans-serif; font-size: 0.72rem; font-weight: 700;
+  border: 1px solid var(--dash-border);
+  color: rgba(255,255,255,0.8); cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='6' viewBox='0 0 8 6'%3E%3Cpath fill='%23888' d='M1 1l3 4 3-4z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 0.5rem center;
+  transition: background 0.18s, color 0.18s, border-color 0.18s, transform 0.18s;
+  position: relative; overflow: hidden;
+}
+.round-select--r1 { background-color: rgba(91,176,255,0.12); border-color: rgba(91,176,255,0.25); }
+.round-select--r1:hover  { border-color: rgba(91,176,255,0.55); color: #5BB0FF; }
+.round-select--r2 { background-color: rgba(68,166,51,0.12);  border-color: rgba(68,166,51,0.22); }
+.round-select--r2:hover  { border-color: rgba(68,166,51,0.55); color: var(--secondary-400); }
+.round-select:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* ============================================================
+   ROUND CARDS (per-word round assignment, table view)
+============================================================ */
+.round-cards {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;
+  margin-top: 1rem;
+}
+.round-card {
+  background: var(--dash-surface);
+  border: 1px solid var(--dash-border);
+  border-radius: var(--r-lg);
+  padding: 0.9rem 1rem;
+  min-width: 0;
+}
+.round-card--r1 { border-top: 3px solid rgba(91,176,255,0.55); }
+.round-card--r2 { border-top: 3px solid rgba(68,166,51,0.55); }
+.round-card__head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 0.6rem;
+}
+.round-card__label {
+  font-family: 'Baloo 2', sans-serif; font-size: 0.9rem; font-weight: 800;
+  color: rgba(255,255,255,0.9);
+}
+.round-card--r1 .round-card__label { color: #5BB0FF; }
+.round-card--r2 .round-card__label { color: var(--secondary-400); }
+.round-card__count {
+  font-family: 'Baloo 2', sans-serif; font-size: 0.8rem; font-weight: 700;
+  padding: 0.12rem 0.5rem; border-radius: var(--r-full);
+  background: var(--dash-surface-3); color: rgba(255,255,255,0.6);
+}
+.round-card__body {
+  display: flex; flex-wrap: wrap; gap: 0.35rem;
+  max-height: 180px; overflow-y: auto;
+}
+.round-card__empty {
+  font-size: 0.78rem; color: rgba(255,255,255,0.28);
+  width: 100%;
+}
+.round-chip {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  padding: 0.2rem 0.6rem; border-radius: var(--r-full);
+  background: var(--dash-surface-2); border: 1px solid var(--dash-border);
+  font-size: 0.75rem; font-weight: 600; color: rgba(255,255,255,0.82);
+  max-width: 100%;
+}
+.round-chip__text {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: 'Baloo 2', sans-serif; font-weight: 700;
+}
+.round-chip__team {
+  font-size: 0.62rem; font-weight: 700; opacity: 0.6;
+  padding-left: 0.4rem; border-left: 1px solid var(--dash-border);
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .round-cards { grid-template-columns: 1fr; }
+}
+
 /* ============================================================
    EMPTY STATE
 ============================================================ */

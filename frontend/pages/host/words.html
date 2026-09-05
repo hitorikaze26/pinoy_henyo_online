@@ -249,6 +249,7 @@
                 <th scope="col" class="sortable" data-col="word">Word <i class="fa-solid fa-sort"></i></th>
                 <th scope="col" class="sortable" data-col="category">Category <i class="fa-solid fa-sort"></i></th>
                 <th scope="col" class="sortable" data-col="team">Team <i class="fa-solid fa-sort"></i></th>
+                <th scope="col" class="sortable" data-col="round">Round <i class="fa-solid fa-sort"></i></th>
                 <th scope="col">Status</th>
                 <th scope="col">Actions</th>
               </tr>
@@ -268,6 +269,24 @@
           <button class="bulk-btn" id="bulk-cancel">
             <i class="fa-solid fa-xmark"></i> Cancel
           </button>
+        </div>
+
+        <!-- Round cards (per-word assignment summary) -->
+        <div class="round-cards" id="round-cards">
+          <div class="round-card round-card--r1">
+            <div class="round-card__head">
+              <span class="round-card__label">Round 1</span>
+              <span class="round-card__count" id="roundcard-1-count">0</span>
+            </div>
+            <div class="round-card__body" id="roundcard-1-list"></div>
+          </div>
+          <div class="round-card round-card--r2">
+            <div class="round-card__head">
+              <span class="round-card__label">Round 2</span>
+              <span class="round-card__count" id="roundcard-2-count">0</span>
+            </div>
+            <div class="round-card__body" id="roundcard-2-list"></div>
+          </div>
         </div>
 
         <!-- Empty state -->
@@ -357,6 +376,13 @@
             <option value="">Select category</option>
           </select>
           <span class="form-error" id="err-add-category"></span>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="add-round"><i class="fa-solid fa-circle"></i> Round</label>
+          <select id="add-round" class="form-select dd">
+            <option value="1" selected>Round 1</option>
+            <option value="2">Round 2</option>
+          </select>
         </div>
         <div class="modal__actions">
           <button type="button" class="btn-cancel" id="cancel-add">Cancel</button>

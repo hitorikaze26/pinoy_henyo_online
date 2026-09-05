@@ -776,6 +776,160 @@ def test_word_not_found(client):
 
 
 # ---------------------------------------------------------------------------
+# Round assignment
+# ---------------------------------------------------------------------------
+
+
+def test_submit_word_defaults_to_round1(client, app):
+    game_id, host_token = _create_game(client)
+    team_id, sess = _create_team(app, game_id, "A1")
+    category_id = _create_category(client, game_id, host_token, "Food")
+
+    player_word = _submit(
+        client, game_id, category_id, (team_id, sess), "Adobo"
+    )
+    assert player_word.status_code == 201
+    assert player_word.get_json()["data"]["assigned_round"] == 1
+
+    host_word = client.post(
+        "/api/games/{}/words".format(game_id),
+        json={"category_id": category_id, "word_text": "Sisig"},
+        headers={HOST_TOKEN_HEADER: host_token},
+    )
+    assert host_word.status_code == 201
+    assert host_word.get_json()["data"]["assigned_round"] == 1
+
+
+def test_submit_word_with_explicit_round(client, app):
+    game_id, host_token = _create_game(client)
+    category_id = _create_category(client, game_id, host_token, "Food")
+
+    response = client.post(
+        "/api/games/{}/words".format(game_id),
+        json={
+            "category_id": category_id,
+            "word_text": "Halohalo",
+            "assigned_round": 2,
+        },
+        headers={HOST_TOKEN_HEADER: host_token},
+    )
+    assert response.status_code == 201
+    assert response.get_json()["data"]["assigned_round"] == 2
+
+
+def test_submit_word_invalid_round(client, app):
+    game_id, host_token = _create_game(client)
+    category_id = _create_category(client, game_id, host_token, "Food")
+
+    response = client.post(
+        "/api/games/{}/words".format(game_id),
+        json={
+            "category_id": category_id,
+            "word_text": "Oops",
+            "assigned_round": 3,
+        },
+        headers={HOST_TOKEN_HEADER: host_token},
+    )
+    assert response.status_code == 400
+    assert response.get_json()["error"]["code"] == "WORD_ROUND_INVALID"
+
+
+def test_host_changes_word_round(client, app):
+    game_id, host_token = _create_game(client)
+    team_id = _create_team(app, game_id, "A1")
+    category_id = _create_category(client, game_id, host_token, "Food")
+    word_id = _submit(
+        client, game_id, category_id, team_id, "Adobo"
+    ).get_json()["data"]["word_id"]
+
+    response = client.patch(
+        "/api/words/{}/round".format(word_id),
+        json={"assigned_round": 2},
+        headers={HOST_TOKEN_HEADER: host_token},
+    )
+    assert response.status_code == 200
+    data = response.get_json()["data"]
+    assert data["assigned_round"] == 2
+    assert data["word_id"] == word_id
+
+    listing = client.get(
+        "/api/games/{}/words".format(game_id),
+        headers={HOST_TOKEN_HEADER: host_token},
+    ).get_json()["data"]["words"]
+    assert [w["assigned_round"] for w in listing] == [2]
+
+
+def test_word_round_owner_can_change_own_word(client, app):
+    game_id, host_token = _create_game(client)
+    team_a, sess_a = _create_team(app, game_id, "A1")
+    team_b, sess_b = _create_team(app, game_id, "B1", name="Team B")
+    category_id = _create_category(client, game_id, host_token, "Food")
+    word_id = _submit(
+        client, game_id, category_id, (team_a, sess_a), "Adobo"
+    ).get_json()["data"]["word_id"]
+
+    ok = client.patch(
+        "/api/words/{}/round".format(word_id),
+        json={"team_id": team_a, "assigned_round": 2},
+        headers={SESSION_TOKEN_HEADER: sess_a},
+    )
+    assert ok.status_code == 200
+    assert ok.get_json()["data"]["assigned_round"] == 2
+
+    denied = client.patch(
+        "/api/words/{}/round".format(word_id),
+        json={"team_id": team_b, "assigned_round": 1},
+        headers={SESSION_TOKEN_HEADER: sess_b},
+    )
+    assert denied.status_code == 409
+    assert denied.get_json()["error"]["code"] == "WORD_OWNERSHIP"
+
+
+def test_word_round_change_invalid(client, app):
+    game_id, host_token = _create_game(client)
+    team_id = _create_team(app, game_id, "A1")
+    category_id = _create_category(client, game_id, host_token, "Food")
+    word_id = _submit(
+        client, game_id, category_id, team_id, "Adobo"
+    ).get_json()["data"]["word_id"]
+
+    response = client.patch(
+        "/api/words/{}/round".format(word_id),
+        json={"assigned_round": 7},
+        headers={HOST_TOKEN_HEADER: host_token},
+    )
+    assert response.status_code == 400
+    assert response.get_json()["error"]["code"] == "WORD_ROUND_INVALID"
+
+
+def test_word_round_locked_after_game_start(client, app):
+    game_id, host_token = _create_game(client)
+    team_id = _create_team(app, game_id, "A1")
+    category_id = _create_category(client, game_id, host_token, "Food")
+    word_id = _submit(
+        client, game_id, category_id, team_id, "Adobo"
+    ).get_json()["data"]["word_id"]
+    _start(client, game_id, host_token)
+
+    response = client.patch(
+        "/api/words/{}/round".format(word_id),
+        json={"assigned_round": 2},
+        headers={HOST_TOKEN_HEADER: host_token},
+    )
+    assert response.status_code == 409
+    assert response.get_json()["error"]["code"] == "WORD_LOCKED"
+
+
+def test_word_round_not_found(client):
+    assert (
+        client.patch(
+            "/api/words/999999/round", json={"assigned_round": 2}
+        ).status_code
+        == 404
+    )
+
+
+# ---------------------------------------------------------------------------
 # Own-team word restriction (game rule for assignment)
 # ---------------------------------------------------------------------------
 

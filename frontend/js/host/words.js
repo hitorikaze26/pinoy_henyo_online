@@ -38,6 +38,10 @@ let STATE = {
   words: [],
 };
 
+// Assigned by the backend integration bootstrap so the compact Round 1 picker
+// can force the word pool to refresh after a bulk category assignment.
+let refreshWordPoolHook = null;
+
 /* ============================================================
    DOM HELPERS
 ============================================================ */
@@ -167,18 +171,16 @@ function renderSummary() {
   countUp($('stat-total'), STATE.totalWords);
   countUp($('stat-cats'),  STATE.totalCategories);
 
-  const total = STATE.totalCategories;
-  const r1Picked = (STATE.round1CategoryIds || []).length;
-  const r1Assigned = r1Picked ? r1Picked : total;   // empty selection => all categories
-  const r2Assigned = total;
+  const r1Count = (STATE.words || []).filter(w => (w.round || 1) === 1).length;
+  const r2Count = (STATE.words || []).filter(w => (w.round || 1) === 2).length;
 
-  countUp($('stat-r1-assigned'), r1Assigned);
-  countUp($('stat-r1-total'),    total);
-  countUp($('stat-r2-assigned'), r2Assigned);
-  countUp($('stat-r2-total'),    total);
+  countUp($('stat-r1-assigned'), r1Count);
+  countUp($('stat-r1-total'),    STATE.totalWords);
+  countUp($('stat-r2-assigned'), r2Count);
+  countUp($('stat-r2-total'),    STATE.totalWords);
 
-  const r1Ready = total > 0 && r1Assigned >= total;
-  const r2Ready = total > 0 && r2Assigned >= total;
+  const r1Ready = STATE.totalWords > 0 && r1Count > 0;
+  const r2Ready = STATE.totalWords > 0 && r2Count > 0;
 
   setRoundBadge('badge-r1', r1Ready);
   setRoundBadge('badge-r2', r2Ready);
@@ -187,11 +189,11 @@ function renderSummary() {
   const statusEl = $('overall-status');
   statusEl.className = `overall-status overall-status--${allReady ? 'ready' : 'warn'} reveal visible`;
   $('overall-icon').className = allReady ? 'fa-solid fa-circle-check' : 'fa-solid fa-triangle-exclamation';
-  $('overall-text').textContent = total > 0
-    ? (allReady
-        ? 'All categories are ready for both rounds!'
-        : 'Pick Round 1 categories above — Round 2 automatically uses all categories.')
-    : 'No categories yet. Add categories to get started.';
+  $('overall-text').textContent = STATE.totalWords === 0
+    ? 'No words yet. Add words to get started.'
+    : (allReady
+        ? 'Both rounds have assigned words!'
+        : 'Assign every word to Round 1 or Round 2 — use the Round 1 picker or the Round column.');
 }
 
 function setRoundBadge(id, ready) {
@@ -305,6 +307,9 @@ function getFilteredWords() {
     })
     .sort((a, b) => {
       const dir = STATE.sortDir === 'asc' ? 1 : -1;
+      if (STATE.sortCol === 'round') {
+        return ((a.round || 1) - (b.round || 1)) * dir;
+      }
       const va  = String(a[STATE.sortCol] ?? '').toLowerCase();
       const vb  = String(b[STATE.sortCol] ?? '').toLowerCase();
       return va < vb ? -dir : va > vb ? dir : 0;
@@ -355,6 +360,12 @@ function renderTable() {
         <td><span class="cat-badge">${esc(w.category)}</span></td>
         <td>${esc(teamOf(w))}</td>
         <td>
+          <select class="round-select round-select--r${w.round || 1}" data-id="${w.id}" data-current="${w.round || 1}" ${STATE.locked ? 'disabled' : ''} aria-label="Assign ${esc(w.word)} to a round">
+            <option value="1" ${(w.round || 1) === 1 ? 'selected' : ''}>Round 1</option>
+            <option value="2" ${(w.round || 1) === 2 ? 'selected' : ''}>Round 2</option>
+          </select>
+        </td>
+        <td>
           <span class="status-dot status-dot--${esc(w.status)}">
             <span class="status-dot__circle"></span>
             ${esc(statusLabel(w.status))}
@@ -399,6 +410,42 @@ function renderTable() {
   $$('.word-table th.sortable').forEach(th => {
     th.classList.remove('asc', 'desc');
     if (th.dataset.col === STATE.sortCol) th.classList.add(STATE.sortDir);
+  });
+
+  // Round assignment dropdowns
+  tbody.querySelectorAll('.round-select').forEach(sel => {
+    sel.addEventListener('change', async () => {
+      const id = +sel.dataset.id;
+      const next = parseInt(sel.value, 10);
+      const w = STATE.words.find(x => x.id === id);
+      if (!w) return;
+      const prev = w.round || 1;
+      // Optimistic update, then persist via the API when a host context exists.
+      w.round = next;
+      sel.dataset.current = next;
+      sel.className = `round-select round-select--r${next}`;
+      renderRoundCards();
+      renderSummary();
+      if (window.WordAPI && API.getGameId()) {
+        try {
+          await API.withLoading(`round-${id}`, () =>
+            WordAPI.setWordRound(id, next)
+          );
+          showToast(`"${w.word}" moved to Round ${next}`);
+        } catch (err) {
+          console.error('[Pinoy Henyo] set word round failed', err);
+          w.round = prev;
+          sel.dataset.current = prev;
+          sel.className = `round-select round-select--r${prev}`;
+          sel.value = String(prev);
+          renderRoundCards();
+          renderSummary();
+          showToast(err.message || 'Could not change the round.');
+        }
+      } else {
+        showToast(`"${w.word}" moved to Round ${next}`);
+      }
+    });
   });
 }
 
@@ -678,6 +725,7 @@ $('form-add').addEventListener('submit', e => {
     category: catIn.value,
     team:     null,   // host-added words are stored under "Host"
     status:   'available',
+    round:    parseInt($('add-round').value, 10) || 1,
   };
 
   // Check duplicate
@@ -704,7 +752,9 @@ async function commitAddWord(data) {
     btn.textContent = 'Adding…';
     try {
       const created = await API.withLoading('add-word', () =>
-        WordAPI.createWord(API.getGameId(), { categoryId, wordText: data.word, asHost: true })
+        WordAPI.createWord(API.getGameId(), {
+          categoryId, wordText: data.word, asHost: true, assignedRound: data.round || 1,
+        })
       );
       if (!created.word_id) throw new Error('No word_id returned.');
       STATE.words.push({
@@ -713,6 +763,7 @@ async function commitAddWord(data) {
         category: created.category_name || data.category,
         team: created.team_name || null,
         status: mapWordStatus(created.status),
+        round: created.assigned_round || data.round || 1,
       });
       STATE.totalWords++;
       closeModal('modal-add');
@@ -1022,6 +1073,9 @@ async function saveRound1Selection() {
       RoundAPI.selectRoundCategories(gameId, 1, ids)
     );
     STATE.round1CategoryIds = ((saved && saved.selected_category_ids) || ids).slice();
+    if (typeof refreshWordPoolHook === 'function') {
+      try { await refreshWordPoolHook(); } catch (e) { /* ignore */ }
+    }
     renderRound1Picker();
     render();
     showToast('Round 1 categories saved');
@@ -1100,9 +1154,38 @@ function render() {
   renderLockBar();
   renderFilterPills();
   renderTable();
+  renderRoundCards();
   if (STATE.view === 'team')     renderByTeam();
   if (STATE.view === 'category') renderByCategory();
   if (STATE.showAssign)          renderWordStatus();
+}
+
+/* ============================================================
+   ROUND CARDS
+   Two cards under the All Words table: one per round, listing
+   every word currently assigned to it (chips + team tag).
+============================================================ */
+function renderRoundCards() {
+  const cardsEl = $('round-cards');
+  if (!cardsEl) return;
+  cardsEl.hidden = !STATE.words.length;
+
+  [1, 2].forEach(round => {
+    const list  = $(`roundcard-${round}-list`);
+    const count = $(`roundcard-${round}-count`);
+    if (!list || !count) return;
+    const words = STATE.words.filter(w => (w.round || 1) === round);
+    count.textContent = String(words.length);
+    if (!words.length) {
+      list.innerHTML = '<span class="round-card__empty">No words yet — assign some from the table above.</span>';
+      return;
+    }
+    list.innerHTML = words.map(w => `
+      <span class="round-chip" title="${esc(w.word)} — ${esc(teamOf(w))}">
+        <span class="round-chip__text">${esc(w.word)}</span>
+        <span class="round-chip__team">${esc(teamOf(w))}</span>
+      </span>`).join('');
+  });
 }
 
 /* ============================================================
@@ -1174,6 +1257,7 @@ function mapWordStatus(status) {
         team: w.team_name || null,
         isHost: w.is_host === true,
         status: mapWordStatus(w.status),
+        round: w.assigned_round || 1,
       }));
       STATE.words = wordsList;
       STATE.totalWords = wordsList.length;
@@ -1192,6 +1276,7 @@ function mapWordStatus(status) {
       render();
     } catch (e) { console.warn('[words] words offline', e.message); }
   }
+  refreshWordPoolHook = refreshWordPool;
 
   // Refetch all backend-driven sections (round-1 picker and word pool).
   let refreshTimer = null;

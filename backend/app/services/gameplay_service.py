@@ -111,11 +111,6 @@ class RoundCategoryNotAllowedError(GameplayServiceError):
     code = "ROUND_CATEGORY_NOT_ALLOWED"
 
 
-class CategoriesNotSelectedError(GameplayServiceError):
-    status = 409
-    code = "CATEGORIES_NOT_SELECTED"
-
-
 class MatchesRequiredError(GameplayServiceError):
     status = 400
     code = "MATCHES_REQUIRED"
@@ -440,6 +435,7 @@ def select_round_categories(game, round_number, category_ids):
         raise CategoriesRequiredError(
             "At least one category must be selected."
         )
+    selected_ids = set(category_ids)
     categories = Category.query.filter(
         Category.game_id == game.id,
         Category.id.in_(category_ids),
@@ -451,6 +447,23 @@ def select_round_categories(game, round_number, category_ids):
     RoundCategory.query.filter_by(round_id=round_obj.id).delete()
     for category_id in category_ids:
         db.session.add(RoundCategory(round_id=round_obj.id, category_id=category_id))
+    # Bulk-assign words so round membership is driven by each word's
+    # `assigned_round` (per-word control). The picker is a shortcut: words in
+    # the selected categories go to Round 1, everything else to Round 2.
+    Word.query.filter(
+        Word.game_id == game.id,
+        Word.category_id.in_(selected_ids),
+    ).update(
+        {Word.assigned_round: ROUND_1}, synchronize_session=False
+    )
+    Word.query.filter(
+        Word.game_id == game.id,
+        ~Word.category_id.in_(selected_ids),
+    ).update(
+        {Word.assigned_round: ROUND_2}, synchronize_session=False
+    )
+    db.session.flush()
+    db.session.expire_all()
     return round_obj
 
 
@@ -639,23 +652,16 @@ def list_game_matches(game):
 # ---------------------------------------------------------------------------
 
 
-def _selected_category_ids(round_obj):
-    return {rc.category_id for rc in round_obj.selected_categories}
-
-
 def _round_word_pool(match):
     round_obj = match.round
     query = Word.query.filter(
         Word.game_id == match.game_id,
         Word.status != Word.STATUS_DISABLED,
     )
-    if round_obj.round_number == ROUND_1:
-        selected = _selected_category_ids(round_obj)
-        if not selected:
-            raise CategoriesNotSelectedError(
-                "Round 1 has no selected categories."
-            )
-        query = query.filter(Word.category_id.in_(selected))
+    # Rounds 1 and 2 pull only from the words assigned to them. Tie-break and
+    # any extra rounds fall back to the full pool.
+    if round_obj.round_number in (ROUND_1, ROUND_2):
+        query = query.filter(Word.assigned_round == round_obj.round_number)
     return [
         word
         for word in query.all()
@@ -678,7 +684,6 @@ def assign_turn_words(match, word_ids=None, count=None):
         )
     used = _used_word_ids(match)
     round_obj = match.round
-    selected = _selected_category_ids(round_obj) if round_obj.round_number == ROUND_1 else None
 
     if word_ids is not None:
         if not word_ids:
@@ -691,11 +696,13 @@ def assign_turn_words(match, word_ids=None, count=None):
                     "The word does not belong to this game."
                 )
             if (
-                round_obj.round_number == ROUND_1
-                and word.category_id not in selected
+                round_obj.round_number in (ROUND_1, ROUND_2)
+                and word.assigned_round != round_obj.round_number
             ):
                 raise WordNotInRoundError(
-                    "Round 1 can only use words from selected categories."
+                    "Round {} can only use words assigned to it.".format(
+                        round_obj.round_number
+                    )
                 )
             if word.submitted_by_team_id == match.team_id:
                 raise WordOwnTeamError(
@@ -813,11 +820,15 @@ def readiness(game):
         issues.append("No rounds have been set up.")
     for round_obj in rounds:
         label = "Round {}".format(round_obj.round_number)
-        if (
-            round_obj.round_number == ROUND_1
-            and not _selected_category_ids(round_obj)
-        ):
-            issues.append("{0} has no selected categories.".format(label))
+        round_word_count = (
+            Word.query.filter(
+                Word.game_id == game.id,
+                Word.status != Word.STATUS_DISABLED,
+                Word.assigned_round == round_obj.round_number,
+            ).count()
+        )
+        if round_word_count == 0:
+            issues.append("{} has no assigned words.".format(label))
         matches = (
             Match.query.filter_by(round_id=round_obj.id)
             .order_by(Match.match_order)

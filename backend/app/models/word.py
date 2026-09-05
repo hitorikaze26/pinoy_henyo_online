@@ -12,6 +12,10 @@ class Word(db.Model):
     STATUS_DISABLED = "DISABLED"
     STATUSES = (STATUS_AVAILABLE, STATUS_SELECTED, STATUS_USED, STATUS_PASSED, STATUS_DISABLED)
 
+    ROUND_1 = 1
+    ROUND_2 = 2
+    ROUNDS = (ROUND_1, ROUND_2)
+
     id = db.Column(db.Integer, primary_key=True)
     game_id = db.Column(
         db.Integer, db.ForeignKey("games.id"), nullable=False, index=True
@@ -21,6 +25,12 @@ class Word(db.Model):
     )
     submitted_by_team_id = db.Column(
         db.Integer, db.ForeignKey("teams.id"), nullable=True, index=True
+    )
+    assigned_round = db.Column(
+        db.Integer,
+        nullable=False,
+        default=ROUND_1,
+        server_default="1",
     )
     word_text = db.Column(db.String(100), nullable=False)
     normalized_word = db.Column(db.String(100), nullable=False, index=True)
@@ -42,6 +52,9 @@ class Word(db.Model):
 
     __table_args__ = (
         db.Index("ix_words_game_status", "game_id", "status"),
+        db.CheckConstraint(
+            "assigned_round IN (1, 2)", name="ck_words_assigned_round"
+        ),
         db.Index(
             "ix_words_game_category_normalized",
             "game_id",

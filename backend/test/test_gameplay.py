@@ -197,10 +197,10 @@ def _full_setup(client, cat_count=2):
     s.words_b = {}
     for index, cat_id in enumerate(s.cats):
         s.words_a[cat_id] = _submit_words(
-            client, s.game_id, s.team_a["team_id"], cat_id, ["A{}1".format(index), "A{}2".format(index)], s.sess_a
+            client, s.game_id, s.team_a["team_id"], cat_id, ["A{}{}".format(index, n) for n in range(1, 4)], s.sess_a
         )
         s.words_b[cat_id] = _submit_words(
-            client, s.game_id, s.team_b["team_id"], cat_id, ["B{}1".format(index), "B{}2".format(index)], s.sess_b
+            client, s.game_id, s.team_b["team_id"], cat_id, ["B{}{}".format(index, n) for n in range(1, 4)], s.sess_b
         )
     assert _assign_roles(
         client,
@@ -223,7 +223,7 @@ def _full_setup(client, cat_count=2):
     assert _create_round(client, s.game_id, s.host, 1).status_code == 201
     assert _create_round(client, s.game_id, s.host, 2).status_code == 201
     assert _select_categories(
-        client, s.game_id, s.host, 1, s.cats
+        client, s.game_id, s.host, 1, [s.cats[0]]
     ).status_code == 200
     assert _create_matches(
         client,
@@ -246,10 +246,10 @@ def _full_setup(client, cat_count=2):
     s.match_a = next(m for m in matches if m["round_number"] == 1)
     s.match_a_round2 = next(m for m in matches if m["round_number"] == 2)
     assert _assign_turn_words(
-        client, s.host, s.match_a["match_id"], word_ids=s.words_b[s.cats[1]]
+        client, s.host, s.match_a["match_id"], word_ids=s.words_b[s.cats[0]][-1:]
     ).status_code == 201
     assert _assign_turn_words(
-        client, s.host, s.match_a_round2["match_id"], word_ids=s.words_b[s.cats[0]]
+        client, s.host, s.match_a_round2["match_id"], word_ids=s.words_b[s.cats[1]][-1:]
     ).status_code == 201
     return s
 
@@ -544,6 +544,97 @@ def test_round_categories_round_not_found(client):
 
 
 # ---------------------------------------------------------------------------
+# Per-word round assignment
+# ---------------------------------------------------------------------------
+
+
+def test_select_categories_bulk_assigns_words(client):
+    s = _basic_setup(client)
+    s.cats = [
+        _create_category(client, s.game_id, s.host, "Food"),
+        _create_category(client, s.game_id, s.host, "Animals"),
+    ]
+    s.words_a = {
+        c: _submit_words(
+            client, s.game_id, s.team_a["team_id"], c, ["a{}".format(i)], s.sess_a
+        )
+        for i, c in enumerate(s.cats)
+    }
+    assert _create_round(client, s.game_id, s.host, 1).status_code == 201
+    assert _select_categories(
+        client, s.game_id, s.host, 1, [s.cats[0]]
+    ).status_code == 200
+
+    words = client.get(
+        "/api/games/{}/words".format(s.game_id),
+        headers={HOST_TOKEN_HEADER: s.host},
+    ).get_json()["data"]["words"]
+    rounds = {w["word_text"]: w["assigned_round"] for w in words}
+    assert rounds["a0"] == 1
+    assert rounds["a1"] == 2
+
+
+def test_word_round_drives_round2_pool(client):
+    s = _full_setup(client)
+    words = client.get(
+        "/api/games/{}/words".format(s.game_id),
+        headers={HOST_TOKEN_HEADER: s.host},
+    ).get_json()["data"]["words"]
+    by_round = {w["word_text"]: w["assigned_round"] for w in words}
+    # Round 1 picker selected cats[0] only, so cats[0] words are in Round 1
+    # and cats[1] words are in Round 2.
+    assert by_round["B01"] == 1
+    assert by_round["B11"] == 2
+
+    # Random assignment on the Round 2 match only draws Round 2 words.
+    response = _assign_turn_words(
+        client, s.host, s.match_a_round2["match_id"], count=2
+    )
+    assert response.status_code == 201
+    turn_words = {w["word_text"] for w in response.get_json()["data"]["words"]}
+    assert turn_words == {"B11", "B12"}
+
+
+def test_word_round_change_rescopes_pool(client):
+    s = _full_setup(client)
+    target = s.words_b[s.cats[0]][0]  # B01, Round 1
+    move = client.patch(
+        "/api/words/{}/round".format(target),
+        json={"assigned_round": 2},
+        headers={HOST_TOKEN_HEADER: s.host},
+    )
+    assert move.status_code == 200
+
+    # B01 is now a Round 2 word: it can feed the Round 2 match but not Round 1.
+    ok = _assign_turn_words(
+        client, s.host, s.match_a_round2["match_id"], word_ids=[target]
+    )
+    assert ok.status_code == 201
+    denied = _assign_turn_words(
+        client, s.host, s.match_a["match_id"], word_ids=[target]
+    )
+    assert denied.status_code == 409
+    assert denied.get_json()["error"]["code"] == "WORD_NOT_IN_ROUND"
+
+
+def test_readiness_detects_empty_round2(client):
+    s = _basic_setup(client)
+    s.cat = _create_category(client, s.game_id, s.host, "Food")
+    _submit_words(
+        client, s.game_id, s.team_a["team_id"], s.cat, ["apple"], s.sess_a
+    )
+    assert _create_round(client, s.game_id, s.host, 1).status_code == 201
+    assert _create_round(client, s.game_id, s.host, 2).status_code == 201
+    _select_categories(client, s.game_id, s.host, 1, [s.cat])
+    response = client.get(
+        "/api/games/{}/readiness".format(s.game_id),
+        headers={HOST_TOKEN_HEADER: s.host},
+    )
+    issues = response.get_json()["data"]["issues"]
+    assert any("Round 2 has no assigned words" in issue for issue in issues)
+
+
+# ---------------------------------------------------------------------------
 # Matches
 # ---------------------------------------------------------------------------
 
@@ -788,19 +879,11 @@ def test_assign_word_not_in_game(client):
     assert response.get_json()["error"]["code"] == "WORD_NOT_IN_GAME"
 
 
-def test_assign_word_outside_round1_categories(client):
+def test_assign_word_from_other_round_rejected(client):
     s = _full_setup(client)
-    outside_cat = _create_category(client, s.game_id, s.host, "Outside")
-    outside_word = _submit_words(
-        client,
-        s.game_id,
-        s.team_b["team_id"],
-        outside_cat,
-        ["outsideB"],
-        s.sess_b,
-    )[0]
+    # words_b[cats[1]] belong to Round 2 (the Round 1 picker drove them there).
     response = _assign_turn_words(
-        client, s.host, s.match_a["match_id"], word_ids=[outside_word]
+        client, s.host, s.match_a["match_id"], word_ids=s.words_b[s.cats[1]][:1]
     )
     assert response.status_code == 409
     assert response.get_json()["error"]["code"] == "WORD_NOT_IN_ROUND"
@@ -915,7 +998,7 @@ def test_readiness_missing_roles(client):
     assert "Tagasagot" in joined
 
 
-def test_readiness_missing_round1_categories(client):
+def test_readiness_missing_round1_words(client):
     s = _basic_setup(client)
     s.team_c = _create_team(client, s.game_id, "Team C", "Cece")
     s.team_d = _create_team(client, s.game_id, "Team D", "Dina")
@@ -926,7 +1009,7 @@ def test_readiness_missing_round1_categories(client):
     )
     data = response.get_json()["data"]
     assert data["ready"] is False
-    assert any("selected categories" in issue for issue in data["issues"])
+    assert any("no assigned words" in issue for issue in data["issues"])
 
 
 def test_readiness_missing_matches(client):
