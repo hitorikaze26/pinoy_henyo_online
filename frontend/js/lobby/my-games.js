@@ -9,9 +9,10 @@
    pinoy_henyo_my_games), because the backend scopes GET
    /api/games/history to ONE host token per game. Live status is
    refreshed per game through the public status endpoint.
-     - Continue   -> live/active game -> host dashboard
-     - View report-> completed game   -> leaderboard + statistics
-     - Delete     -> terminal games only -> type-to-confirm modal
+- Continue   -> live/active game -> host dashboard
+      - View report-> completed game   -> leaderboard + statistics
+      - Delete     -> terminal games only -> tick to bulk-delete, or delete
+                    one from its card; both use a simple confirm modal
    Requires js/script.js (openModal/closeModal) and js/api/*.
    ============================================================ */
 
@@ -24,10 +25,9 @@
   const overlayReport = document.getElementById('modal-report-game');
   const overlayDelete = document.getElementById('modal-delete-game');
 
-  const deleteInput  = document.getElementById('input-delete-code');
-  const deleteHint   = document.getElementById('delete-code-hint');
-  const deleteError  = document.getElementById('error-delete-code');
-  const deleteBtn    = document.getElementById('btn-delete-confirm');
+  const deleteBody = document.getElementById('modal-delete-body');
+  const deleteBtn  = document.getElementById('btn-delete-confirm');
+  const deleteSelectedBtn = document.getElementById('my-games-delete-selected');
 
   const HOST_ENTRY = 'pages/host/host_dashboard.html';
 
@@ -53,7 +53,8 @@
   };
 
   let games = [];
-  let deleteTarget = null; // game object queued for deletion
+  let deletePending = []; // game objects queued for deletion
+  const selected = new Set(); // game ids ticked for bulk delete
 
   function esc(s) {
     return String(s == null ? '' : s)
@@ -183,11 +184,21 @@
       g.saved_at ? `Saved ${fmtDate(g.saved_at)}` : '',
     ].filter(Boolean).join(' · ');
 
+    const check = terminal
+      ? `<label class="my-games__check" title="Select for deletion">
+           <input type="checkbox" data-check="${g.game_id}" aria-label="Select game ${esc(g.game_code || g.game_id)} for deletion" />
+           <span class="my-games__check-box" aria-hidden="true"><i class="fa-solid fa-check"></i></span>
+         </label>`
+      : '';
+
     return `
-      <article class="my-games__card${isCurrent ? ' my-games__card--current' : ''}" data-id="${g.game_id}">
+      <article class="my-games__card${isCurrent ? ' my-games__card--current' : ''}${selected.has(String(g.game_id)) ? ' my-games__card--selected' : ''}" data-id="${g.game_id}">
         ${isCurrent ? `<div class="my-games__current-badge"><i class="fa-solid fa-circle"></i> Currently Hosting: ${esc(g.game_code || '')}</div>` : ''}
         <div class="my-games__card-main">
-          <span class="my-games__code">${esc(g.game_code || '')}</span>
+          <span class="my-games__card-title">
+            ${check}
+            <span class="my-games__code">${esc(g.game_code || '')}</span>
+          </span>
           <span class="my-games__status my-games__status--${live ? 'live' : (terminal ? 'done' : 'muted')}">
             ${esc(statusLabel(g.status))}
           </span>
@@ -199,7 +210,26 @@
       </article>`;
   }
 
+  /* ---------- bulk delete toolbar ---------- */
+  function syncBulkDeleteButton() {
+    if (!deleteSelectedBtn) return;
+    const anyDeletable = games.some(isTerminal);
+    deleteSelectedBtn.hidden = !anyDeletable;
+    const n = selected.size;
+    deleteSelectedBtn.disabled = n === 0;
+    deleteSelectedBtn.innerHTML = n
+      ? `<i class="fa-solid fa-trash"></i> Delete (${n})`
+      : '<i class="fa-solid fa-trash"></i> Delete';
+  }
+
   function render() {
+    // Selection lives across re-renders (e.g. stale ids from status refresh),
+    // so drop ids that no longer exist as soon as we rebuild the list.
+    selected.forEach((id) => {
+      if (!games.some((g) => String(g.game_id) === String(id))) selected.delete(id);
+    });
+    syncBulkDeleteButton();
+
     if (!games.length) {
       setListHTML(emptyHtml());
       return;
@@ -407,72 +437,101 @@
     }
   }
 
-  /* ---------- delete modal ---------- */
-  function openDeleteModal(g) {
-    if (!overlayDelete || typeof openModal !== 'function') return;
-    deleteTarget = g;
-    if (deleteHint) deleteHint.textContent = g.game_code || '';
-    if (deleteInput) { deleteInput.value = ''; deleteInput.classList.remove('error'); }
-    if (deleteError) deleteError.textContent = '';
-    if (deleteBtn) { deleteBtn.disabled = true; deleteBtn.innerHTML = '<i class="fa-solid fa-trash"></i> Delete Forever'; }
+  /* ---------- delete confirm (single or bulk) ---------- */
+  function describeDeletion(list) {
+    if (!list.length) return;
+    const codes = list
+      .map((g) => String(g.game_code || g.game_id || '').trim().toUpperCase())
+      .filter(Boolean);
+
+    if (codes.length === 1) {
+      deleteBody.textContent = `Delete game "${codes[0]}"?`;
+      return;
+    }
+    deleteBody.innerHTML =
+      `Delete ${list.length} games?` +
+      `<span class="my-games__delete-chips" id="delete-chips">` +
+      codes.map((c) => `<span class="my-games__delete-chip">${esc(c)}</span>`).join('') +
+      `</span>`;
+  }
+
+  function openDeleteConfirm(list) {
+    if (!overlayDelete || typeof openModal !== 'function' || !list.length) return;
+    deletePending = list;
+    if (deleteBody) {
+      deleteBody.textContent = 'Delete this game?';
+      deleteBody.innerHTML = '';
+      describeDeletion(list);
+    }
     openModal(overlayDelete);
   }
 
-  function syncDeleteButton() {
-    const code = (deleteInput && deleteInput.value || '').trim().toUpperCase();
-    const match = deleteTarget && code === String(deleteTarget.game_code || '').toUpperCase();
-    if (deleteBtn) deleteBtn.disabled = !match;
-  }
-
   async function confirmDelete() {
-    if (!deleteTarget || !deleteBtn) return;
+    const pending = deletePending.filter(Boolean);
+    if (!pending.length) return;
     deleteBtn.disabled = true;
+    const originalLabel = deleteBtn.innerHTML;
     deleteBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Deleting…';
-    if (deleteError) deleteError.textContent = '';
 
-    const g = deleteTarget;
-    // DELETE is host-only; non-current games need their own stored token.
-    const priorToken = API.getHostToken();
-    if (g.host_token) API.setHostToken(g.host_token);
-    try {
-      await API.withLoading('delete-game-' + g.game_id, () => GameAPI.deleteGame(g.game_id, { confirm: true }));
-      API.removeMyGame(g.game_id);
-      if (typeof closeModal === 'function' && overlayDelete) closeModal(overlayDelete);
-      deleteTarget = null;
+    const deleteDuring = [];
+    let deletedCount = 0;
+    let failedCount = 0;
+    let firstError = null;
 
-      // If the deleted game was the current host game, the host session is
-      // gone. Compare against BOTH ids (gameId is authoritative; hostGameId
-      // may lag behind for sessions written before the Create Team flow set
-      // the full host context). Never leave a stale id pointing at a deleted
-      // game — the dashboard could otherwise keep using it.
-      const currentGameId = API.getGameId();
-      const currentHostGame = API.getHostGameId();
-      const deletedIsCurrent =
-        String(g.game_id) === String(currentGameId) ||
-        (currentHostGame && String(g.game_id) === String(currentHostGame));
-      if (deletedIsCurrent) {
-        // clearTokens() only wipes the live session; the My Games registry
-        // (separate localStorage key) keeps the other games intact.
-        API.clearTokens();
-        games = games.filter((x) => String(x.game_id) !== String(g.game_id));
-        SECTION.hidden = !games.length;
-        render();
-      } else {
+    for (const g of pending) {
+      // DELETE is host-only; non-current games need their own stored token.
+      const priorToken = API.getHostToken();
+      if (g.host_token) API.setHostToken(g.host_token);
+      try {
+        await API.withLoading('delete-game-' + g.game_id, () => GameAPI.deleteGame(g.game_id, { confirm: true }));
+        API.removeMyGame(g.game_id);
+        deleteDuring.push(g.game_id);
+        deletedCount += 1;
+      } catch (err) {
+        failedCount += 1;
+        if (!firstError) {
+          firstError = (err && err.message) || 'Could not delete the game.';
+        }
+      } finally {
         API.setHostToken(priorToken);
-        await load({ silent: true });
-      }
-    } catch (err) {
-      deleteBtn.disabled = false;
-      deleteBtn.innerHTML = '<i class="fa-solid fa-trash"></i> Delete Forever';
-      const map = {
-        INVALID_OPERATION: 'Only completed, cancelled, or expired games can be deleted.',
-        WITH_CONFIRMATION_REQUIRED: 'Please confirm the deletion and try again.',
-        GAME_FROZEN: 'This game is read-only and cannot be deleted.',
-      };
-      if (deleteError) {
-        deleteError.textContent = map[err.code] || (err && err.message) || 'Could not delete the game.';
       }
     }
+
+    if (typeof closeModal === 'function' && overlayDelete) closeModal(overlayDelete);
+    deleteBtn.disabled = false;
+    deleteBtn.innerHTML = originalLabel;
+    deletePending = [];
+    deleteDuring.forEach((id) => selected.delete(String(id)));
+    syncBulkDeleteButton();
+
+    if (deletedCount && typeof showToast === 'function') {
+      showToast(deletedCount === 1 ? 'Game deleted.' : `${deletedCount} games deleted.`);
+    }
+    if (failedCount && typeof showToast === 'function') {
+      showToast(failedCount === 1 ? firstError : `${failedCount} games could not be deleted.`);
+    }
+
+    // If any deleted game was the current host game, the host session is gone.
+    const currentGameId = API.getGameId();
+    const currentHostGame = API.getHostGameId();
+    const deletedIsCurrent = deleteDuring.some((id) =>
+      String(id) === String(currentGameId) ||
+      (currentHostGame && String(id) === String(currentHostGame))
+    );
+    if (deletedIsCurrent) {
+      // clearTokens() only wipes the live session; the My Games registry
+      // (separate localStorage key) keeps the other games intact.
+      API.clearTokens();
+      games = games.filter((x) => !deleteDuring.some((id) => String(x.game_id) === String(id)));
+      SECTION.hidden = !games.length;
+      render();
+    } else {
+      await load({ silent: true });
+    }
+  }
+
+  function openDeleteModal(g) {
+    openDeleteConfirm([g]);
   }
 
   /* ---------- wiring ---------- */
@@ -494,21 +553,38 @@
     if (e.target.closest && e.target.closest('#my-games-retry')) load();
   });
 
-  if (deleteInput) {
-    deleteInput.addEventListener('input', syncDeleteButton);
-    deleteInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && deleteBtn && !deleteBtn.disabled) {
-        e.preventDefault();
-        confirmDelete();
-      }
+  // Checkbox selection for bulk delete (checkboxes only exist on terminal
+  // games, so anything ticked is always deletable).
+  LIST.addEventListener('change', (e) => {
+    const box = e.target;
+    if (!(box instanceof HTMLInputElement) || !box.matches('[data-check]')) return;
+    const id = String(box.getAttribute('data-check'));
+    const card = box.closest('.my-games__card');
+    const game = games.find((x) => String(x.game_id) === id);
+    if (!game || !isTerminal(game)) {
+      box.checked = false;
+      return;
+    }
+    if (box.checked) selected.add(id);
+    else selected.delete(id);
+    if (card) card.classList.toggle('my-games__card--selected', box.checked);
+    syncBulkDeleteButton();
+    if (typeof GameAudio === 'object' && typeof GameAudio.play === 'function') {
+      GameAudio.play('click');
+    }
+  });
+
+  if (deleteSelectedBtn) {
+    deleteSelectedBtn.addEventListener('click', () => {
+      const pending = games.filter((g) => selected.has(String(g.game_id)) && isTerminal(g));
+      if (pending.length) openDeleteConfirm(pending);
     });
   }
+
   if (deleteBtn) deleteBtn.addEventListener('click', confirmDelete);
 
   const resetDelete = () => {
-    deleteTarget = null;
-    if (deleteInput) deleteInput.value = '';
-    if (deleteError) deleteError.textContent = '';
+    deletePending = [];
   };
   ['modal-delete-close', 'modal-delete-cancel'].forEach((id) => {
     const el = document.getElementById(id);

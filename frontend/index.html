@@ -187,6 +187,10 @@
         </div>
 
         <div class="my-games__toolbar">
+          <button type="button" class="my-games__delete-btn" id="my-games-delete-selected" hidden disabled>
+            <i class="fa-solid fa-trash"></i>
+            Delete
+          </button>
           <button type="button" class="my-games__refresh" id="my-games-refresh" aria-label="Refresh my games" title="Refresh">
             <i class="fa-solid fa-rotate-right"></i>
             Refresh
@@ -664,7 +668,7 @@
   </div>
 
   <!-- ============================================================
-       MODAL: DELETE A GAME (type-to-confirm)
+       MODAL: DELETE A GAME (single or bulk confirm)
   ============================================================ -->
   <div class="modal-overlay" id="modal-delete-game" role="dialog" aria-modal="true" aria-labelledby="modal-delete-title" aria-hidden="true">
     <div class="modal">
@@ -680,26 +684,12 @@
         <p class="modal__subtitle">This permanently removes the game and all of its data.</p>
       </div>
 
-      <div class="form-group">
-        <label class="form-label" for="input-delete-code">
-          <i class="fa-solid fa-hashtag"></i>
-          Type the game code <strong id="delete-code-hint">------</strong> to confirm
-        </label>
-        <input
-          type="text"
-          id="input-delete-code"
-          class="form-input form-input--code"
-          placeholder="e.g. HENYO-1234"
-          autocomplete="off"
-          maxlength="16"
-        />
-        <span class="form-error" id="error-delete-code" aria-live="polite"></span>
-      </div>
+      <p class="modal__body-text" id="modal-delete-body">Delete this game?</p>
 
       <div class="modal__actions">
-        <button type="button" class="btn-modal-danger" id="btn-delete-confirm" disabled>
+        <button type="button" class="btn-modal-danger" id="btn-delete-confirm">
           <i class="fa-solid fa-trash"></i>
-          Delete Forever
+          Delete
         </button>
         <button type="button" class="btn-modal-cancel" id="modal-delete-cancel">Cancel</button>
       </div>
@@ -711,6 +701,7 @@
   <script src="js/core/runtime-config.js"></script>
   <script src="js/core/config.js"></script>
   <script src="js/core/audio.js"></script>
+  <script src="js/core/notifications.js"></script>
   <script src="js/api/api.js"></script>
   <script src="js/api/game-api.js"></script>
   <script src="js/api/team-api.js"></script>

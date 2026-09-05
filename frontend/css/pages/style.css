@@ -1168,6 +1168,25 @@ section { position: relative; z-index: 1; }
   line-height: 1.5;
 }
 
+.modal__body-text {
+  text-align: center;
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: -0.5rem 0 0.25rem;
+}
+
+.my-games__delete-chips {
+  display: flex; flex-wrap: wrap; justify-content: center;
+  gap: 0.4rem; margin-top: 0.75rem;
+}
+.my-games__delete-chip {
+  font: 700 0.78rem/1.4 'Inter', sans-serif; letter-spacing: 0.03em;
+  background: rgba(248,113,113,0.1); color: #fca5a5;
+  border: 1px solid rgba(248,113,113,0.3); border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+}
+
 /* ============================================================
    MODAL FORM
 ============================================================ */
@@ -1495,7 +1514,22 @@ section { position: relative; z-index: 1; }
 .my-games { margin: 3.5rem auto 4rem; max-width: 1080px; padding: 0 1.5rem; }
 
 .my-games__toolbar {
-  display: flex; justify-content: flex-end; margin: 0 0 1.25rem;
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 0.75rem; margin: 0 0 1.25rem; flex-wrap: wrap;
+}
+.my-games__delete-btn {
+  display: inline-flex; align-items: center; gap: 0.45rem;
+  background: rgba(248,113,113,0.12); color: #f87171;
+  border: 1px solid rgba(248,113,113,0.45); border-radius: 999px;
+  padding: 0.45rem 1rem; font: 600 0.82rem/1.4 'Inter', sans-serif;
+  cursor: pointer; transition: all 0.2s ease;
+}
+.my-games__delete-btn:hover:not(:disabled) {
+  background: rgba(248,113,113,0.24); border-color: rgba(248,113,113,0.6);
+  transform: translateY(-1px);
+}
+.my-games__delete-btn:disabled {
+  opacity: 0.45; cursor: not-allowed;
 }
 .my-games__refresh {
   display: inline-flex; align-items: center; gap: 0.45rem;
@@ -1550,6 +1584,37 @@ section { position: relative; z-index: 1; }
 .my-games__card-main {
   display: flex; align-items: center; justify-content: space-between;
   gap: 0.75rem; flex-wrap: wrap;
+}
+.my-games__card-title {
+  display: inline-flex; align-items: center; gap: 0.65rem; min-width: 0;
+}
+/* Select-for-deletion checkbox (only rendered on deletable cards). */
+.my-games__check {
+  position: relative; display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0; cursor: pointer; margin: 0;
+}
+.my-games__check input {
+  position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%;
+  margin: 0; cursor: pointer;
+}
+.my-games__check-box {
+  width: 20px; height: 20px; border-radius: 6px; display: grid; place-items: center;
+  border: 2px solid rgba(255,255,255,0.32); background: rgba(255,255,255,0.06);
+  color: transparent; font-size: 0.62rem; line-height: 1;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+.my-games__check:hover .my-games__check-box { border-color: rgba(49,154,251,0.65); }
+.my-games__check input:checked + .my-games__check-box {
+  background: var(--primary-600); border-color: var(--primary-600); color: #fff;
+  box-shadow: 0 0 0 3px rgba(49,154,251,0.25);
+}
+.my-games__check input:focus-visible + .my-games__check-box {
+  outline: 2px solid var(--primary-400); outline-offset: 2px;
+}
+/* Highlighted when ticked for bulk deletion. */
+.my-games__card--selected {
+  border-color: rgba(49,154,251,0.6);
+  box-shadow: 0 0 0 1px rgba(49,154,251,0.25), 0 8px 26px rgba(49,154,251,0.15);
 }
 .my-games__code {
   font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 1.05rem;
