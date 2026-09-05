@@ -663,7 +663,7 @@ if (DOM.teamSelect) {
   DOM.teamSelect.addEventListener('change', () => {
     if (window.__PH_LIVE) return; // live layer owns the select
     if (DOM.teamSelect.value) {
-      showToast('<i class="fa-solid fa-bolt"></i> Select a team pair when teams connect');
+      showToast('<i class="fa-solid fa-bolt"></i> Select a team when it connects');
       DOM.teamSelect.value = '';
     }
   });
@@ -1220,9 +1220,9 @@ function renderRealQr(container, dataUri) {
   }
 
   /* ---------- UI rendering ---------- */
-  // "Current Turn" — a dropdown of the pairs still playing in the current
-  // round (one option per pending match). Selecting an option targets that
-  // match/turn in the console below (custom-select enhanced).
+  // "Current Turn" — a dropdown of the teams still playing in the current
+  // round (one option per pending match slot). Selecting an option targets
+  // that match/turn in the console below (custom-select enhanced).
   function renderTeamSelect() {
     const sel = $('team-select');
     if (!sel) return;
@@ -1230,12 +1230,11 @@ function renderRealQr(container, dataUri) {
     const pending = currentRoundMatches().filter((m) => m.status !== 'COMPLETED');
     const keep = activeMatch ? String(activeMatch.match_id) : '';
     const opts = pending.map((m) => {
-      const vs = m.opponent_team_id ? (' vs ' + teamNameOf(m.opponent_team_id)) : '';
       return '<option value="' + m.match_id + '"' +
         (String(m.match_id) === keep ? ' selected' : '') + '>' +
-        escHtml(teamNameOf(m.team_id) + vs) + '</option>';
+        escHtml(teamNameOf(m.team_id)) + '</option>';
     });
-    const placeholder = pending.length ? 'Select team pair…' : 'No playing teams yet';
+    const placeholder = pending.length ? 'Select team…' : 'No playing teams yet';
     sel.innerHTML = '<option value="">' + escHtml(placeholder) + '</option>' + opts.join('');
     if (empty) empty.hidden = pending.length > 0;
     const wrapper = sel.closest('.dd');
@@ -1247,11 +1246,8 @@ function renderRealQr(container, dataUri) {
     const el = $('current-category');
     if (!el) return;
     if (activeMatch) {
-      const opp = activeMatch.opponent_team_id
-        ? ' vs ' + teamNameOf(activeMatch.opponent_team_id)
-        : '';
       el.innerHTML = '<i class="fa-solid fa-shield-halved"></i> ' +
-        teamNameOf(activeMatch.team_id) + opp +
+        teamNameOf(activeMatch.team_id) +
         ' <span style="opacity:.6">- Round ' + activeMatch.round_number + '</span>';
     } else {
       el.textContent = 'No active match';

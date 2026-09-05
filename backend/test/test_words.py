@@ -480,6 +480,49 @@ def test_host_adds_word(client, app):
     assert response.get_json()["data"]["submitted_by_team_id"] == team_id
 
 
+def test_host_adds_word_without_team(client, app):
+    game_id, host_token = _create_game(client)
+    category_id = _create_category(client, game_id, host_token, "Food")
+
+    response = client.post(
+        "/api/games/{}/words".format(game_id),
+        json={"category_id": category_id, "word_text": "Sisig"},
+        headers={HOST_TOKEN_HEADER: host_token},
+    )
+    assert response.status_code == 201
+    data = response.get_json()["data"]
+    assert data["submitted_by_team_id"] is None
+    assert data["is_host"] is True
+
+    listing = client.get(
+        "/api/games/{}/words".format(game_id),
+        headers={HOST_TOKEN_HEADER: host_token},
+    )
+    word = listing.get_json()["data"]["words"][0]
+    assert word["submitted_by_team_id"] is None
+    assert word["team_name"] is None
+    assert word["is_host"] is True
+
+
+def test_host_word_without_team_is_receivable_by_everyone(client, app):
+    game_id, host_token = _create_game(client)
+    _, session = _create_team(app, game_id, "A1")
+    category_id = _create_category(client, game_id, host_token, "Food")
+    word = client.post(
+        "/api/games/{}/words".format(game_id),
+        json={"category_id": category_id, "word_text": "Lumpia"},
+        headers={HOST_TOKEN_HEADER: host_token},
+    )
+    assert word.status_code == 201
+
+    from app.models import Word
+
+    with app.app_context():
+        word_obj = db.session.get(Word, word.get_json()["data"]["word_id"])
+        assert word_service.word_can_be_received(word_obj, 999)
+        word_service.assert_word_assignable(word_obj, 999)
+
+
 def test_host_word_management_view_list(client, app):
     game_id, host_token = _create_game(client)
     team_id = _create_team(app, game_id, "A1", name="Discovers")

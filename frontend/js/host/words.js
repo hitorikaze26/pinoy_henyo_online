@@ -6,6 +6,11 @@
 let CATEGORIES = [];   // Real categories, populated from the backend.
 let TEAMS      = [];   // Real team names, populated from the backend.
 const STATUSES = ['selected', 'available', 'used', 'passed', 'disabled'];
+const HOST_TEAM_LABEL = 'Host';
+
+// teamOf returns the display label for a word's submitting side. Host-added
+// words have no owning team, so they show up under "Host".
+function teamOf(w) { return w.team || HOST_TEAM_LABEL; }
 
 let STATE = {
   locked: false,
@@ -27,11 +32,8 @@ let STATE = {
   totalWords:      0,
   totalCategories: 0,
 
-  // Round readiness (0 until real round/category data loads).
-  round1Assigned:  0,
-  round1Total:     0,
-  round2Assigned:  0,
-  round2Total:     0,
+  // Round 1 category selection. Empty array = use every category.
+  round1CategoryIds: [],
 
   words: [],
 };
@@ -146,8 +148,7 @@ document.addEventListener('keydown', e => {
    POPULATE SELECT OPTIONS (shared)
 ============================================================ */
 function populateSelects() {
-  const catSelects  = ['add-category', 'edit-category'];
-  const teamSelects = ['add-team'];
+  const catSelects = ['add-category', 'edit-category'];
 
   catSelects.forEach(id => {
     const el = $(id);
@@ -156,22 +157,6 @@ function populateSelects() {
     CATEGORIES.forEach(c => {
       el.innerHTML += `<option value="${esc(c)}"${c===cur?' selected':''}>${esc(c)}</option>`;
     });
-  });
-
-  teamSelects.forEach(id => {
-    const el = $(id);
-    const cur = el.value;
-    const known = API.getKnownTeams && API.getKnownTeams();
-    if (known && known.length) {
-      // Real backend teams when a game context exists.
-      el.innerHTML = '<option value="">— No team —</option>' +
-        known.map(t => `<option value="${t.team_id}"${String(t.team_id)===String(cur) ? ' selected' : ''}>${esc(t.team_name || 'Team #' + t.team_id)}</option>`).join('');
-    } else {
-      el.innerHTML = '<option value="">— No team —</option>';
-      TEAMS.forEach(t => {
-        el.innerHTML += `<option value="${esc(t)}"${t===cur?' selected':''}>${esc(t)}</option>`;
-      });
-    }
   });
 }
 
@@ -182,34 +167,31 @@ function renderSummary() {
   countUp($('stat-total'), STATE.totalWords);
   countUp($('stat-cats'),  STATE.totalCategories);
 
-  // Round readiness comes from real round/category setup when loaded.
-  const rd = window.__ROUND_DATA || {};
-  const r1Assigned = (rd.round1Selected != null)  ? rd.round1Selected  : STATE.round1Assigned;
-  const r1Total    = (rd.categories != null)      ? rd.categories      : STATE.round1Total;
-  const r2Assigned = (rd.categories != null)      ? rd.categories      : STATE.round2Assigned;
-  const r2Total    = (rd.categories != null)      ? rd.categories      : STATE.round2Total;
+  const total = STATE.totalCategories;
+  const r1Picked = (STATE.round1CategoryIds || []).length;
+  const r1Assigned = r1Picked ? r1Picked : total;   // empty selection => all categories
+  const r2Assigned = total;
 
   countUp($('stat-r1-assigned'), r1Assigned);
-  countUp($('stat-r1-total'),    r1Total);
+  countUp($('stat-r1-total'),    total);
   countUp($('stat-r2-assigned'), r2Assigned);
-  countUp($('stat-r2-total'),    r2Total);
+  countUp($('stat-r2-total'),    total);
 
-  const r1Ready = r1Total > 0 && r1Assigned >= r1Total;
-  const r2Ready = r2Total > 0 && r2Assigned >= r2Total;
+  const r1Ready = total > 0 && r1Assigned >= total;
+  const r2Ready = total > 0 && r2Assigned >= total;
 
   setRoundBadge('badge-r1', r1Ready);
   setRoundBadge('badge-r2', r2Ready);
 
   const allReady = r1Ready && r2Ready;
-  const anySetup = r1Total > 0 || r2Total > 0;
   const statusEl = $('overall-status');
   statusEl.className = `overall-status overall-status--${allReady ? 'ready' : 'warn'} reveal visible`;
   $('overall-icon').className = allReady ? 'fa-solid fa-circle-check' : 'fa-solid fa-triangle-exclamation';
-  $('overall-text').textContent = allReady
-    ? 'All rounds have their categories ready!'
-    : anySetup
-      ? 'Some rounds are missing configured categories.'
-      : 'No rounds configured yet. Set up Round 1 & Round 2 below.';
+  $('overall-text').textContent = total > 0
+    ? (allReady
+        ? 'All categories are ready for both rounds!'
+        : 'Pick Round 1 categories above — Round 2 automatically uses all categories.')
+    : 'No categories yet. Add categories to get started.';
 }
 
 function setRoundBadge(id, ready) {
@@ -280,11 +262,18 @@ function renderFilterPills() {
 
   // Team pills
   const teamCounts = {};
-  STATE.words.forEach(w => { if (w.team) teamCounts[w.team] = (teamCounts[w.team] || 0) + 1; });
+  STATE.words.forEach(w => {
+    const t = teamOf(w);
+    teamCounts[t] = (teamCounts[t] || 0) + 1;
+  });
   const teamContainer = $('team-pills');
   teamContainer.innerHTML = '';
 
-  ['All', ...TEAMS].forEach(team => {
+  const teamPillList = ['All'];
+  if (!TEAMS.includes(HOST_TEAM_LABEL)) teamPillList.push(HOST_TEAM_LABEL);
+  TEAMS.forEach(t => { if (!teamPillList.includes(t)) teamPillList.push(t); });
+
+  teamPillList.forEach(team => {
     const count  = team === 'All' ? STATE.words.length : (teamCounts[team] || 0);
     const active = STATE.filterTeam === team ? 'active' : '';
     const pill   = document.createElement('button');
@@ -311,7 +300,7 @@ function getFilteredWords() {
     .filter(w => {
       const matchSearch = !q || w.word.toLowerCase().includes(q) || w.category.toLowerCase().includes(q);
       const matchCat    = STATE.filterCat  === 'All' || w.category === STATE.filterCat;
-      const matchTeam   = STATE.filterTeam === 'All' || w.team     === STATE.filterTeam;
+      const matchTeam   = STATE.filterTeam === 'All' || teamOf(w) === STATE.filterTeam;
       return matchSearch && matchCat && matchTeam;
     })
     .sort((a, b) => {
@@ -364,7 +353,7 @@ function renderTable() {
         </td>
         <td class="word-cell">${esc(w.word)}</td>
         <td><span class="cat-badge">${esc(w.category)}</span></td>
-        <td>${esc(w.team || 'â€”')}</td>
+        <td>${esc(teamOf(w))}</td>
         <td>
           <span class="status-dot status-dot--${esc(w.status)}">
             <span class="status-dot__circle"></span>
@@ -557,7 +546,7 @@ function renderByTeam() {
   // Group by team
   const teamMap = {};
   words.forEach(w => {
-    const key = w.team || 'â€” No Team â€”';
+    const key = teamOf(w);
     if (!teamMap[key]) teamMap[key] = {};
     if (!teamMap[key][w.category]) teamMap[key][w.category] = [];
     teamMap[key][w.category].push(w);
@@ -627,7 +616,7 @@ function renderByCategory() {
           ${ws.map(w => `
             <div class="group-word-chip">
               ${esc(w.word)}
-              <span class="group-word-chip__team">(${esc(w.team || 'â€”')})</span>
+              <span class="group-word-chip__team">(${esc(teamOf(w))})</span>
             </div>`).join('')}
         </div>
       </div>
@@ -655,7 +644,6 @@ function openAddWord() {
   $('form-add').reset();
   $('err-add-word').textContent = '';
   $('err-add-category').textContent = '';
-  $('err-add-team').textContent = '';
   populateSelects();
   openModal('modal-add');
 }
@@ -669,8 +657,6 @@ $('form-add').addEventListener('submit', e => {
   e.preventDefault();
   const wordIn = $('add-word');
   const catIn  = $('add-category');
-  const teamIn = $('add-team');
-  const hosted = !!(window.WordAPI && API.getGameId());
   let valid    = true;
 
   if (!wordIn.value.trim()) {
@@ -685,20 +671,12 @@ $('form-add').addEventListener('submit', e => {
     valid = false;
   } else { catIn.classList.remove('error'); $('err-add-category').textContent = ''; }
 
-  // Hosted games require a real submitting team (the backend rejects
-  // team-less words). Do not silently fall back to a local demo row.
-  if (hosted && !teamIn.value) {
-    teamIn.classList.add('error');
-    $('err-add-team').textContent = 'Please select the team that submitted this word.';
-    valid = false;
-  } else { teamIn.classList.remove('error'); $('err-add-team').textContent = ''; }
-
   if (!valid) return;
 
   const newWord = {
     word:     wordIn.value.trim(),
     category: catIn.value,
-    team:     teamIn.value || null,
+    team:     null,   // host-added words are stored under "Host"
     status:   'available',
   };
 
@@ -716,11 +694,9 @@ $('form-add').addEventListener('submit', e => {
 });
 
 async function commitAddWord(data) {
-  // Real backend integration when a host game context exists.
-  // The backend requires a submitting team for every word, and the add form
-  // already enforces a team selection in hosted mode.
+  // Real backend integration when a host game context exists. Host words
+  // carry no team — the backend stores them without a submitting team.
   if (window.WordAPI && API.getGameId()) {
-    const selectedTeamId = parseInt($('add-team').value, 10);
     const categoryId = window.CATEGORY_NAME_TO_ID ? window.CATEGORY_NAME_TO_ID[data.category] : null;
     const btn = $('form-add').querySelector('button[type="submit"]');
     const original = btn.textContent;
@@ -728,7 +704,7 @@ async function commitAddWord(data) {
     btn.textContent = 'Adding…';
     try {
       const created = await API.withLoading('add-word', () =>
-        WordAPI.createWord(API.getGameId(), { categoryId, wordText: data.word, teamId: selectedTeamId, asHost: true })
+        WordAPI.createWord(API.getGameId(), { categoryId, wordText: data.word, asHost: true })
       );
       if (!created.word_id) throw new Error('No word_id returned.');
       STATE.words.push({
@@ -788,8 +764,8 @@ function openEditWord(id) {
   populateSelects();
   $('edit-word').value     = w.word;
   $('edit-category').value = w.category;
-  $('edit-team').value     = w.team  || '';
-  $('edit-subtitle').textContent = `Editing "${w.word}"` + (w.team ? ` — ${w.team}` : '');
+  $('edit-team').value     = w.team  || HOST_TEAM_LABEL;
+  $('edit-subtitle').textContent = `Editing "${w.word}"` + (w.team ? ` — ${w.team}` : ` — ${HOST_TEAM_LABEL}`);
 
   $('err-edit-word').textContent = '';
   $('err-edit-category').textContent = '';
@@ -940,7 +916,7 @@ function renderWordStatus() {
   // Group the real words by submitting team, then by category.
   const teamMap = {};
   STATE.words.forEach(w => {
-    const key = w.team || 'â€” No Team â€”';
+    const key = teamOf(w);
     if (!teamMap[key]) teamMap[key] = {};
     if (!teamMap[key][w.category]) teamMap[key][w.category] = [];
     teamMap[key][w.category].push(w);
@@ -981,298 +957,105 @@ function renderWordStatus() {
 }
 
 /* ============================================================
-   ROUND & MATCH SETUP
-   Uses only the real backend endpoints:
-   - RoundAPI.createRound / listRounds / selectRoundCategories
-   - MatchAPI.createMatches / listMatches / reorderMatch
-   - GameAPI.status (current_round / current_match_id)
+   ROUND 1 CATEGORIES
+   Compact picker in the category filter row. Round 1 uses the
+   selected chips (or every category when none are picked);
+   Round 2 always uses all categories. Match play-slots are
+   created automatically by the server when the game starts.
 ============================================================ */
-let _setupBusy = false;
-const _pendingMatches = window.__MATCH_DRAFT = [];
-
-function setupToast(msg) { showToast(msg); }
-
-function escAttr(s) { return esc(s); }
-
-function statusText(roundStatus) {
-  const map = { pending: 'Pending', active: 'Active', completed: 'Completed', cancelled: 'Cancelled' };
-  return map[roundStatus] || roundStatus || 'Unknown';
+function renderRound1Picker() {
+  const pills = $('r1-pills');
+  const allBtn = $('r1-pill-all');
+  if (!pills) return;
+  const selected = STATE.round1CategoryIds || [];
+  const all = selected.length === 0 || selected.length >= STATE.categories.length;
+  pills.innerHTML = STATE.categories.map(c => {
+    const active = selected.includes(c.id);
+    return `<button type="button" class="filter-pill ${active ? 'active' : ''}" data-cat-id="${c.id}" role="radio" aria-checked="${active}">${esc(c.name)}</button>`;
+  }).join('');
+  if (allBtn) {
+    allBtn.classList.toggle('is-active', all);
+    allBtn.setAttribute('aria-pressed', all ? 'true' : 'false');
+  }
 }
 
-async function refreshRounds() {
+async function refreshRound1() {
   const gameId = API.getGameId();
-  if (!gameId) return;
+  if (!gameId || !window.RoundAPI) return;
   try {
     const r = await RoundAPI.listRounds(gameId);
-    const rounds = r.rounds || [];
-    const el = $('round-1-cats');
-    const st1 = $('round-1-status');
-    const st2 = $('round-2-status');
-
-    const round1 = rounds.find(x => x.round_number === 1);
-    const round2 = rounds.find(x => x.round_number === 2);
-
-    // Round 1 status + selected categories
-    if (round1) {
-      st1.textContent = statusText(round1.status);
-      st1.classList.add('ready');
-      if (round1.selected_category_ids && round1.selected_category_ids.length) {
-        const names = STATE.categories
-          .filter(c => round1.selected_category_ids.includes(c.id))
-          .map(c => c.name);
-        el.innerHTML = names.length
-          ? names.map(n => `<span class="cat-tag">${esc(n)}</span>`).join('')
-          : `<span class="cat-tag">${round1.selected_category_ids.length} selected</span>`;
-      } else {
-        el.innerHTML = '<p style="color:rgba(255,255,255,0.35);font-size:0.8rem">Round 1 exists â€” choose categories.</p>';
-      }
-    } else {
-      st1.textContent = 'Not set up';
-      st1.classList.remove('ready');
-      el.innerHTML = '<p style="color:rgba(255,255,255,0.35);font-size:0.8rem">Create Round 1 to choose categories.</p>';
-    }
-
-    // Round 2 status (uses all categories automatically)
-    if (round2) {
-      st2.textContent = statusText(round2.status);
-      st2.classList.add('ready');
-    } else {
-      st2.textContent = 'Not set up';
-      st2.classList.remove('ready');
-    }
-
-    // Update global round readiness for the summary cards.
-    window.__ROUND_DATA = {
-      categories: STATE.categories.length,
-      round1Selected: round1 && round1.selected_category_ids ? round1.selected_category_ids.length : 0,
-    };
+    const round1 = (r.rounds || []).find(x => x.round_number === 1);
+    STATE.round1CategoryIds = (round1 && round1.selected_category_ids)
+      ? round1.selected_category_ids.slice()
+      : [];
+    renderRound1Picker();
     render();
   } catch (e) {
-    console.warn('[setup] rounds offline', e.message);
+    console.warn('[words] round 1 offline', e.message);
   }
 }
 
-async function createRound(roundNumber) {
+let _r1Saving = false;
+async function saveRound1Selection() {
   const gameId = API.getGameId();
-  if (!gameId) { setupToast('No game context.'); return; }
-  if (_setupBusy) return;
-  _setupBusy = true;
-  const btn = roundNumber === 1 ? $('btn-create-round-1') : $('btn-create-round-2');
-  const orig = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = 'Creating…';
+  if (!gameId || !window.RoundAPI || _r1Saving) return;
+  let ids = (STATE.round1CategoryIds || [])
+    .filter(id => STATE.categories.some(c => c.id === id));
+  if (!ids.length) ids = STATE.categories.map(c => c.id); // none picked => all
+  if (!ids.length) { showToast('No categories yet. Add categories first.'); return; }
+  _r1Saving = true;
+  const allBtn = $('r1-pill-all');
+  const prevText = allBtn ? allBtn.textContent : '';
+  if (allBtn) { allBtn.disabled = true; allBtn.textContent = 'Saving…'; }
   try {
-    await API.withLoading(`create-round-${roundNumber}`, () =>
-      RoundAPI.createRound(gameId, { roundNumber })
-    );
-    setupToast(`Round ${roundNumber} set up`);
-    await refreshRounds();
-    await refreshMatches();
-  } catch (err) {
-    console.error(`[setup] create round ${roundNumber} failed`, err);
-    setupToast(err.message || `Could not create round ${roundNumber}.`);
-  } finally {
-    _setupBusy = false;
-    btn.disabled = false;
-    btn.textContent = orig;
-  }
-}
-
-$('btn-create-round-1').addEventListener('click', async e => {
-  const g = API.getGameId();
-  if (!g) return;
-  // Open category-chooser: create round first if needed, then choose cats.
-  try {
-    const r = await RoundAPI.listRounds(g);
-    const round1 = (r.rounds || []).find(x => x.round_number === 1);
+    let round1 = null;
+    try {
+      const r = await RoundAPI.listRounds(gameId);
+      round1 = (r.rounds || []).find(x => x.round_number === 1);
+    } catch (e) { /* ignore */ }
     if (!round1) {
-      await API.withLoading('round1-bootstrap', () =>
-        RoundAPI.createRound(g, { roundNumber: 1 })
+      await API.withLoading('r1-create', () =>
+        RoundAPI.createRound(gameId, { roundNumber: 1 })
       );
     }
-    await openRoundCatModal();
-  } catch (err) {
-    setupToast(err.message || 'Could not set up Round 1.');
-  }
-});
-
-$('btn-create-round-2').addEventListener('click', () => createRound(2));
-
-async function openRoundCatModal() {
-  const gameId = API.getGameId();
-  if (!gameId) return;
-  const list = $('cats-list');
-  list.innerHTML = '<p style="color:rgba(255,255,255,0.35)">Loading categories…</p>';
-  openModal('modal-cats');
-  try {
-    const catData = await WordAPI.listCategories(gameId);
-    const cats = catData.categories || [];
-    const r = await RoundAPI.listRounds(gameId);
-    const round1 = (r.rounds || []).find(x => x.round_number === 1);
-    const selected = round1 && round1.selected_category_ids ? round1.selected_category_ids : [];
-    if (!cats.length) {
-      list.innerHTML = '<p style="color:rgba(255,255,255,0.35)">No categories yet. Add categories first.</p>';
-    } else {
-      list.innerHTML = cats.map(c => `
-        <label>
-          <input type="checkbox" value="${c.category_id}" ${selected.includes(c.category_id) ? 'checked' : ''} />
-          <span>${esc(c.name)}</span>
-          <span class="cat-count">${c.word_count != null ? c.word_count + ' words' : ''}</span>
-        </label>`).join('');
-    }
-  } catch (err) {
-    list.innerHTML = `<p style="color:rgba(255,255,255,0.5)">${esc(err.message || 'Could not load categories.')}</p>`;
-  }
-}
-
-$('btn-save-cats').addEventListener('click', async () => {
-  const gameId = API.getGameId();
-  if (!gameId) return;
-  const ids = [...$('cats-list').querySelectorAll('input[type="checkbox"]:checked')]
-    .map(cb => parseInt(cb.value, 10));
-  if (!ids.length) { $('cats-subtitle').textContent = 'Select at least one category for Round 1.'; return; }
-  const btn = $('btn-save-cats');
-  btn.disabled = true;
-  try {
-    await API.withLoading('round1-cats', () =>
+    const saved = await API.withLoading('r1-cats', () =>
       RoundAPI.selectRoundCategories(gameId, 1, ids)
     );
-    closeModal('modal-cats');
-    setupToast('Round 1 categories saved');
-    await refreshRounds();
+    STATE.round1CategoryIds = ((saved && saved.selected_category_ids) || ids).slice();
+    renderRound1Picker();
+    render();
+    showToast('Round 1 categories saved');
   } catch (err) {
-    setupToast(err.message || 'Could not save categories.');
+    console.error('[words] save round 1 categories failed', err);
+    showToast((err && err.message) || 'Could not save Round 1 categories.');
   } finally {
-    btn.disabled = false;
-  }
-});
-
-$('close-cats').addEventListener('click',  () => closeModal('modal-cats'));
-$('cancel-cats').addEventListener('click', () => closeModal('modal-cats'));
-
-/* ---------------- Match setup ---------------- */
-function knownTeamName(id) {
-  const t = API.getKnownTeams().find(x => x.team_id === id);
-  return t ? (t.team_name || 'Team #' + id) : ('Team #' + id);
-}
-
-async function refreshMatches() {
-  const gameId = API.getGameId();
-  if (!gameId) return;
-  const container = $('matches-list');
-  if (!container) return;
-  const roundNum = parseInt($('matches-round').value, 10) || 1;
-  const currentMatch = (await GameAPI.status(gameId).catch(() => ({}))).current_match_id;
-  try {
-    const md = await MatchAPI.listMatches(gameId);
-    const matches = (md.matches || []).filter(m => m.round_number === roundNum);
-    if (!matches.length) {
-      container.innerHTML = '<p style="color:rgba(255,255,255,0.35);font-size:0.85rem">No matches defined for this round yet.</p>';
-      return;
-    }
-    container.innerHTML = matches.map((m, i) => {
-      const live = m.status === 'active' || m.match_id === currentMatch;
-      const cls = m.status === 'completed' ? 'finished' : (live ? 'live' : 'pending');
-      const label = m.status === 'completed'
-        ? (m.winner_team_id ? `${knownTeamName(m.team_id)} vs ${m.opponent_team_id ? knownTeamName(m.opponent_team_id) : 'Free'} → winner` : `Match ${i + 1}`)
-        : (m.opponent_team_id
-            ? `${knownTeamName(m.team_id)} <span class="match-row__opponent">vs ${knownTeamName(m.opponent_team_id)}</span>`
-            : `${knownTeamName(m.team_id)} <span class="match-row__opponent">(free round)</span>`);
-      const canReorder = m.status === 'pending';
-      return `
-        <div class="match-row" data-match-id="${m.match_id}">
-          <span class="match-row__order">${m.match_order}</span>
-          <span class="match-row__label">${label}</span>
-          <span class="match-row__status ${cls}">${statusText(m.status)}</span>
-          <div class="match-row__actions">
-            <button class="match-row__btn match-row__btn--up" data-id="${m.match_id}" title="Move up" ${canReorder ? '' : 'disabled'}><i class="fa-solid fa-chevron-up"></i></button>
-            <button class="match-row__btn match-row__btn--down" data-id="${m.match_id}" title="Move down" ${canReorder ? '' : 'disabled'}><i class="fa-solid fa-chevron-down"></i></button>
-          </div>
-        </div>`;
-    }).join('');
-    container.querySelectorAll('.match-row__btn--up, .match-row__btn--down').forEach(btn => {
-      btn.addEventListener('click', () => reorderMatchRow(btn, roundNum));
-    });
-  } catch (e) {
-    container.innerHTML = `<p style="color:rgba(255,255,255,0.5)">${esc(e.message || 'Could not load matches.')}</p>`;
+    _r1Saving = false;
+    if (allBtn) { allBtn.disabled = false; allBtn.textContent = prevText; }
   }
 }
 
-function reorderMatchRow(btn, roundNum) {
-  const row = btn.closest('.match-row');
-  const id = parseInt(row.dataset.matchId, 10);
-  const sibling = btn.classList.contains('match-row__btn--up')
-    ? row.previousElementSibling : row.nextElementSibling;
-  if (!sibling || !sibling.dataset || !sibling.dataset.matchId) return;
-  const otherId = parseInt(sibling.dataset.matchId, 10);
-  const currentOrder = parseInt(row.querySelector('.match-row__order').textContent, 10);
-  const otherOrder = parseInt(sibling.querySelector('.match-row__order').textContent, 10);
-  API.withLoading('reorder-match', async () => {
-    await MatchAPI.reorderMatch(id, otherOrder);
-    await MatchAPI.reorderMatch(otherId, currentOrder);
-  }).then(() => refreshMatches()).catch(err => setupToast(err.message || 'Could not reorder.'));
+const r1PillsEl = $('r1-pills');
+if (r1PillsEl) {
+  r1PillsEl.addEventListener('click', async e => {
+    const chip = e.target.closest('.filter-pill[data-cat-id]');
+    if (!chip) return;
+    const id = parseInt(chip.dataset.catId, 10);
+    const ids = (STATE.round1CategoryIds || []).slice();
+    const i = ids.indexOf(id);
+    if (i >= 0) ids.splice(i, 1); else ids.push(id);
+    STATE.round1CategoryIds = ids;
+    renderRound1Picker();
+    await saveRound1Selection();
+  });
 }
-
-$('matches-round').addEventListener('change', () => {
-  if (_pendingMatches.length) {
-    _pendingMatches.length = 0;
-    setupToast('Match draft cleared — add matches for the selected round.');
-  }
-  refreshMatches();
-});
-
-$('btn-add-match').addEventListener('click', () => {
-  const teams = API.getKnownTeams();
-  const teamSel = $('match-team');
-  const oppSel = $('match-opponent');
-  teamSel.innerHTML = '<option value="">Select team</option>' +
-    teams.map(t => `<option value="${t.team_id}">${esc(t.team_name || 'Team #' + t.team_id)}</option>`).join('');
-  oppSel.innerHTML = '<option value="">â€” No opponent / Free round â€”</option>' +
-    teams.map(t => `<option value="${t.team_id}">${esc(t.team_name || 'Team #' + t.team_id)}</option>`).join('');
-  $('err-match-team').textContent = '';
-  $('err-match-opponent').textContent = '';
-  openModal('modal-match');
-});
-
-$('close-match').addEventListener('click',  () => closeModal('modal-match'));
-$('cancel-match').addEventListener('click', () => closeModal('modal-match'));
-
-$('form-match').addEventListener('submit', e => {
-  e.preventDefault();
-  const teamId = parseInt($('match-team').value, 10);
-  const oppRaw = $('match-opponent').value;
-  const oppId = oppRaw ? parseInt(oppRaw, 10) : null;
-  if (!teamId) { $('err-match-team').textContent = 'Please select a team.'; return; }
-  if (oppId === teamId) { $('err-match-opponent').textContent = 'A team cannot play itself.'; return; }
-  if (_pendingMatches.some(m => m.team_id === teamId)) {
-    $('err-match-team').textContent = 'This team already has a match for the round.';
-    return;
-  }
-  _pendingMatches.push({ team_id: teamId, opponent_team_id: oppId });
-  closeModal('modal-match');
-  setupToast(`Match added (${_pendingMatches.length} in draft)`);
-});
-
-$('btn-create-matches').addEventListener('click', async () => {
-  const gameId = API.getGameId();
-  if (!gameId) return;
-  if (!_pendingMatches.length) { setupToast('Add at least one match first.'); return; }
-  const roundNum = parseInt($('matches-round').value, 10) || 1;
-  const btn = $('btn-create-matches');
-  btn.disabled = true;
-  try {
-    await API.withLoading('create-matches', () =>
-      MatchAPI.createMatches(gameId, roundNum, _pendingMatches.slice())
-    );
-    _pendingMatches.length = 0;
-    setupToast(`Matches created for Round ${roundNum}`);
-    await refreshMatches();
-  } catch (err) {
-    setupToast(err.message || 'Could not create matches.');
-  } finally {
-    btn.disabled = false;
-  }
-});
+const r1AllBtn = $('r1-pill-all');
+if (r1AllBtn) {
+  r1AllBtn.addEventListener('click', async () => {
+    STATE.round1CategoryIds = [];
+    renderRound1Picker();
+    await saveRound1Selection();
+  });
+}
 
 /* ============================================================
    NAV CODE COPY
@@ -1389,6 +1172,7 @@ function mapWordStatus(status) {
         word: w.word_text,
         category: w.category_name || 'Other',
         team: w.team_name || null,
+        isHost: w.is_host === true,
         status: mapWordStatus(w.status),
       }));
       STATE.words = wordsList;
@@ -1409,16 +1193,13 @@ function mapWordStatus(status) {
     } catch (e) { console.warn('[words] words offline', e.message); }
   }
 
-  // Refetch all backend-driven sections (round + match setup and word pool).
+  // Refetch all backend-driven sections (round-1 picker and word pool).
   let refreshTimer = null;
   function refreshAll() {
     clearTimeout(refreshTimer);
     refreshTimer = setTimeout(async () => {
       await refreshWordPool();
-      if (window.RoundAPI && window.MatchAPI) {
-        try { await refreshRounds(); } catch (e) { /* ignore */ }
-        try { await refreshMatches(); } catch (e) { /* ignore */ }
-      }
+      await refreshRound1();
     }, 120);
   }
 
@@ -1443,7 +1224,7 @@ function mapWordStatus(status) {
     populateSelects();
     render();
     await refreshWordPool();
-    if (window.RoundAPI) { try { await refreshRounds(); } catch (e) { /* ignore */ } }
+    await refreshRound1();
   }
 
   try { await fetchCategories(); }
@@ -1451,13 +1232,8 @@ function mapWordStatus(status) {
 
   await refreshWordPool();
 
-  // Load real round + match setup data into the new setup section.
-  const setupSec = $('setup-section');
-  if (setupSec && window.RoundAPI && window.MatchAPI) {
-    revealObs.observe(setupSec);
-    await refreshRounds();
-    await refreshMatches();
-  }
+  // Load the Round-1 category selection into the compact picker.
+  await refreshRound1();
 
   // ---------------- Manage Categories modal ----------------
   const manageCatsList = $('manage-cats-list');

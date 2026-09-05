@@ -133,9 +133,12 @@ def _transition(game, target, event_type, apply=None):
 
 
 def start_game(game):
+    from .gameplay_service import ensure_game_setup
+
     def _apply():
         if game.started_at is None:
             game.started_at = utcnow()
+        ensure_game_setup(game)
 
     _transition(game, Game.STATUS_READY, "GAME_STARTED", apply=_apply)
     return _status_payload(game)

@@ -185,6 +185,90 @@ def test_start_moves_game_to_ready(client):
     assert status_body["started_at"] is not None
 
 
+def test_start_auto_creates_rounds_and_single_team_matches(client, app):
+    from app.models import Match, Round, Team, TeamMember
+
+    data = _create_game(client)
+    with app.app_context():
+        for idx, code in enumerate(("AA", "BB"), start=1):
+            team = Team(
+                game_id=data["game_id"],
+                team_code=code,
+                team_name="Team {}".format(code),
+            )
+            db.session.add(team)
+            db.session.flush()
+            leader = TeamMember(
+                team_id=team.id,
+                username="Leader {}".format(code),
+                device_role=TeamMember.DEVICE_ROLE_TEAM_LEADER,
+                connection_token="ct-{}".format(code),
+            )
+            db.session.add(leader)
+            db.session.flush()
+            team.leader_member_id = leader.id
+            team.status = Team.STATUS_ACTIVE
+        db.session.commit()
+
+    assert _start(client, data["game_id"], data["host_session_token"]).status_code == 200
+
+    with app.app_context():
+        rounds = Round.query.filter_by(game_id=data["game_id"]).order_by(
+            Round.round_number
+        ).all()
+        assert [r.round_number for r in rounds] == [1, 2]
+        for round_obj in rounds:
+            matches = Match.query.filter_by(round_id=round_obj.id).order_by(
+                Match.match_order
+            ).all()
+            assert len(matches) == 2
+            assert [m.team_id for m in matches] == [
+                team.id for team in Team.query.filter_by(
+                    game_id=data["game_id"]
+                ).order_by(Team.id).all()
+            ]
+            assert all(m.opponent_team_id is None for m in matches)
+
+
+def test_advance_round_auto_creates_matches_for_next_round(client, app):
+    from app.models import Match, Round, Team, TeamMember
+
+    data = _create_game(client)
+    with app.app_context():
+        for idx, code in enumerate(("AA", "BB"), start=1):
+            team = Team(
+                game_id=data["game_id"],
+                team_code=code,
+                team_name="Team {}".format(code),
+            )
+            db.session.add(team)
+            db.session.flush()
+            leader = TeamMember(
+                team_id=team.id,
+                username="Leader {}".format(code),
+                device_role=TeamMember.DEVICE_ROLE_TEAM_LEADER,
+                connection_token="ct-{}".format(code),
+            )
+            db.session.add(leader)
+            db.session.flush()
+            team.leader_member_id = leader.id
+            team.status = Team.STATUS_ACTIVE
+        db.session.commit()
+
+    token = data["host_session_token"]
+    assert _start(client, data["game_id"], token).status_code == 200
+    response = client.post(
+        "/api/games/{}/rounds/1/advance".format(data["game_id"]),
+        headers={HOST_TOKEN_HEADER: token},
+    )
+    assert response.status_code == 200
+    with app.app_context():
+        round_two = Round.query.filter_by(
+            game_id=data["game_id"], round_number=2
+        ).one()
+        assert len(Match.query.filter_by(round_id=round_two.id).all()) == 2
+
+
 def test_duplicate_start_is_rejected(client):
     data = _create_game(client)
     token = data["host_session_token"]

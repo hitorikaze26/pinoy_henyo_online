@@ -1,5 +1,7 @@
 import random
 
+from sqlalchemy import func
+
 from ..extensions import db
 from ..models import (
     Category,
@@ -259,6 +261,7 @@ def advance_round(game, round_number):
         raise NextRoundMissingError(
             "Round {} has not been set up yet.".format(next_number)
         )
+    ensure_round_matches(game, next_round)
     if not next_round.matches:
         raise NextRoundMissingError(
             "Round {} has no matches yet.".format(next_number)
@@ -528,6 +531,68 @@ def create_round_matches(game, round_number, match_entries):
         db.session.add(match)
         matches.append(match)
     return matches
+
+
+def ensure_round_matches(game, round_obj):
+    """Idempotently create one single-team play slot per team for a round.
+
+    In this model a match is simply a team's turn slot (no opposing team).
+    Slots are ordered by team join order and appended after any matches that
+    were already defined so a manual order survives.
+    """
+    matched_team_ids = {
+        team_id
+        for (team_id,) in db.session.query(Match.team_id)
+        .filter_by(round_id=round_obj.id)
+        .all()
+    }
+    query = Team.query.filter_by(game_id=game.id)
+    if matched_team_ids:
+        query = query.filter(~Team.id.in_(matched_team_ids))
+    missing = query.order_by(Team.id).all()
+    if not missing:
+        return []
+    max_order = (
+        db.session.query(func.max(Match.match_order))
+        .filter_by(round_id=round_obj.id)
+        .scalar()
+    )
+    max_order = max_order or 0
+    matches = []
+    for index, team in enumerate(missing, start=max_order + 1):
+        match = Match(
+            game_id=game.id,
+            round_id=round_obj.id,
+            match_order=index,
+            team_id=team.id,
+            opponent_team_id=None,
+        )
+        db.session.add(match)
+        matches.append(match)
+    return matches
+
+
+def ensure_game_setup(game):
+    """Create Round 1/2 and each team's play slot for both rounds.
+
+    Runs when the host starts the game so the dashboard can immediately pick
+    the playing team from the Current Turn dropdown with no manual setup.
+    """
+    created = {"rounds": [], "matches": []}
+    for round_number in (ROUND_1, ROUND_2):
+        round_obj = get_round(game, round_number)
+        if round_obj is None:
+            round_obj = Round(
+                game_id=game.id,
+                round_number=round_number,
+                timer_seconds=60,
+                timer_mode=Round.TIMER_MODE_COUNTDOWN,
+            )
+            db.session.add(round_obj)
+            db.session.flush()
+            created["rounds"].append(round_number)
+        created["matches"].extend(ensure_round_matches(game, round_obj))
+    return created
 
 
 def reorder_match(match, new_order):

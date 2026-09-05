@@ -90,7 +90,7 @@
           </div>
           <div>
             <h1 class="page-header__title">Words</h1>
-            <p class="page-header__sub">Manage the word pool, categories, rounds, and matches.</p>
+            <p class="page-header__sub">Manage the word pool and categories.</p>
           </div>
         </div>
         <div class="page-header__actions">
@@ -191,6 +191,17 @@
           <button type="button" class="filter-row__manage" id="btn-manage-cats" title="Add, rename, or delete categories">
             <i class="fa-solid fa-tag"></i> Manage
           </button>
+        </div>
+
+        <!-- Round 1 categories (compact picker; Round 2 always uses all) -->
+        <div class="filter-row">
+          <span class="filter-row__label">Round 1:</span>
+          <button type="button" class="r1-pill r1-pill--all is-active" id="r1-pill-all" title="Use every category in Round 1">
+            All categories
+          </button>
+          <div class="filter-pills" id="r1-pills" role="group" aria-label="Choose the categories used in Round 1">
+            <!-- Populated by JS; active chips = Round 1 categories -->
+          </div>
         </div>
 
         <!-- Team pills -->
@@ -316,126 +327,7 @@
         </div>
       </div>
 
-      <!-- ====================================================
-           ROUND & MATCH SETUP
-           Rounds: create Round 1 / 2, select Round-1 categories.
-           Matches: define team order / pairings + reorder.
-      ==================================================== -->
-      <div id="setup-section" class="setup-section reveal">
-        <div class="assign-header">
-          <h2 class="assign-header__title">
-            <i class="fa-solid fa-layer-group"></i> Round &amp; Match Setup
-          </h2>
-        </div>
-
-        <div class="setup-grid">
-          <!-- Rounds -->
-          <div class="setup-card setup-card--rounds">
-            <div class="setup-card__head">
-              <i class="fa-solid fa-circle-nodes"></i>
-              <span>Rounds</span>
-            </div>
-            <div class="setup-card__body">
-              <div class="setup-round" data-round="1">
-                <div class="setup-round__title">
-                  <i class="fa-solid fa-circle-1"></i> Round 1
-                  <span class="setup-round__status" id="round-1-status">Not set up</span>
-                </div>
-                <div class="setup-cats" id="round-1-cats">
-                  <p style="color:rgba(255,255,255,0.35);font-size:0.8rem">Create Round 1 to choose categories.</p>
-                </div>
-              </div>
-              <div class="setup-round" data-round="2">
-                <div class="setup-round__title">
-                  <i class="fa-solid fa-circle-2"></i> Round 2
-                  <span class="setup-round__status" id="round-2-status">Not set up</span>
-                </div>
-                <p class="setup-round__note">Round 2 automatically uses all categories.</p>
-              </div>
-            </div>
-            <div class="setup-card__foot">
-              <button class="hdr-btn hdr-btn--primary" id="btn-create-round-1">
-                <i class="fa-solid fa-plus"></i> Set Up Round 1
-              </button>
-              <button class="hdr-btn hdr-btn--secondary" id="btn-create-round-2">
-                <i class="fa-solid fa-plus"></i> Set Up Round 2
-              </button>
-            </div>
-          </div>
-
-          <!-- Matches -->
-          <div class="setup-card setup-card--matches">
-            <div class="setup-card__head">
-              <i class="fa-solid fa-ranking-star"></i>
-              <span>Matches (Team Order)</span>
-            </div>
-            <div class="setup-card__body">
-              <div class="setup-round-select">
-                <label for="matches-round">Round</label>
-                <select id="matches-round" class="form-select dd">
-                  <option value="1">Round 1</option>
-                  <option value="2">Round 2</option>
-                </select>
-              </div>
-              <div id="matches-list" class="matches-list">
-                <p style="color:rgba(255,255,255,0.35);font-size:0.85rem">No matches defined yet.</p>
-              </div>
-            </div>
-            <div class="setup-card__foot">
-              <button class="hdr-btn hdr-btn--primary" id="btn-add-match">
-                <i class="fa-solid fa-plus"></i> Add Match
-              </button>
-              <button class="hdr-btn hdr-btn--secondary" id="btn-create-matches">
-                <i class="fa-solid fa-floppy-disk"></i> Create Matches
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-    </main>
-  </div>
-
-  <!-- MATCH MODAL -->
-  <div class="modal-overlay" id="modal-match" aria-hidden="true" role="dialog" aria-modal="true">
-    <div class="modal">
-      <button class="modal__close" id="close-match"><i class="fa-solid fa-xmark"></i></button>
-      <h2 class="modal__title"><i class="fa-solid fa-ranking-star"></i> Add Match</h2>
-      <form class="modal__form" id="form-match" novalidate>
-        <label for="match-team" class="form-label">Team</label>
-        <select id="match-team" class="form-select dd">
-          <option value="">Select team</option>
-        </select>
-        <span class="form-error" id="err-match-team"></span>
-
-        <label for="match-opponent" class="form-label">Opponent (optional)</label>
-        <select id="match-opponent" class="form-select dd">
-          <option value="">— No opponent / Free round —</option>
-        </select>
-        <span class="form-error" id="err-match-opponent"></span>
-
-        <div class="modal__actions">
-          <button type="button" class="btn-cancel" id="cancel-match">Cancel</button>
-          <button type="submit" class="btn-confirm"><i class="fa-solid fa-plus"></i> Add to Round</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- ROUND 1 CATEGORIES MODAL -->
-  <div class="modal-overlay" id="modal-cats" aria-hidden="true" role="dialog" aria-modal="true">
-    <div class="modal">
-      <button class="modal__close" id="close-cats"><i class="fa-solid fa-xmark"></i></button>
-      <h2 class="modal__title"><i class="fa-solid fa-circle-1"></i> Round 1 Categories</h2>
-      <p class="modal__subtitle" id="cats-subtitle">Select the categories used in Round 1.</p>
-      <div id="cats-list" class="cats-list">
-        <p style="color:rgba(255,255,255,0.35)">Loading categories…</p>
-      </div>
-      <div class="modal__actions">
-        <button type="button" class="btn-cancel" id="cancel-cats">Cancel</button>
-        <button type="button" class="btn-confirm" id="btn-save-cats"><i class="fa-solid fa-check"></i> Save</button>
-      </div>
-    </div>
+      </main>
   </div>
 
   <!-- ============================================================
@@ -465,13 +357,6 @@
             <option value="">Select category</option>
           </select>
           <span class="form-error" id="err-add-category"></span>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="add-team"><i class="fa-solid fa-users"></i> Team</label>
-          <select id="add-team" class="form-select dd">
-            <option value="">— No team —</option>
-          </select>
-          <span class="form-error" id="err-add-team"></span>
         </div>
         <div class="modal__actions">
           <button type="button" class="btn-cancel" id="cancel-add">Cancel</button>
@@ -608,7 +493,6 @@
   <script src="../../js/api/team-api.js"></script>
   <script src="../../js/api/word-api.js"></script>
   <script src="../../js/api/round-api.js"></script>
-  <script src="../../js/api/match-api.js"></script>
   <script src="../../js/api/connect.js"></script>
   <script src="../../js/api/realtime.js"></script>
   <script src="../../js/core/custom-select.js"></script>

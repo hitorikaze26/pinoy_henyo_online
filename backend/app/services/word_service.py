@@ -334,8 +334,13 @@ def resolve_submitting_team(game, session_token=None, team_id=None):
 
 
 def resolve_team_for_host(game, team_id):
-    """Resolve a team for a host-authorized word operation."""
-    team = db.session.get(Team, team_id) if team_id is not None else None
+    """Resolve a team for a host-authorized word operation.
+
+    Returns ``None`` when the host does not assign a team (host-level word).
+    """
+    if team_id is None:
+        return None
+    team = db.session.get(Team, team_id)
     if team is None or team.game_id != game.id:
         raise TeamNotInGameError("The team does not belong to this game.")
     return team
@@ -355,7 +360,7 @@ def submit_word(game, team, category_id, word_text, host=False):
         )
     text = _validate_word_text(word_text)
     normalized = normalize_word(text)
-    if team is None:
+    if team is None and not host:
         raise TeamRequiredError("A submitting team is required.")
     _ensure_unlocked(game)
 
@@ -368,20 +373,21 @@ def submit_word(game, team, category_id, word_text, host=False):
         raise DuplicateWordError(
             "This word has already been submitted for this category."
         )
-    count = _count_active_words(
-        game_id=game.id, category_id=category.id, team_id=team.id
-    )
-    if count >= MAX_WORDS_PER_TEAM_CATEGORY:
-        raise WordLimitExceededError(
-            "A team can submit at most {} words per category.".format(
-                MAX_WORDS_PER_TEAM_CATEGORY
-            )
+    if team is not None:
+        count = _count_active_words(
+            game_id=game.id, category_id=category.id, team_id=team.id
         )
+        if count >= MAX_WORDS_PER_TEAM_CATEGORY:
+            raise WordLimitExceededError(
+                "A team can submit at most {} words per category.".format(
+                    MAX_WORDS_PER_TEAM_CATEGORY
+                )
+            )
 
     word = Word(
         game_id=game.id,
         category_id=category.id,
-        submitted_by_team_id=team.id,
+        submitted_by_team_id=(team.id if team is not None else None),
         word_text=text,
         normalized_word=normalized,
     )
@@ -399,7 +405,7 @@ def submit_word(game, team, category_id, word_text, host=False):
         {
             "word_id": word.id,
             "category_id": category.id,
-            "team_id": team.id,
+            "team_id": word.submitted_by_team_id,
         },
     )
     return word
@@ -500,6 +506,7 @@ def word_payload(word, with_relations=False):
         "status": word.status,
         "category_id": word.category_id,
         "submitted_by_team_id": word.submitted_by_team_id,
+        "is_host": word.submitted_by_team_id is None,
         "game_id": word.game_id,
         "created_at": word.created_at,
         "updated_at": word.updated_at,

@@ -20,7 +20,7 @@ class Word(db.Model):
         db.Integer, db.ForeignKey("categories.id"), nullable=True, index=True
     )
     submitted_by_team_id = db.Column(
-        db.Integer, db.ForeignKey("teams.id"), nullable=False, index=True
+        db.Integer, db.ForeignKey("teams.id"), nullable=True, index=True
     )
     word_text = db.Column(db.String(100), nullable=False)
     normalized_word = db.Column(db.String(100), nullable=False, index=True)
