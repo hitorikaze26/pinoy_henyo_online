@@ -6,10 +6,13 @@
    opens with the background game music playing; the speaker
    control in the navbar area toggles sound on/off (default ON).
 
-   Browser autoplay policy: audible playback requires a user
-   gesture, so on load we attempt music.play() optimistically.
-   If the browser blocks it (NotAllowedError), we resume the
-   music on the first pointer/touch/key interaction via unlock().
+   Browser autoplay policy: browsers block AUDIBLE autoplay until the user
+   has interacted with the origin at least once, but always allow MUTED
+   autoplay. So on load we start the music MUTED (guaranteed to be running
+   the instant the page opens), then the first pointer/touch/key gesture
+   unmutes it in the same gesture (allowed). Once the origin has gesture
+   history, the browser permits audible autoplay, so later opens start
+   audibly and the very first gesture just keeps them playing.
 
    API:
      GameAudio.toggle() -> bool (new enabled state)
@@ -17,6 +20,8 @@
      GameAudio.playMusic()
      GameAudio.pauseMusic()
      GameAudio.enabled      // current enabled state
+     GameAudio.musicPlaying // music is running (not paused/ended)
+     GameAudio.musicMuted   // music is running muted (pre-gesture first visit)
    ============================================================ */
 (function () {
   const ASSET_ROOT = 'assets/sounds/';
@@ -44,6 +49,9 @@
   musicEl.loop = true;
   musicEl.volume = MUSIC_VOLUME;
   musicEl.preload = 'auto';
+  // Start muted so autoplay policy never blocks the music from running on
+  // open; the first user gesture unmutes it (see onFirstGesture below).
+  musicEl.muted = true;
 
   // One Audio element per effect; playback is restarted via currentTime=0.
   const effectEls = Object.create(null);
@@ -55,13 +63,13 @@
     effectEls[name] = el;
   }
 
-  /** Attempt playback; returns true if playback started. */
+  /** Start (or restart) the music. When called from a non-gesture context
+      (e.g. page load) it plays muted — allowed by browsers. */
   function playMusic() {
     if (!enabled) return false;
     const attempt = musicEl.play();
     if (attempt && typeof attempt.catch === 'function') {
-      attempt.catch(() => { /* blocked by autoplay policy — wait for a gesture */ });
-      return true;
+      attempt.catch(() => { /* nothing audible to resume until a gesture */ });
     }
     return true;
   }
@@ -98,21 +106,20 @@
     return enabled;
   }
 
-  /** Called once on the first user gesture to satisfy autoplay policy. */
+  /** Called once on the first user gesture: unmute (allowed during the
+      gesture) so the music and UI effects become audible. */
   function unlock() {
     if (!enabled) return;
+    musicEl.muted = false;
     playMusic();
   }
-
   const UNLOCK_EVENTS = ['pointerdown', 'touchstart', 'keydown'];
 
-  // Always attempt right away. If blocked, the first real gesture resumes
-  // the music (this also unlocks the gated UI effect playback).
+  // Start as soon as possible: audible if allowed, muted-autoplay otherwise.
   playMusic();
 
-  // A gesture is only needed if the optimistic attempt was rejected. Rather
-  // than tracking rejection state (some engines resolve.play() lazily), arm
-  // the unlock listeners once; they are cheap and self-remove afterwards.
+  // The first real gesture unmutes the muted fallback. The listeners are
+  // cheap and self-remove afterwards.
   let unlocked = false;
   const onFirstGesture = function () {
     if (unlocked) return;
@@ -130,5 +137,6 @@
     stopMusic,
     get enabled() { return enabled; },
     get musicPlaying() { return !musicEl.paused && !musicEl.ended; },
+    get musicMuted() { return musicEl.muted; },
   };
 })();
