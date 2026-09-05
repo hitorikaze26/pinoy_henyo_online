@@ -1494,6 +1494,24 @@ section { position: relative; z-index: 1; }
   border-radius: var(--radius-lg);
   padding: 1rem 1.25rem;
   box-shadow: 0 6px 22px rgba(15,23,42,0.25);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+/* The card matching the ACTIVE host session — visual beacon, never an
+   auto-switch: only clicking "Continue" changes which game the dashboard
+   targets. */
+.my-games__card--current {
+  border-color: rgba(74,222,128,0.55);
+  box-shadow: 0 0 0 1px rgba(74,222,128,0.25), 0 8px 28px rgba(34,197,94,0.18);
+}
+.my-games__current-badge {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  font: 700 0.74rem/1.3 'Inter', sans-serif;
+  color: #4ade80; letter-spacing: 0.04em;
+}
+.my-games__current-badge i { font-size: 0.6rem; animation: pulse 2s infinite; }
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
 }
 .my-games__card-main {
   display: flex; align-items: center; justify-content: space-between;

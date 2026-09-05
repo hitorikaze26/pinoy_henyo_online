@@ -291,6 +291,16 @@ const API = (() => {
     window.PINOY_GAME_ID = ctx.gameId;
     window.PINOY_TEAM_ID = ctx.teamId;
     window.PINOY_GAME_CODE = ctx.gameCode;
+
+    // Dev-safe trace of the restored host session (never logs token values).
+    if (ctx.hostToken || ctx.gameId) {
+      console.log('[HOST SESSION]', {
+        gameId: ctx.gameId,
+        gameCode: ctx.gameCode,
+        hostGameId: ctx.hostGameId,
+        hasHostToken: !!ctx.hostToken,
+      });
+    }
   }
 
   /* ---------- current game context (shared across pages) ---------- */

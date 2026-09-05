@@ -868,6 +868,11 @@ init();
   try {
     // Game code is only returned at creation; use the shared client context.
     const code = API.getGameCode() || (await GameAPI.status(gameId)).game_code;
+    console.log('[HOST DASHBOARD]', {
+      gameId,
+      gameCode: code,
+      teamsApiUrl: `${API.getBaseUrl()}/games/${gameId}/teams`,
+    });
     if (code) {
       STATE.gameCode = code;
       if (DOM.gameCodeDisplay) DOM.gameCodeDisplay.textContent = STATE.gameCode;

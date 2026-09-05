@@ -271,6 +271,7 @@ document.getElementById('form-start').addEventListener('submit', (e) => {
       API.setHostToken(game.host_session_token);
       API.setGameId(game.game_id);
       API.setGameCode(game.game_code);
+      API.setHostContext(game);
       window.PINOY_GAME = game;
 
       // Register this game in the device's "My Games" list (see api.js).

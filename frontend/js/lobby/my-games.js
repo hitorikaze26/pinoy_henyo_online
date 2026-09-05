@@ -148,6 +148,12 @@
   function cardHtml(g) {
     const live = isLive(g);
     const terminal = isTerminal(g);
+    // The card that matches the ACTIVE host session is marked so the user can
+    // see which saved game the dashboard will open before they click. Merely
+    // having a game in the registry never switches the session — only the
+    // explicit "Continue" button does that.
+    const activeGameId = API.getGameId();
+    const isCurrent = activeGameId && String(activeGameId) === String(g.game_id);
     const winner = (g.winner && g.winner.team_name)
       ? g.winner.team_name
       : (g.winner_name || null);
@@ -178,7 +184,8 @@
     ].filter(Boolean).join(' · ');
 
     return `
-      <article class="my-games__card" data-id="${g.game_id}">
+      <article class="my-games__card${isCurrent ? ' my-games__card--current' : ''}" data-id="${g.game_id}">
+        ${isCurrent ? `<div class="my-games__current-badge"><i class="fa-solid fa-circle"></i> Currently Hosting: ${esc(g.game_code || '')}</div>` : ''}
         <div class="my-games__card-main">
           <span class="my-games__code">${esc(g.game_code || '')}</span>
           <span class="my-games__status my-games__status--${live ? 'live' : (terminal ? 'done' : 'muted')}">
@@ -286,6 +293,13 @@
       if (typeof alert === 'function') alert('No host key stored for this game.');
       return;
     }
+    // Dev-safe trace (never logs the token itself).
+    console.log('[MY GAMES] continue → switching host session', {
+      game_id: g.game_id,
+      game_code: g.game_code || null,
+      from_game_id: API.getGameId() || null,
+      to_host_game_id: g.game_id,
+    });
     API.setHostToken(token);
     API.setGameId(g.game_id);
     API.setGameCode(g.game_code || '');
@@ -408,9 +422,17 @@
       if (typeof closeModal === 'function' && overlayDelete) closeModal(overlayDelete);
       deleteTarget = null;
 
-      // If the deleted game was the current host game, the host session is gone.
+      // If the deleted game was the current host game, the host session is
+      // gone. Compare against BOTH ids (gameId is authoritative; hostGameId
+      // may lag behind for sessions written before the Create Team flow set
+      // the full host context). Never leave a stale id pointing at a deleted
+      // game — the dashboard could otherwise keep using it.
+      const currentGameId = API.getGameId();
       const currentHostGame = API.getHostGameId();
-      if (currentHostGame && String(currentHostGame) === String(g.game_id)) {
+      const deletedIsCurrent =
+        String(g.game_id) === String(currentGameId) ||
+        (currentHostGame && String(g.game_id) === String(currentHostGame));
+      if (deletedIsCurrent) {
         // clearTokens() only wipes the live session; the My Games registry
         // (separate localStorage key) keeps the other games intact.
         API.clearTokens();
