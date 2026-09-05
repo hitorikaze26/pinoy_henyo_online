@@ -159,8 +159,8 @@
       : (g.winner_name || null);
 
     const continueBtn = live
-      ? `<button type="button" class="my-games__act my-games__act--primary" data-act="continue" data-id="${g.game_id}" title="Continue this game">
-           <i class="fa-solid fa-play"></i> Continue
+      ? `<button type="button" class="my-games__act my-games__act--primary" data-act="continue" data-id="${g.game_id}" title="${isCurrent ? 'Open the dashboard for this game' : 'Switch the active host session to this game'}">
+           ${isCurrent ? '<i class="fa-solid fa-door-open"></i> Open Game' : '<i class="fa-solid fa-play"></i> Continue'}
          </button>`
       : '';
 
@@ -204,11 +204,29 @@
       setListHTML(emptyHtml());
       return;
     }
-    const live = games.filter(isLive);
-    const done = games.filter(isTerminal);
-    const other = games.filter((g) => !isLive(g) && !isTerminal(g));
+
+    // The game matching the ACTIVE host session is pinned to its own group so
+    // the currently-hosted game is unmistakable. It is a display decision
+    // only: nothing here switches the session — Continue (on other games) is
+    // the only action that changes which game is hosted.
+    const activeGameId = API.getGameId();
+    const current = activeGameId
+      ? games.find((g) => String(g.game_id) === String(activeGameId)) || null
+      : null;
+    const rest = current ? games.filter((g) => g !== current) : games;
 
     const groups = [];
+    if (current) {
+      groups.push(`<div class="my-games__group my-games__group--current">
+        <h3 class="my-games__group-title"><i class="fa-solid fa-circle"></i> Currently Hosting</h3>
+        ${cardHtml(current)}
+      </div>`);
+    }
+
+    const live = rest.filter(isLive);
+    const done = rest.filter(isTerminal);
+    const other = rest.filter((g) => !isLive(g) && !isTerminal(g));
+
     if (live.length) {
       groups.push(`<div class="my-games__group">
         <h3 class="my-games__group-title"><i class="fa-solid fa-bolt"></i> Active Games</h3>

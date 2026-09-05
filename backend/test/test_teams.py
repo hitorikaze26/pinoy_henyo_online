@@ -535,6 +535,45 @@ def test_list_teams_game_not_found(client):
     assert client.get("/api/games/999999/teams").status_code == 404
 
 
+def test_list_teams_only_returns_requested_games_teams(client):
+    """GET /api/games/<id>/teams must NEVER include teams from another game.
+
+    Regression: a response for game A must not contain a team whose game is B
+    (e.g. GET /api/games/11/teams must only return teams with game_id == 11).
+    """
+    a = client.post("/api/games").get_json()["data"]
+    b = client.post("/api/games").get_json()["data"]
+    team_a = _create_team(client, a["game_id"], team_name="Only in A", username="Ana")
+    team_b = _create_team(client, b["game_id"], team_name="Only in B", username="Ben")
+
+    # Requesting game A returns A's team, never B's.
+    res_a = client.get(
+        "/api/games/{}/teams".format(a["game_id"]),
+        headers={"X-Host-Token": a["host_session_token"]},
+    )
+    assert res_a.status_code == 200
+    ids_a = [t["team_id"] for t in res_a.get_json()["data"]["teams"]]
+    assert team_a["team_id"] in ids_a
+    assert team_b["team_id"] not in ids_a
+
+    # Requesting game B returns B's team, never A's.
+    res_b = client.get(
+        "/api/games/{}/teams".format(b["game_id"]),
+        headers={"X-Host-Token": b["host_session_token"]},
+    )
+    assert res_b.status_code == 200
+    ids_b = [t["team_id"] for t in res_b.get_json()["data"]["teams"]]
+    assert team_b["team_id"] in ids_b
+    assert team_a["team_id"] not in ids_b
+
+    # The wrong token must not unlock the other game either.
+    res_cross = client.get(
+        "/api/games/{}/teams".format(b["game_id"]),
+        headers={"X-Host-Token": a["host_session_token"]},
+    )
+    assert res_cross.status_code == 401
+
+
 # ---------------------------------------------------------------------------
 # Host connection approval workflow (connection_status state machine)
 # ---------------------------------------------------------------------------
