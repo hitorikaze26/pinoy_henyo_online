@@ -830,3 +830,51 @@ def test_connection_status_is_persisted_not_device_presence(client):
         headers={"X-Host-Token": host_token},
     ).get_json()["data"]["teams"]
     assert roster[0]["connection_status"] == "CONNECTED"
+
+
+def test_connect_prefers_connection_token_over_stale_session(client, app):
+    """A fresh connection_token must win over a stale persisted session_token.
+    Otherwise a player who creates a team in a NEW game from a browser that
+    already has an old session re-binds to the old game/team, and the new team
+    is left orphaned (host sees no pending request)."""
+    # 1) Game A + Team A with an established device session.
+    game_a = _create_game(client)
+    team_a = _create_team(client, game_a, team_name="Team A")
+    old_session = _connect(
+        client,
+        connection_token=team_a["leader"]["connection_token"],
+        device_id="dev-shared",
+    ).get_json()["data"]
+    assert old_session["game_id"] == game_a
+    assert old_session["team_id"] == team_a["team_id"]
+
+    # 2) Game B + Team B joined from the SAME device/browser.
+    game_b = _create_game(client)
+    team_b = _create_team(client, game_b, team_name="Team B")
+
+    # 3) Both tokens presented: the fresh connection token must win, and the
+    #    resulting session must belong to Game B / Team B / Member B.
+    response = _connect(
+        client,
+        connection_token=team_b["leader"]["connection_token"],
+        session_token=old_session["session_token"],
+        device_id="dev-shared",
+    )
+    assert response.status_code == 201
+    data = response.get_json()["data"]
+    assert data["game_id"] == game_b
+    assert data["team_id"] == team_b["team_id"]
+    assert data["member_id"] == team_b["leader"]["member_id"]
+    assert data["session_token"] != old_session["session_token"]
+
+    # 4) The stale Team A session was superseded (marked disconnected), not
+    #    reused; the old member has no active session left.
+    with app.app_context():
+        old = db.session.query(DeviceSession).filter_by(
+            session_token=old_session["session_token"]
+        ).first()
+        old_member = db.session.get(TeamMember, team_a["leader"]["member_id"])
+        old_member_has_active = team_service._member_has_active_session(old_member.id)
+    assert old is not None
+    assert old.disconnected_at is not None
+    assert not old_member_has_active

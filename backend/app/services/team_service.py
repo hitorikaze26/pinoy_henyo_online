@@ -486,6 +486,70 @@ def connect_device(connection_token=None, session_token=None, device_id=None):
     if not device_id:
         raise DeviceIdRequiredError("device_id is required.")
 
+    if connection_token:
+        # A fresh connection token (create/join/add-member) is authoritative:
+        # the device is always bound to THAT member/team/game. A stale
+        # session_token forwarded by an older client is superseded instead of
+        # being reused, so a new team is never orphaned behind the previous
+        # game/team session.
+        member = TeamMember.query.filter_by(
+            connection_token=connection_token
+        ).first()
+        if member is None:
+            raise ConnectionTokenInvalidError(
+                "Invalid connection token."
+            )
+        team = member.team
+        if session_token:
+            stale = _get_device_session(session_token)
+            if stale.device_id != device_id:
+                raise UnauthorizedDeviceError(
+                    "This session belongs to a different device."
+                )
+            stale.disconnected_at = now
+            stale_member = stale.member
+            if (
+                stale_member is not None
+                and not _member_has_active_session(stale_member.id)
+            ):
+                stale_member.is_connected = False
+        _deactivate_active_sessions(member.id, now)
+        device_type = (
+            DeviceSession.DEVICE_TYPE_TEAM_LEADER
+            if member.device_role == TeamMember.DEVICE_ROLE_TEAM_LEADER
+            else DeviceSession.DEVICE_TYPE_TEAM_MEMBER
+        )
+        session = DeviceSession(
+            game_id=team.game_id,
+            team_id=team.id,
+            member_id=member.id,
+            device_id=device_id,
+            session_token=secrets.token_urlsafe(32),
+            device_type=device_type,
+            connected_at=now,
+            last_heartbeat=now,
+        )
+        db.session.add(session)
+        try:
+            db.session.flush()
+        except IntegrityError:
+            db.session.rollback()
+            raise TeamServiceError("Could not establish a device session.")
+        member.is_connected = True
+        member.last_seen_at = now
+        _record_event(
+            team.game,
+            "DEVICE_CONNECTED",
+            {
+                "session_id": session.id,
+                "game_id": team.game_id,
+                "team_id": team.id,
+                "member_id": member.id,
+                "device_type": device_type,
+            },
+        )
+        return session
+
     if session_token:
         session = _get_device_session(session_token)
         if session.device_id != device_id:
@@ -500,54 +564,9 @@ def connect_device(connection_token=None, session_token=None, device_id=None):
             member.last_seen_at = now
         return session
 
-    if not connection_token:
-        raise ConnectionTokenRequiredError(
-            "Either connection_token or session_token is required."
-        )
-    member = TeamMember.query.filter_by(
-        connection_token=connection_token
-    ).first()
-    if member is None:
-        raise ConnectionTokenInvalidError(
-            "Invalid connection token."
-        )
-    team = member.team
-    _deactivate_active_sessions(member.id, now)
-    device_type = (
-        DeviceSession.DEVICE_TYPE_TEAM_LEADER
-        if member.device_role == TeamMember.DEVICE_ROLE_TEAM_LEADER
-        else DeviceSession.DEVICE_TYPE_TEAM_MEMBER
+    raise ConnectionTokenRequiredError(
+        "Either connection_token or session_token is required."
     )
-    session = DeviceSession(
-        game_id=team.game_id,
-        team_id=team.id,
-        member_id=member.id,
-        device_id=device_id,
-        session_token=secrets.token_urlsafe(32),
-        device_type=device_type,
-        connected_at=now,
-        last_heartbeat=now,
-    )
-    db.session.add(session)
-    try:
-        db.session.flush()
-    except IntegrityError:
-        db.session.rollback()
-        raise TeamServiceError("Could not establish a device session.")
-    member.is_connected = True
-    member.last_seen_at = now
-    _record_event(
-        team.game,
-        "DEVICE_CONNECTED",
-        {
-            "session_id": session.id,
-            "game_id": team.game_id,
-            "team_id": team.id,
-            "member_id": member.id,
-            "device_type": device_type,
-        },
-    )
-    return session
 
 
 def heartbeat(session_token, device_id=None):

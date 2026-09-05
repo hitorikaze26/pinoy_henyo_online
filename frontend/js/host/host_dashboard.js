@@ -1026,6 +1026,38 @@ function renderRealQr(container, dataUri) {
     return roster.slice().sort((a, b) => a.team_id - b.team_id);
   }
 
+  // Authoritative roster merged with score data. A team is ALWAYS listed even
+  // when it has no matches yet (lobby/setup stage); match-specific fields
+  // default to empty values instead of dropping the team from the UI.
+  function rankedTeams() {
+    const totals = {};
+    scores.forEach((s) => {
+      const cur = totals[s.team_id] || { points: 0, penalties: 0, passes: 0 };
+      totals[s.team_id] = {
+        points: cur.points + (s.points || 0),
+        penalties: cur.penalties + (s.penalty_seconds || 0),
+        passes: cur.passes + (s.passed_words || 0),
+      };
+    });
+    return allRosterTeams()
+      .map((t) => {
+        const row = totals[t.team_id] || { points: 0, penalties: 0, passes: 0 };
+        return {
+          team_id: t.team_id,
+          team_name: t.team_name || teamNameOf(t.team_id),
+          points: row.points,
+          penalties: row.penalties,
+          passes: row.passes,
+        };
+      })
+      .sort((a, b) => (b.points - a.points) || (a.team_id - b.team_id));
+  }
+
+  // True when the team has at least one COMPLETED match (status-chip dot).
+  function teamHasCompletedMatch(teamId) {
+    return matches.some((m) => m.team_id === teamId && m.status === 'COMPLETED');
+  }
+
   // Round-major ordering (matches of round 1 then round 2), then match_order.
   function orderedMatches() {
     return matches.slice().sort(
@@ -1220,12 +1252,12 @@ function renderRealQr(container, dataUri) {
   function renderTeamStatus() {
     const grid = $('team-status-grid');
     if (!grid) return;
-    const rows = orderedMatches().slice(0, 8).map((m) => {
-      const done = m.status === 'COMPLETED';
+    const rows = rankedTeams().slice(0, 8).map((t) => {
+      const done = teamHasCompletedMatch(t.team_id);
       return '<div class="team-status-chip">' +
         '<span class="team-status-chip__dot ' + (done ? '' : 'team-status-chip__dot--online') + '"></span>' +
-        '<span>' + teamNameOf(m.team_id) + '</span>' +
-        '<span class="team-status-chip__score">' + teamScore(m.team_id) + ' pts</span>' +
+        '<span>' + t.team_name + '</span>' +
+        '<span class="team-status-chip__score">' + t.points + ' pts</span>' +
         '</div>';
     });
     grid.innerHTML = rows.join('') || '<div class="team-status-chip">No teams</div>';
@@ -1234,10 +1266,7 @@ function renderRealQr(container, dataUri) {
   function renderLeaderboard() {
     const list = $('leaderboard-list');
     if (!list) return;
-    const ranked = orderedMatches()
-      .map((m) => ({ team_id: m.team_id, points: teamScore(m.team_id) }))
-      .filter((t, i, arr) => arr.findIndex((x) => x.team_id === t.team_id) === i)
-      .sort((a, b) => b.points - a.points);
+    const ranked = rankedTeams().sort((a, b) => b.points - a.points);
 
     const medals = ['gold', 'silver', 'bronze'];
     list.innerHTML = ranked.map((t, i) => {
@@ -1248,7 +1277,7 @@ function renderRealQr(container, dataUri) {
         : String(i + 1);
       return '<li class="lb-item ' + (isActive ? 'lb-item--active' : '') + '">' +
         '<span class="lb-medal ' + medalClass + '" aria-hidden="true">' + rankLabel + '</span>' +
-        '<span class="lb-team-name">' + teamNameOf(t.team_id) + '</span>' +
+        '<span class="lb-team-name">' + t.team_name + '</span>' +
         '<span class="lb-score-wrap"><span class="lb-pts">' + t.points + ' pts</span></span>' +
         '</li>';
     }).join('') || '<li class="lb-item">No scores yet</li>';
@@ -1257,20 +1286,14 @@ function renderRealQr(container, dataUri) {
   function renderAllTeams() {
     const tbody = $('all-teams-tbody');
     if (!tbody) return;
-    const rows = orderedMatches()
-      .map((m) => ({ team_id: m.team_id, points: teamScore(m.team_id) }))
-      .filter((t, i, arr) => arr.findIndex((x) => x.team_id === t.team_id) === i)
-      .sort((a, b) => b.points - a.points);
-    tbody.innerHTML = rows.map((t) => {
-      const teamRows = scores.filter((s) => s.team_id === t.team_id);
-      const penalties = teamRows.reduce((a, s) => a + (s.penalty_seconds || 0), 0);
-      const passes = teamRows.reduce((a, s) => a + (s.passed_words || 0), 0);
+    const rows = rankedTeams();
+    tbody.innerHTML = rows.map((t, idx) => {
       const online = teamConnected(t.team_id);
-      return '<tr><td>' + (rows.indexOf(t) + 1) + '</td>' +
-        '<td style="font-weight:700;color:#fff">' + teamNameOf(t.team_id) + '</td>' +
+      return '<tr><td>' + (idx + 1) + '</td>' +
+        '<td style="font-weight:700;color:#fff">' + t.team_name + '</td>' +
         '<td style="color:var(--primary-300);font-weight:700">' + t.points + '</td>' +
-        '<td style="color:var(--gray-400)">' + penalties + '</td>' +
-        '<td style="color:var(--gray-600)">' + passes + '</td>' +
+        '<td style="color:var(--gray-400)">' + t.penalties + '</td>' +
+        '<td style="color:var(--gray-600)">' + t.passes + '</td>' +
         '<td><span style="color:' + (online ? 'var(--secondary-400)' : 'var(--gray-500)') + '">' +
         (online ? '● Connected' : '○ Offline') + '</span></td></tr>';
     }).join('') || '<tr><td colspan="6">No teams</td></tr>';

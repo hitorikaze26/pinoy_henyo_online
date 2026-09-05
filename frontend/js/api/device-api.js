@@ -14,16 +14,21 @@ const DeviceAPI = (() => {
 
   // POST /api/devices/connect  { connection_token?, session_token?, device_id }
   // - With a `connection_token` (from create/join/add-member): establishes a
-  //   brand-new device session for that member.
-  // - With a `session_token` (persisted, same device): RE-CONNECTS / restores
-  //   the existing session (clears disconnected_at, marks connected).
+  //   brand-new device session for that member. A fresh token is authoritative,
+  //   so a previously persisted session_token is never forwarded — the new
+  //   team/join must not be re-bound to an old game/team session.
+  // - With a `session_token` ONLY (persisted, same device): RE-CONNECTS /
+  //   restores the existing session (clears disconnected_at, marks connected).
   // The returned session payload contains game_id, team_id, member_id,
   // and device_type. We store that identity for cross-page restoration.
   async function connect({ connectionToken } = {}) {
     const body = { device_id: getDeviceId() };
-    const existing = API.getSessionToken();
-    if (existing) body.session_token = existing;
-    if (connectionToken) body.connection_token = connectionToken;
+    if (connectionToken) {
+      body.connection_token = connectionToken;
+    } else {
+      const existing = API.getSessionToken();
+      if (existing) body.session_token = existing;
+    }
     const data = await API.request('/devices/connect', { method: 'POST', body });
 
     if (data && data.session_token) {
