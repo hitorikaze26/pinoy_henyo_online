@@ -84,28 +84,39 @@
   /* ---------- live status refresh (public endpoint) ---------- */
   // The registry remembers status only as of last interaction; call the
   // public GET /games/<id>/status to pull the current server truth for
-  // games, then persist any changes back into the registry.
+  // games, then persist any changes back into the registry. Runs with a
+  // small worker pool so a long/slow backend can't stall the whole list.
+  const STATUS_CONCURRENCY = 4;
+
   async function refreshStatuses(list) {
-    let changed = false;
-    for (const g of list) {
-      if (TERMINAL_STATUSES.has(g.status)) continue; // finished = finished
-      try {
-        const fresh = await GameAPI.status(g.game_id);
-        if (fresh && fresh.status) {
-          const prev = g.status;
-          g.status = fresh.status;
-          if (fresh.current_round != null) g.current_round = fresh.current_round;
-          if (fresh.ended_at) g.ended_at = fresh.ended_at;
-          if (!g.created_at && fresh.created_at) g.created_at = fresh.created_at;
-          if (prev !== fresh.status) changed = true;
-        }
-      } catch (e) { /* 404/network: keep the stored entry as-is */ }
+    const jobs = list.filter((g) => !TERMINAL_STATUSES.has(g.status));
+    if (!jobs.length) return list;
+
+    const changed = [];
+    let idx = 0;
+    async function worker() {
+      while (idx < jobs.length) {
+        const g = jobs[idx++];
+        try {
+          const fresh = await GameAPI.status(g.game_id);
+          if (fresh && fresh.status) {
+            const prev = g.status;
+            g.status = fresh.status;
+            if (fresh.current_round != null) g.current_round = fresh.current_round;
+            if (fresh.ended_at) g.ended_at = fresh.ended_at;
+            if (!g.created_at && fresh.created_at) g.created_at = fresh.created_at;
+            if (prev !== fresh.status) changed.push(g);
+          }
+        } catch (e) { /* 404/network: keep the stored entry as-is */ }
+      }
     }
-    if (changed) {
-      list.forEach((g) => API.updateMyGame({
-        game_id: g.game_id, status: g.status, ended_at: g.ended_at,
-      }));
-    }
+
+    await Promise.all(
+      Array.from({ length: Math.min(STATUS_CONCURRENCY, jobs.length) }, worker)
+    );
+    changed.forEach((g) => API.updateMyGame({
+      game_id: g.game_id, status: g.status, ended_at: g.ended_at || undefined,
+    }));
     return list;
   }
 

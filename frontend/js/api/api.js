@@ -25,6 +25,10 @@ const API = (() => {
 
   const SERVER_ERROR = { code: 'NETWORK_ERROR', message: 'Could not reach the server. Please try again.' };
 
+  // Default per-request timeout so no button can ever hang forever (free-tier
+  // backends sleep and take a while to cold-start).
+  const DEFAULT_TIMEOUT_MS = 15000;
+
   let baseUrl = (_cfg && _cfg.API_BASE_URL) || window.PINOY_API_BASE || DEFAULT_BASE;
 
   /* ============================================================
@@ -353,7 +357,7 @@ const API = (() => {
   /* ============================================================
      Core request
      ============================================================ */
-  async function request(path, { method = 'GET', body, params, host = false, session = false } = {}) {
+  async function request(path, { method = 'GET', body, params, host = false, session = false, timeout = DEFAULT_TIMEOUT_MS } = {}) {
     let url = `${baseUrl}${path}`;
     if (params && typeof params === 'object') {
       const qs = Object.keys(params)
@@ -377,15 +381,27 @@ const API = (() => {
       headers['X-Host-Token'] = ctx.hostToken;
     }
 
+    const controller = (typeof AbortController !== 'undefined' && timeout > 0)
+      ? new AbortController()
+      : null;
+    let tid = null;
+    if (controller) tid = setTimeout(() => controller.abort(), timeout);
+
     let payload;
     try {
       payload = await fetch(url, {
         method,
         headers,
         body: body === undefined ? undefined : JSON.stringify(body),
+        signal: controller ? controller.signal : undefined,
       });
     } catch (err) {
-      throw { network: true, code: 'NETWORK_ERROR', message: SERVER_ERROR.message, status: 0 };
+      const timedOut = controller && err && err.name === 'AbortError';
+      throw timedOut
+        ? { network: true, code: 'TIMEOUT_ERROR', message: 'The server took too long to respond. Please try again.', status: 0 }
+        : { network: true, code: 'NETWORK_ERROR', message: SERVER_ERROR.message, status: 0 };
+    } finally {
+      if (tid !== null) { clearTimeout(tid); tid = null; }
     }
 
     let json = null;
@@ -449,6 +465,41 @@ const API = (() => {
     });
   }
 
+  /* ============================================================
+     Cold-start warm-up.
+     ------------------------------------------------------------
+     Free-tier hosts (Render) sleep after inactivity; the first
+     request after a nap can take ~30-60s to boot. This pings the
+     cheap, unthrottled GET /health endpoint until it answers, so
+     the caller can show honest progress and then fire its real
+     (one-shot, potentially non-idempotent) request — retrying a
+     POST instead would risk creating duplicate games. A GET can be
+     retried freely.
+     ============================================================ */
+  const WAKE_ATTEMPTS = 8;
+  const WAKE_INTERVAL_MS = 8000;
+  const WAKE_TIMEOUT_MS = 10000;
+
+  function delay(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  // Resolves true once the backend answers /health (i.e. it is warm).
+  // onAttempt(i, total) lets the UI report "Waking up (#/8)…".
+  async function wakeServer({ attempts = WAKE_ATTEMPTS, intervalMs = WAKE_INTERVAL_MS, onAttempt = null } = {}) {
+    for (let i = 1; i <= attempts; i++) {
+      if (typeof onAttempt === 'function') onAttempt(i, attempts);
+      try {
+        await request('/health', { timeout: WAKE_TIMEOUT_MS });
+        return true;
+      } catch (e) {
+        // Instance still booting (network error / timeout / 502 during start).
+      }
+      if (i < attempts) await delay(intervalMs);
+    }
+    return false;
+  }
+
   // Bootstrap: restore any previously-stored identity on page load so
   // multi-page navigation keeps the host/session context alive.
   restoreFromStorage();
@@ -500,6 +551,7 @@ const API = (() => {
     withLoading,
     isLoading,
     loadingButtons,
+    wakeServer,
     messageForStatus,
   };
 })();

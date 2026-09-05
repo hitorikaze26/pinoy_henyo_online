@@ -129,6 +129,21 @@ document.getElementById('btn-are-you-host').addEventListener('click', async () =
   API.clearTokens();
 
   try {
+    const woke = await API.wakeServer({
+      onAttempt: (i, total) => {
+        btn.innerHTML = i === 1
+          ? '<i class="fa-solid fa-spinner fa-spin"></i> Connecting to server…'
+          : '<i class="fa-solid fa-mug-hot"></i> Waking up the game server (' + i + '/' + total + ')…';
+      },
+    });
+    if (!woke) {
+      btn.disabled = false;
+      btn.innerHTML = original;
+      alert('The game server is taking too long to wake up. Please try again in a moment.');
+      return;
+    }
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Creating…';
+
     const game = await API.withLoading('create-game-host', () => GameAPI.create());
 
     // Store the host session + game context so host pages can reuse them.
@@ -233,8 +248,24 @@ document.getElementById('form-start').addEventListener('submit', (e) => {
   // don't linger and cause 404s on subsequent pages.
   API.clearTokens();
 
-  API.withLoading('create-game', () => GameAPI.create())
-    .then(async (game) => {
+  API.withLoading('create-game', async () => {
+      // Wake the (possibly sleeping) free-tier server BEFORE creating the
+      // game. Warming uses a safe GET; retrying the create POST instead
+      // could mint a duplicate game if the response was lost.
+      const woke = await API.wakeServer({
+        onAttempt: (i, total) => {
+          btn.innerHTML = i === 1
+            ? '<i class="fa-solid fa-spinner fa-spin"></i> Connecting to server…'
+            : '<i class="fa-solid fa-mug-hot"></i> Waking up the game server (' + i + '/' + total + ')…';
+        },
+      });
+      if (!woke) {
+        throw { code: 'SERVER_WAKE_TIMEOUT', message: 'The game server is taking too long to wake up. Please try again in a moment.' };
+      }
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Creating…';
+      return GameAPI.create();
+    })
+      .then(async (game) => {
       // Reserve the host session on disk so the host dashboard remains reachable,
       // but the creator below connects as a team-leader device session.
       API.setHostToken(game.host_session_token);
@@ -269,6 +300,12 @@ document.getElementById('form-start').addEventListener('submit', (e) => {
     .catch((err) => {
       btn.disabled = false;
       btn.innerHTML = original;
+
+      // Warm-up budget exhausted — tell the user and let them retry.
+      if (err && err.code === 'SERVER_WAKE_TIMEOUT') {
+        alert(err.message || 'The game server is taking too long to wake up. Please try again in a moment.');
+        return;
+      }
 
       // Surface validation errors from the backend into the form fields.
       if (err && err.code === 'USERNAME_INVALID') {
