@@ -354,13 +354,14 @@ ol, ul { list-style: none; }
 }
 
 /* ============================================================
-   3-COLUMN GRID
+   3-COLUMN GRID  —  35 / 40 / 25
 ============================================================ */
 .dash-grid {
   display: grid;
-  grid-template-columns: 1fr 320px 260px;
+  grid-template-columns: 35fr 40fr 25fr;
   gap: 1.1rem;
   flex: 1;
+  align-items: start;
 }
 
 /* Column base */
@@ -385,7 +386,7 @@ ol, ul { list-style: none; }
   background: var(--dash-surface);
   border: 1px solid var(--dash-border);
   border-radius: var(--r-lg);
-  padding: 1rem 1.1rem;
+  padding: 0.85rem 1rem;
 }
 
 /* ============================================================
@@ -402,22 +403,22 @@ ol, ul { list-style: none; }
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: rgba(255,255,255,0.4);
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.4rem;
 }
 .ctrl-card__label i { font-size: 0.65rem; color: var(--accent-1-400); }
 
 .ctrl-card__team-wrap {
-  margin-top: 0.4rem;
+  margin-top: 0.25rem;
 }
 
 .ctrl-card__team-select {
   width: 100%;
-  padding: 0.7rem 2.2rem 0.7rem 1rem;
+  padding: 0.55rem 2.2rem 0.55rem 0.85rem;
   background: var(--dash-surface-2);
   border: 1px solid var(--dash-border);
   border-radius: var(--r-md);
   font-family: 'Baloo 2', sans-serif;
-  font-size: 1.4rem;
+  font-size: 1.2rem;
   font-weight: 800;
   color: #fff;
   cursor: pointer;
@@ -429,7 +430,7 @@ ol, ul { list-style: none; }
   background-repeat: no-repeat;
   background-position: right 0.8rem center;
   background-size: 16px;
-transition: border-color 0.2s, box-shadow 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .ctrl-card__team-select:focus {
@@ -478,7 +479,7 @@ transition: border-color 0.2s, box-shadow 0.2s;
 .word-card {
   background: linear-gradient(135deg, var(--primary-600) 0%, var(--primary-800) 100%);
   border-color: rgba(255,255,255,0.12);
-  padding: 1.2rem 1.25rem;
+  padding: 0.9rem 1rem;
   position: relative;
   overflow: hidden;
 }
@@ -507,18 +508,17 @@ transition: border-color 0.2s, box-shadow 0.2s;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 72px;
+  min-height: 58px;
 }
 
 .word-card__word {
   font-family: 'Baloo 2', sans-serif;
-  font-size: clamp(2.2rem, 4vw, 3rem);
+  font-size: clamp(1.9rem, 3.2vw, 2.6rem);
   font-weight: 800;
   color: var(--accent-1-300);
   text-align: center;
   line-height: 1.1;
   text-shadow: 0 2px 12px rgba(0,0,0,0.3);
-  /* Word reveal animation class toggled by JS */
   will-change: opacity, transform;
 }
 
@@ -534,19 +534,72 @@ transition: border-color 0.2s, box-shadow 0.2s;
 /* --- Control Buttons Row — REMOVED, now lives in timer card --- */
 
 /* ============================================================
-   MIDDLE COLUMN — TIMER & PROGRESS
+   MIDDLE COLUMN — GAME CONTROL CONSOLE
+   Replaces the old timer-card as a single cohesive panel.
 ============================================================ */
 
-/* --- Timer Card --- */
-.timer-card {
+/* ── Console Card (outer shell) ── */
+.console-card {
   background: linear-gradient(160deg, var(--dash-surface) 0%, var(--dash-surface-2) 100%);
-  text-align: center;
-  padding: 1.4rem 1.25rem 1.3rem;
+  border: 1px solid var(--dash-border);
+  border-radius: var(--r-lg);
+  padding: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
 }
 
+.console-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.25rem 0;
+}
+
+.console-card__title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: 'Baloo 2', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.35);
+}
+.console-card__title i { color: var(--primary-400); font-size: 0.7rem; }
+
+/* ── Section label (shared) ── */
+.console-section-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.35);
+  margin-bottom: 0.65rem;
+}
+.console-section-label i { font-size: 0.65rem; color: rgba(255,255,255,0.25); }
+
+/* ── Divider between sections ── */
+.console-divider {
+  height: 1px;
+  background: var(--dash-border);
+  margin: 0 1.25rem;
+}
+
+/* ── Timer section ── */
+.console-timer {
+  padding: 0.75rem 1.25rem 1rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* -- legacy eyebrow (keep .timer-card__eyebrow selector in JS-land) -- */
 .timer-card__eyebrow {
   display: flex;
   align-items: center;
@@ -559,14 +612,14 @@ transition: border-color 0.2s, box-shadow 0.2s;
   color: rgba(255,255,255,0.35);
 }
 
-/* Digital display panel */
+/* Digital display panel — preserved exactly for JS state classes */
 .timer-card__display {
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
-  padding: 1.1rem 1rem 0.95rem;
+  gap: 0.45rem;
+  padding: 1.1rem 1rem 0.9rem;
   border-radius: var(--r-lg);
   background: linear-gradient(180deg, #0A1222 0%, #0D1626 100%);
   border: 1px solid var(--dash-border);
@@ -577,7 +630,6 @@ transition: border-color 0.2s, box-shadow 0.2s;
   transition: border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
-/* Soft top highlight */
 .timer-card__display::before {
   content: '';
   position: absolute;
@@ -589,7 +641,7 @@ transition: border-color 0.2s, box-shadow 0.2s;
 
 .timer-card__digits {
   font-family: 'Chivo Mono', ui-monospace, 'SF Mono', 'Cascadia Code', Consolas, monospace;
-  font-size: clamp(3.1rem, 6vw, 4.5rem);
+  font-size: clamp(3.5rem, 6.5vw, 5.2rem);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
@@ -601,7 +653,7 @@ transition: border-color 0.2s, box-shadow 0.2s;
   will-change: color, text-shadow;
 }
 
-/* Timer states — applied to the panel, drive the digits via descendants */
+/* Timer states */
 .timer-card__display.running { border-color: rgba(49,154,251,0.25); }
 .timer-card__display.running .timer-card__digits {
   animation: timerPulse 1.6s ease-in-out infinite;
@@ -665,25 +717,26 @@ transition: border-color 0.2s, box-shadow 0.2s;
 .timer-card__status.critical { color: var(--accent-2-400); border-color: rgba(184,3,30,0.45); }
 .timer-card__status.critical::before { background: var(--accent-2-400); box-shadow: 0 0 7px rgba(247,101,118,0.6); }
 
-/* Row 1: utility controls */
-.timer-card__util-row {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-}
-
-/* Row 2: game action controls */
+/* ── Primary timer controls row: [-3s] [START] [+3s] ── */
 .timer-card__action-row {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.6rem;
-  padding-top: 0.85rem;
-  border-top: 1px solid var(--dash-border);
+  gap: 0.75rem;
 }
 
-/* ---- ctrl-btn base (shared by both rows) ---- */
+/* ── Secondary utility controls row ── */
+.timer-card__util-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--dash-border-soft);
+  flex-wrap: wrap;
+}
+
+/* ── ctrl-btn base (shared across all rows) ── */
 .ctrl-btn {
   display: inline-flex;
   align-items: center;
@@ -703,8 +756,8 @@ transition: border-color 0.2s, box-shadow 0.2s;
 
 /* Icon-only (Sound) */
 .ctrl-btn--icon {
-  width: 42px; height: 42px;
-  font-size: 0.95rem;
+  width: 36px; height: 36px;
+  font-size: 0.88rem;
   background: var(--dash-surface-2);
   border: 1px solid var(--dash-border);
   color: rgba(255,255,255,0.6);
@@ -712,85 +765,111 @@ transition: border-color 0.2s, box-shadow 0.2s;
 }
 .ctrl-btn--sound { color: var(--accent-1-400); border-color: rgba(238,147,38,0.25); }
 
-/* Set Time */
+/* Set Time — secondary */
 .ctrl-btn--settime {
-  height: 42px;
-  padding: 0 1rem;
-  font-size: 0.8rem;
+  height: 36px;
+  padding: 0 0.85rem;
+  font-size: 0.75rem;
   background: var(--accent-1-500);
   color: #fff;
-  box-shadow: 0 3px 10px rgba(238,147,38,0.4);
+  box-shadow: 0 2px 8px rgba(238,147,38,0.35);
 }
-.ctrl-btn--settime:hover { box-shadow: 0 5px 16px rgba(238,147,38,0.55); }
+.ctrl-btn--settime:hover { box-shadow: 0 4px 14px rgba(238,147,38,0.5); }
 
-/* Reset */
+/* Reset — secondary */
 .ctrl-btn--reset {
-  height: 42px;
-  padding: 0 1rem;
-  font-size: 0.8rem;
+  height: 36px;
+  padding: 0 0.85rem;
+  font-size: 0.75rem;
   background: var(--dash-surface-3);
-  color: rgba(255,255,255,0.65);
+  color: rgba(255,255,255,0.6);
   border: 1px solid var(--dash-border);
 }
 .ctrl-btn--reset:hover { color: #fff; background: var(--gray-700); }
 
-/* -3 Penalty */
+/* Stop — secondary */
+.ctrl-btn--stop {
+  height: 36px;
+  padding: 0 0.85rem;
+  font-size: 0.75rem;
+  background: var(--accent-2-700);
+  color: rgba(255,255,255,0.85);
+  box-shadow: 0 2px 8px rgba(184,3,30,0.25);
+  border: 1px solid var(--accent-2-600);
+}
+.ctrl-btn--stop:hover { background: var(--accent-2-600); color: #fff; }
+
+/* Save — secondary */
+.ctrl-btn--save {
+  height: 36px;
+  padding: 0 0.85rem;
+  font-size: 0.75rem;
+  background: var(--primary-600);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(24,131,229,0.35);
+}
+.ctrl-btn--save:hover { box-shadow: 0 4px 14px rgba(24,131,229,0.5); }
+
+/* -3 Penalty — primary flanking */
 .ctrl-btn--penalty {
-  width: 46px; height: 46px;
-  font-size: 0.9rem;
+  width: 52px; height: 52px;
+  font-size: 0.95rem;
   background: var(--accent-2-500);
   color: #fff;
-  box-shadow: 0 3px 10px rgba(184,3,30,0.4);
+  box-shadow: 0 3px 12px rgba(184,3,30,0.4);
 }
-.ctrl-btn--penalty:hover { box-shadow: 0 5px 16px rgba(184,3,30,0.55); }
+.ctrl-btn--penalty:hover { box-shadow: 0 5px 18px rgba(184,3,30,0.58); }
 
-/* Start / Pause — large pill (replaces the old circle) */
+/* Start / Pause — PRIMARY button, center of the action row */
 .ctrl-btn--pause {
-  padding: 0 1.6rem;
-  height: 52px;
-  font-size: 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  padding: 0 2rem;
+  height: 60px;
+  font-size: 1.05rem;
   background: var(--secondary-500);
   color: #fff;
   border-radius: var(--r-full);
-  box-shadow: 0 4px 18px rgba(68,166,51,0.45);
-  gap: 0.5rem;
-  min-width: 120px;
+  box-shadow: 0 5px 22px rgba(68,166,51,0.5);
+  min-width: 140px;
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 800;
 }
-.ctrl-btn--pause:hover { box-shadow: 0 6px 22px rgba(68,166,51,0.6); }
-/* Running state */
+.ctrl-btn--pause:hover { box-shadow: 0 7px 28px rgba(68,166,51,0.65); }
 .ctrl-btn--pause.playing {
   background: var(--accent-1-500);
-  box-shadow: 0 4px 18px rgba(238,147,38,0.5);
+  box-shadow: 0 5px 22px rgba(238,147,38,0.55);
 }
-.ctrl-btn--pause.playing:hover { box-shadow: 0 6px 22px rgba(238,147,38,0.65); }
+.ctrl-btn--pause.playing:hover { box-shadow: 0 7px 28px rgba(238,147,38,0.7); }
+/* Label text inside the primary button */
+.ctrl-btn--pause__label {
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
 
-/* +3 Bonus */
+/* +3 Bonus — primary flanking */
 .ctrl-btn--bonus {
-  width: 46px; height: 46px;
-  font-size: 0.9rem;
+  width: 52px; height: 52px;
+  font-size: 0.95rem;
   background: var(--secondary-500);
   color: #fff;
-  box-shadow: 0 3px 10px rgba(68,166,51,0.4);
+  box-shadow: 0 3px 12px rgba(68,166,51,0.4);
 }
-.ctrl-btn--bonus:hover { box-shadow: 0 5px 16px rgba(68,166,51,0.55); }
+.ctrl-btn--bonus:hover { box-shadow: 0 5px 18px rgba(68,166,51,0.58); }
 
-/* Stop */
-.ctrl-btn--stop {
-  height: 46px;
-  padding: 0 1.1rem;
-  font-size: 0.82rem;
-  background: var(--accent-2-700);
-  color: #fff;
-  box-shadow: 0 3px 10px rgba(184,3,30,0.3);
-  border: 1px solid var(--accent-2-500);
+/* ── Game Actions section ── */
+.console-actions {
+  padding: 0.85rem 1.25rem;
 }
-.ctrl-btn--stop:hover { background: var(--accent-2-600); }
 
-/* --- Correct / Pass --- */
+/* ── Correct / Pass buttons ── */
 .action-buttons {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.65rem;
+  gap: 0.7rem;
 }
 
 .action-btn {
@@ -798,11 +877,11 @@ transition: border-color 0.2s, box-shadow 0.2s;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  padding: 0.85rem 1rem;
+  padding: 0.9rem 1rem;
   border-radius: var(--r-md);
   font-family: 'Baloo 2', sans-serif;
-  font-size: 1rem;
-  font-weight: 700;
+  font-size: 1.05rem;
+  font-weight: 800;
   cursor: pointer;
   position: relative;
   overflow: hidden;
@@ -814,11 +893,11 @@ transition: border-color 0.2s, box-shadow 0.2s;
 .action-btn--correct {
   background: var(--secondary-500);
   color: #fff;
-  box-shadow: 0 4px 16px rgba(68,166,51,0.45);
+  box-shadow: 0 4px 18px rgba(68,166,51,0.45);
 }
 .action-btn--correct:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 22px rgba(68,166,51,0.6);
+  box-shadow: 0 6px 24px rgba(68,166,51,0.62);
 }
 .action-btn--correct.celebrate { animation: correctCelebrate 0.5s ease; }
 @keyframes correctCelebrate {
@@ -839,13 +918,22 @@ transition: border-color 0.2s, box-shadow 0.2s;
   color: #fff;
   box-shadow: var(--shadow-md);
 }
+
+/* ── Progress section ── */
+.console-progress {
+  padding: 0.85rem 1.25rem 1rem;
+}
+
+/* ============================================================
+   LEFT COLUMN — TEAM STATUS BAR
+============================================================ */
 .team-status-bar__label {
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: rgba(255,255,255,0.35);
-  margin-bottom: 0.65rem;
+  margin-bottom: 0.5rem;
 }
 
 .team-status-bar__grid {
@@ -857,12 +945,12 @@ transition: border-color 0.2s, box-shadow 0.2s;
 .team-status-chip {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
   background: var(--dash-surface-2);
   border: 1px solid var(--dash-border);
   border-radius: var(--r-sm);
-  padding: 0.5rem 0.65rem;
-  font-size: 0.82rem;
+  padding: 0.4rem 0.55rem;
+  font-size: 0.78rem;
   font-weight: 600;
   color: rgba(255,255,255,0.75);
 }
@@ -887,8 +975,13 @@ transition: border-color 0.2s, box-shadow 0.2s;
   color: rgba(255,255,255,0.4);
 }
 
-/* --- Progress Card --- */
+/* --- Progress Card (now .console-progress inside console-card) --- */
 .progress-card { padding: 1.1rem; }
+/* When nested inside console-card, padding is handled by .console-progress */
+.console-progress .progress-card__header,
+.console-progress .progress-bar-wrap,
+.console-progress .progress-card__pct,
+.console-progress .progress-card__score-row { /* inherits from below */ }
 
 .progress-card__header {
   display: flex;
@@ -1797,16 +1890,7 @@ transition: border-color 0.2s, box-shadow 0.2s;
 /* ============================================================
    GAME SAVE + GAME OVER MODAL
 ============================================================ */
-/* Save (checkpoint) control button */
-.ctrl-btn--save {
-  height: 42px;
-  padding: 0 1rem;
-  font-size: 0.8rem;
-  background: var(--primary-600);
-  color: #fff;
-  box-shadow: 0 3px 10px rgba(24,131,229,0.4);
-}
-.ctrl-btn--save:hover { box-shadow: 0 5px 16px rgba(24,131,229,0.55); }
+/* Note: .ctrl-btn--save styles are defined in the console card section above */
 
 .dash-modal__confirm--danger {
   background: var(--accent-2-600);
@@ -1917,9 +2001,11 @@ transition: border-color 0.2s, box-shadow 0.2s;
 /* ============================================================
    RESPONSIVE
    ============================================================ */
+
+/* 1240px and below — stack right column under left+middle */
 @media (max-width: 1240px) {
   .dash-grid {
-    grid-template-columns: 1fr 300px;
+    grid-template-columns: 35fr 40fr;
   }
   .dash-col--right {
     grid-column: 1 / -1;
@@ -1929,6 +2015,7 @@ transition: border-color 0.2s, box-shadow 0.2s;
   }
 }
 
+/* 900px and below — single column */
 @media (max-width: 900px) {
   .dash-grid {
     grid-template-columns: 1fr;
@@ -1948,13 +2035,18 @@ transition: border-color 0.2s, box-shadow 0.2s;
   }
 }
 
+/* 620px and below — fine-tune for mobile */
 @media (max-width: 620px) {
   .timer-card__util-row,
   .timer-card__action-row {
     flex-wrap: wrap;
   }
   .timer-card__digits {
-    font-size: clamp(2.6rem, 14vw, 3.6rem);
+    font-size: clamp(2.8rem, 16vw, 4rem);
+  }
+  .ctrl-btn--pause {
+    min-width: 120px;
+    height: 54px;
   }
   .dash-nav {
     padding: 0 0.9rem;

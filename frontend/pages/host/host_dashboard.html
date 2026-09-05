@@ -189,109 +189,138 @@
         </section>
 
         <!-- ====================================================
-             MIDDLE COLUMN — Timer & Progress
+             MIDDLE COLUMN — Game Control Console
         ==================================================== -->
-        <section class="dash-col dash-col--middle" aria-label="Timer and Progress">
+        <section class="dash-col dash-col--middle" aria-label="Game Control Console">
 
-          <!-- Timer Card — all game controls live here -->
-          <div class="timer-card" id="timer-card">
+          <!-- ================================================
+               GAME CONTROL CONSOLE — single cohesive panel
+          ================================================ -->
+          <div class="console-card" id="timer-card">
 
-            <!-- Eyebrow label -->
-            <p class="timer-card__eyebrow">
-              <i class="fa-regular fa-clock"></i>
-              TIME REMAINING
-            </p>
-
-            <!-- Big timer digits -->
-            <div class="timer-card__display" id="timer-display-panel" aria-live="polite" aria-atomic="true" aria-label="Timer">
-              <span class="timer-card__digits" id="timer-display">1:35</span>
-              <span class="timer-card__status" id="timer-state">Ready</span>
-            </div>
-
-            <!-- Row 1: utility controls — Sound · Save · Set Time · Reset -->
-            <div class="timer-card__util-row">
-              <button class="ctrl-btn ctrl-btn--icon ctrl-btn--sound" id="btn-sound" aria-label="Toggle sound" title="Toggle sound">
-                <i class="fa-solid fa-volume-high" id="sound-icon"></i>
-              </button>
-              <button class="ctrl-btn ctrl-btn--save" id="btn-save-game" aria-label="Save game checkpoint" title="Save a checkpoint of this game">
-                <i class="fa-solid fa-floppy-disk"></i>
-                Save
-              </button>
-              <button class="ctrl-btn ctrl-btn--settime" id="btn-set-time" aria-label="Set time">
-                <i class="fa-regular fa-clock"></i>
-                Set Time
-              </button>
-              <button class="ctrl-btn ctrl-btn--reset" id="btn-timer-reset" aria-label="Reset timer">
-                <i class="fa-solid fa-rotate-left"></i>
-                Reset
-              </button>
-            </div>
-
-            <!-- Row 2: game action controls — -3s · Start/Pause · Stop · +3s -->
-            <div class="timer-card__action-row">
-              <button class="ctrl-btn ctrl-btn--penalty" id="btn-penalty" aria-label="Subtract 3 seconds">
-                <i class="fa-solid fa-minus"></i>
-                <span>3s</span>
-              </button>
-              <button class="ctrl-btn ctrl-btn--pause" id="btn-pause-play" aria-label="Start/Pause timer">
-                <i class="fa-solid fa-play" id="pause-icon"></i>
-              </button>
-              <button class="ctrl-btn ctrl-btn--stop" id="btn-stop" aria-label="Stop round">
-                <i class="fa-solid fa-stop"></i>
-                Stop
-              </button>
-              <button class="ctrl-btn ctrl-btn--bonus" id="btn-bonus" aria-label="Add 3 seconds">
-                <i class="fa-solid fa-plus"></i>
-                <span>3s</span>
-              </button>
-            </div>
-
-            <!-- Row 3: Correct / Pass -->
-            <div class="action-buttons">
-              <button class="action-btn action-btn--correct" id="btn-correct" aria-label="Mark word as correct">
-                <i class="fa-solid fa-check"></i>
-                Correct
-              </button>
-              <button class="action-btn action-btn--pass" id="btn-pass" aria-label="Pass this word">
-                <i class="fa-solid fa-forward"></i>
-                Pass
-              </button>
-            </div>
-
-          </div>
-
-          <!-- Progress Card -->
-          <div class="progress-card" id="progress-card">
-            <div class="progress-card__header">
-              <p class="progress-card__label">
-                <i class="fa-solid fa-chart-simple"></i>
-                Progress
-              </p>
-              <span class="progress-card__fraction">
-                <span id="words-correct">0</span>/<span id="words-total">0</span> Words
+            <!-- Console header -->
+            <div class="console-card__header">
+              <span class="console-card__title">
+                <i class="fa-solid fa-gamepad"></i>
+                Game Control
               </span>
             </div>
 
-            <div class="progress-bar-wrap" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="Word progress">
-              <div class="progress-bar" id="progress-bar" style="width: 0%;"></div>
-            </div>
-            <p class="progress-card__pct" id="progress-pct">60%</p>
+            <!-- ── TIMER SECTION ── -->
+            <div class="console-timer">
 
-            <div class="progress-card__score-row">
-              <div class="progress-card__stat">
-                <span class="progress-card__stat-label">Score</span>
-                <span class="progress-card__stat-val" id="current-score">0</span>
+              <p class="console-section-label">
+                <i class="fa-regular fa-clock"></i>
+                TIME REMAINING
+              </p>
+
+              <!-- Big timer digits -->
+              <div class="timer-card__display" id="timer-display-panel" aria-live="polite" aria-atomic="true" aria-label="Timer">
+                <span class="timer-card__digits" id="timer-display">1:35</span>
+                <span class="timer-card__status" id="timer-state">Ready</span>
               </div>
-              <div class="progress-card__stat">
-                <span class="progress-card__stat-label">Penalties</span>
-                <span class="progress-card__stat-val progress-card__stat-val--danger" id="current-penalties">0</span>
+
+              <!-- Primary timer controls: -3s · START/STOP · +3s -->
+              <div class="timer-card__action-row">
+                <button class="ctrl-btn ctrl-btn--penalty" id="btn-penalty" aria-label="Subtract 3 seconds" title="-3 seconds">
+                  <i class="fa-solid fa-minus"></i>
+                  <span>3s</span>
+                </button>
+                <button class="ctrl-btn ctrl-btn--pause" id="btn-pause-play" aria-label="Start/Pause timer">
+                  <i class="fa-solid fa-play" id="pause-icon"></i>
+                  <span class="ctrl-btn--pause__label">Start</span>
+                </button>
+                <button class="ctrl-btn ctrl-btn--bonus" id="btn-bonus" aria-label="Add 3 seconds" title="+3 seconds">
+                  <i class="fa-solid fa-plus"></i>
+                  <span>3s</span>
+                </button>
               </div>
-              <div class="progress-card__stat">
-                <span class="progress-card__stat-label">Passes</span>
-                <span class="progress-card__stat-val progress-card__stat-val--muted" id="current-passes">0</span>
+
+              <!-- Secondary controls: Sound · Save · Set Time · Reset · Stop -->
+              <div class="timer-card__util-row">
+                <button class="ctrl-btn ctrl-btn--icon ctrl-btn--sound" id="btn-sound" aria-label="Toggle sound" title="Toggle sound">
+                  <i class="fa-solid fa-volume-high" id="sound-icon"></i>
+                </button>
+                <button class="ctrl-btn ctrl-btn--save" id="btn-save-game" aria-label="Save game checkpoint" title="Save a checkpoint of this game">
+                  <i class="fa-solid fa-floppy-disk"></i>
+                  Save
+                </button>
+                <button class="ctrl-btn ctrl-btn--settime" id="btn-set-time" aria-label="Set time">
+                  <i class="fa-regular fa-clock"></i>
+                  Set Time
+                </button>
+                <button class="ctrl-btn ctrl-btn--reset" id="btn-timer-reset" aria-label="Reset timer">
+                  <i class="fa-solid fa-rotate-left"></i>
+                  Reset
+                </button>
+                <button class="ctrl-btn ctrl-btn--stop" id="btn-stop" aria-label="Stop round" title="Stop round">
+                  <i class="fa-solid fa-stop"></i>
+                  Stop
+                </button>
               </div>
-            </div>
-          </div>
+
+            </div><!-- /.console-timer -->
+
+            <!-- ── DIVIDER ── -->
+            <div class="console-divider" aria-hidden="true"></div>
+
+            <!-- ── GAME ACTIONS SECTION ── -->
+            <div class="console-actions">
+              <p class="console-section-label">
+                <i class="fa-solid fa-bolt"></i>
+                Game Actions
+              </p>
+              <div class="action-buttons">
+                <button class="action-btn action-btn--correct" id="btn-correct" aria-label="Mark word as correct">
+                  <i class="fa-solid fa-check"></i>
+                  Correct
+                </button>
+                <button class="action-btn action-btn--pass" id="btn-pass" aria-label="Pass this word">
+                  <i class="fa-solid fa-forward"></i>
+                  Pass
+                </button>
+              </div>
+            </div><!-- /.console-actions -->
+
+            <!-- ── DIVIDER ── -->
+            <div class="console-divider" aria-hidden="true"></div>
+
+            <!-- ── PROGRESS SECTION ── -->
+            <div class="console-progress" id="progress-card">
+
+              <div class="progress-card__header">
+                <p class="progress-card__label">
+                  <i class="fa-solid fa-chart-simple"></i>
+                  Progress
+                </p>
+                <span class="progress-card__fraction">
+                  <span id="words-correct">0</span>/<span id="words-total">0</span> Words
+                </span>
+              </div>
+
+              <div class="progress-bar-wrap" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="Word progress">
+                <div class="progress-bar" id="progress-bar" style="width: 0%;"></div>
+              </div>
+              <p class="progress-card__pct" id="progress-pct">0%</p>
+
+              <div class="progress-card__score-row">
+                <div class="progress-card__stat">
+                  <span class="progress-card__stat-label">Score</span>
+                  <span class="progress-card__stat-val" id="current-score">0</span>
+                </div>
+                <div class="progress-card__stat">
+                  <span class="progress-card__stat-label">Penalties</span>
+                  <span class="progress-card__stat-val progress-card__stat-val--danger" id="current-penalties">0</span>
+                </div>
+                <div class="progress-card__stat">
+                  <span class="progress-card__stat-label">Passes</span>
+                  <span class="progress-card__stat-val progress-card__stat-val--muted" id="current-passes">0</span>
+                </div>
+              </div>
+
+            </div><!-- /.console-progress -->
+
+          </div><!-- /.console-card -->
 
           <!-- Next Word Preview -->
           <div class="next-word-card">
