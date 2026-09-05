@@ -396,6 +396,25 @@ document.getElementById('form-join').addEventListener('submit', async (e) => {
   btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Connecting…';
 
   try {
+    // 0) Wake the possibly-sleeping free-tier server BEFORE the first
+    //    request, so a cold instance never makes this flow hang on a
+    //    silent request (long boot) or false-error out (15s timeout).
+    const woke = await API.wakeServer({
+      onAttempt: (i, total) => {
+        btn.innerHTML = i === 1
+          ? '<i class="fa-solid fa-spinner fa-spin"></i> Connecting to server…'
+          : '<i class="fa-solid fa-mug-hot"></i> Waking up the game server (' + i + '/' + total + ')…';
+      },
+    });
+    if (!woke) {
+      btn.disabled = false;
+      btn.innerHTML = original;
+      codeError.textContent = 'The game server is taking too long to wake up. Please try again in a moment.';
+      codeInput.classList.add('error');
+      return;
+    }
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Connecting…';
+
     // 1) Resolve the game by its public code.
     const game = await GameAPI.getByCode(code);
     const gameId = game.game_id;
