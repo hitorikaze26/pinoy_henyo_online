@@ -411,77 +411,36 @@ ol, ul { list-style: none; }
   margin-top: 0.25rem;
 }
 
-/* Current Turn — list of playing teams, one active at a time */
-.current-teams {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  max-height: 13rem;
-  overflow-y: auto;
-  padding-right: 0.15rem;
-}
-.current-teams__row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+/* Current Turn — dropdown of playing team pairs (custom-select enhanced).
+   Width must be 100% of the card; the wrapper also becomes the enhanced
+   button (the native select is hidden inside the wrapper). */
+.ctrl-card__team-wrap--select .dd__button {
   width: 100%;
-  padding: 0.45rem 0.6rem;
+  min-height: 2.5rem;
+  justify-content: space-between;
   background: var(--dash-surface-2);
   border: 1px solid var(--dash-border);
   border-radius: var(--r-md);
+  color: #fff;
   font-family: 'Baloo 2', sans-serif;
   font-size: 0.95rem;
   font-weight: 800;
-  color: #fff;
-  text-align: left;
-  cursor: pointer;
-  transition: border-color 0.18s, box-shadow 0.18s, background 0.18s;
 }
-.current-teams__row:hover {
+.ctrl-card__team-wrap--select .dd__button:hover {
   border-color: var(--accent-1-400);
-  background: rgba(255, 255, 255, 0.05);
 }
-.current-teams__row--active {
+.ctrl-card__team-wrap--select .dd--open .dd__button,
+.ctrl-card__team-wrap--select .dd__button[aria-expanded='true'] {
   border-color: var(--accent-1-400);
-  background: rgba(245, 185, 66, 0.10);
   box-shadow: 0 0 0 3px rgba(245, 185, 66, 0.18);
 }
-.current-teams__row:focus-visible {
-  outline: none;
-  border-color: var(--accent-1-400);
-  box-shadow: 0 0 0 3px rgba(245, 185, 66, 0.22);
-}
-.current-teams__dot {
-  width: 8px; height: 8px;
-  flex-shrink: 0;
-  border-radius: 50%;
-  background: var(--gray-600);
-}
-.current-teams__dot--online {
-  background: var(--secondary-400);
-  box-shadow: 0 0 6px var(--secondary-400);
-}
-.current-teams__name {
-  flex: 1;
-  min-width: 0;
+.ctrl-card__team-wrap--select .dd__label {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.current-teams__vs {
-  flex-shrink: 0;
-  font-size: 0.68rem;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.45);
-}
-.current-teams__pts {
-  flex-shrink: 0;
-  font-size: 0.75rem;
-  font-weight: 800;
-  color: var(--primary-300);
-}
-.current-teams__empty {
-  padding: 0.5rem 0.6rem;
+.ctrl-card__match-empty {
+  margin-top: 0.45rem;
   font-size: 0.8rem;
   color: rgba(255, 255, 255, 0.5);
 }
@@ -1631,6 +1590,42 @@ ol, ul { list-style: none; }
 .dash-modal__cancel:hover { color: #fff; background: rgba(255,255,255,0.07); }
 
 /* Set Time Modal */
+.set-time-for {
+  margin: 0 0 0.9rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--primary-300);
+  text-align: center;
+}
+.set-time-mode {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+.set-time-mode__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.6rem 0.5rem;
+  border-radius: var(--r-md);
+  border: 1.5px solid rgba(255,255,255,0.12);
+  background: var(--dash-surface-2);
+  color: rgba(255,255,255,0.6);
+  font-family: 'Baloo 2', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s, color 0.2s;
+}
+.set-time-mode__btn:hover { color: #fff; border-color: var(--primary-400); }
+.set-time-mode__btn--active {
+  color: #fff;
+  border-color: var(--primary-400);
+  background: rgba(49,154,251,0.15);
+  box-shadow: 0 0 0 3px rgba(49,154,251,0.18);
+}
 .set-time-inputs {
   display: flex;
   align-items: flex-end;

@@ -36,7 +36,43 @@ const RoundAPI = (() => {
     return API.request(`/games/${gameId}/rounds/${roundNumber}/categories`, { host: true });
   }
 
-  return { createRound, listRounds, selectRoundCategories, roundCategories };
+  // POST /api/games/<game_id>/rounds/<round_number>/timer  { timer_seconds, timer_mode }
+  function updateTimer(gameId, roundNumber, { timerSeconds, timerMode } = {}) {
+    const body = {};
+    if (timerSeconds !== undefined && timerSeconds !== null) body.timer_seconds = timerSeconds;
+    if (timerMode) body.timer_mode = timerMode;
+    return API.request(`/games/${gameId}/rounds/${roundNumber}/timer`, {
+      method: 'POST',
+      body,
+      host: true,
+    });
+  }
+
+  // POST /api/games/<game_id>/rounds/<round_number>/advance
+  function advanceRound(gameId, roundNumber) {
+    return API.request(`/games/${gameId}/rounds/${roundNumber}/advance`, {
+      method: 'POST',
+      host: true,
+    });
+  }
+
+  // POST /api/games/<game_id>/rounds/<round_number>/reset
+  function resetRound(gameId, roundNumber) {
+    return API.request(`/games/${gameId}/rounds/${roundNumber}/reset`, {
+      method: 'POST',
+      host: true,
+    });
+  }
+
+  return {
+    createRound,
+    listRounds,
+    selectRoundCategories,
+    roundCategories,
+    updateTimer,
+    advanceRound,
+    resetRound,
+  };
 })();
 
 if (typeof window !== 'undefined') window.RoundAPI = RoundAPI;

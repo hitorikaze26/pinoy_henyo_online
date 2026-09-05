@@ -219,6 +219,42 @@ def list_categories(game):
     return items
 
 
+DEFAULT_CATEGORY_NAMES = [
+    "Tao / People",
+    "Bagay / things / object",
+    "Lugar / place",
+    "Hayop / animal",
+    "Pagkain / food",
+    "Other",
+]
+
+
+def ensure_default_categories(game):
+    """Create the default categories for a game that currently has none.
+
+    Idempotent: only inserts when the game has zero categories, so it also
+    upgrades pre-existing games on their first words-page load. Returns the
+    full category payload list (including any newly created defaults).
+    """
+    if Category.query.filter_by(game_id=game.id).count() == 0:
+        for name in DEFAULT_CATEGORY_NAMES:
+            category = Category(game_id=game.id, name=name)
+            db.session.add(category)
+            try:
+                db.session.flush()
+            except IntegrityError:
+                db.session.rollback()
+                raise DuplicateCategoryError(
+                    "A category with this name already exists."
+                )
+            _record_event(
+                game,
+                "CATEGORY_CREATED",
+                {"category_id": category.id, "name": name},
+            )
+    return list_categories(game)
+
+
 def category_payload(category):
     return {
         "category_id": category.id,

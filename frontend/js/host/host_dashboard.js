@@ -60,6 +60,26 @@ const DOM = {
   btnPass:         $('btn-pass'),
   teamStatusGrid:  $('team-status-grid'),
 
+  // Current Turn team-select
+  teamSelect:      $('team-select'),
+  teamSelectEmpty: $('team-select-empty'),
+  btnSetTime:      $('btn-set-time'),
+  btnTimerReset:   $('btn-timer-reset'),
+  btnNextRound:    $('btn-next-round'),
+  btnResetRound:   $('btn-reset-round'),
+  nextRoundBadge:  $('next-round-badge'),
+
+  // Set Time Modal
+  modalSetTime:   $('modal-set-time'),
+  setTimeFor:     $('set-time-for'),
+  inputMinutes:   $('input-minutes'),
+  inputSeconds:   $('input-seconds'),
+  modeCountdown:  $('mode-countdown'),
+  modeCountup:    $('mode-countup'),
+  btnConfirmTime: $('btn-confirm-time'),
+  btnCancelTime:  $('btn-cancel-time'),
+  closeSetTime:   $('close-set-time'),
+
   // Timer
   timerDisplay:   $('timer-display'),
   timerPanel:     $('timer-display-panel'),
@@ -636,6 +656,121 @@ DOM.btnSound.addEventListener('click', () => {
 });
 
 /* ============================================================
+   CURRENT TURN TEAM SELECT (demo preview)
+   Live games overwrite this via gameplayIntegration.
+============================================================ */
+if (DOM.teamSelect) {
+  DOM.teamSelect.addEventListener('change', () => {
+    if (window.__PH_LIVE) return; // live layer owns the select
+    if (DOM.teamSelect.value) {
+      showToast('<i class="fa-solid fa-bolt"></i> Select a team pair when teams connect');
+      DOM.teamSelect.value = '';
+    }
+  });
+}
+
+/* ============================================================
+   SET TIME MODAL (demo preview)
+   Live games overwrite Apply via gameplayIntegration.
+============================================================ */
+let demoSetTimeMode = 'COUNTDOWN';
+function setTimeModeButtons(mode) {
+  demoSetTimeMode = mode;
+  const cd = DOM.modeCountdown;
+  const cu = DOM.modeCountup;
+  if (!cd || !cu) return;
+  const on = 'set-time-mode__btn--active';
+  cd.classList.toggle(on, mode !== 'COUNTUP');
+  cu.classList.toggle(on, mode === 'COUNTUP');
+  cd.setAttribute('aria-pressed', String(mode !== 'COUNTUP'));
+  cu.setAttribute('aria-pressed', String(mode === 'COUNTUP'));
+}
+function openSetTimeModal() {
+  if (DOM.setTimeFor) DOM.setTimeFor.textContent = 'Applies to Round ' + STATE.round;
+  const total = STATE.timerTotal > 0 ? STATE.timerTotal : 60;
+  if (DOM.inputMinutes) DOM.inputMinutes.value = String(Math.floor(total / 60));
+  if (DOM.inputSeconds) DOM.inputSeconds.value = String(total % 60);
+  setTimeModeButtons(demoSetTimeMode);
+  openModal(DOM.modalSetTime);
+}
+
+if (DOM.btnSetTime) {
+  DOM.btnSetTime.addEventListener('click', (e) => {
+    addRipple(DOM.btnSetTime, e);
+    if (window.__PH_LIVE) return; // live layer owns this button
+    openSetTimeModal();
+  });
+}
+
+document.querySelectorAll('.preset-btn').forEach((b) => {
+  b.addEventListener('click', () => {
+    const total = parseInt(b.dataset.seconds, 10) || 60;
+    if (DOM.inputMinutes) DOM.inputMinutes.value = String(Math.floor(total / 60));
+    if (DOM.inputSeconds) DOM.inputSeconds.value = String(total % 60);
+  });
+});
+
+if (DOM.modeCountdown) DOM.modeCountdown.addEventListener('click', () => setTimeModeButtons('COUNTDOWN'));
+if (DOM.modeCountup)   DOM.modeCountup.addEventListener('click', () => setTimeModeButtons('COUNTUP'));
+if (DOM.btnCancelTime) DOM.btnCancelTime.addEventListener('click', () => closeModal(DOM.modalSetTime));
+if (DOM.closeSetTime)  DOM.closeSetTime.addEventListener('click', () => closeModal(DOM.modalSetTime));
+
+if (DOM.btnConfirmTime) {
+  DOM.btnConfirmTime.addEventListener('click', () => {
+    if (window.__PH_LIVE) return; // live layer handles Apply
+    const mins = parseInt(DOM.inputMinutes.value, 10) || 0;
+    const secs = parseInt(DOM.inputSeconds.value, 10) || 0;
+    const total = mins * 60 + secs;
+    if (total < 1 || total > 300) {
+      showToast('<i class="fa-solid fa-triangle-exclamation"></i> Timer must be between 0:01 and 5:00');
+      return;
+    }
+    STATE.timerTotal = total;
+    STATE.timerLeft = Math.max(STATE.timerLeft, 0);
+    STATE.timerLeft = Math.min(STATE.timerLeft, total);
+    updateTimerDisplay();
+    closeModal(DOM.modalSetTime);
+    showToast('<i class="fa-regular fa-clock"></i> Timer set to ' + formatTime(total));
+  });
+}
+
+/* ============================================================
+   RESET TIMER / NEXT ROUND / RESET ROUND (demo preview)
+   Live games overwrite these via gameplayIntegration.
+============================================================ */
+if (DOM.btnTimerReset) {
+  DOM.btnTimerReset.addEventListener('click', (e) => {
+    addRipple(DOM.btnTimerReset, e);
+    if (window.__PH_LIVE) return;
+    resetTimer();
+    showToast('<i class="fa-solid fa-rotate-left"></i> Timer reset for the next team');
+  });
+}
+
+if (DOM.btnNextRound) {
+  DOM.btnNextRound.addEventListener('click', (e) => {
+    addRipple(DOM.btnNextRound, e);
+    if (window.__PH_LIVE) return;
+    if (STATE.round >= 3) {
+      showToast('Already at the final round');
+      return;
+    }
+    STATE.round += 1;
+    DOM.roundNumber.textContent = String(STATE.round);
+    if (DOM.nextRoundBadge) DOM.nextRoundBadge.textContent = 'Round ' + (STATE.round + 1);
+    showToast('<i class="fa-solid fa-forward-step"></i> Advanced to Round ' + STATE.round);
+  });
+}
+
+if (DOM.btnResetRound) {
+  DOM.btnResetRound.addEventListener('click', (e) => {
+    addRipple(DOM.btnResetRound, e);
+    if (window.__PH_LIVE) return;
+    showToast('Round ' + STATE.round + ' reset (demo)');
+  });
+}
+
+/* ============================================================
    COPY GAME CODE
 ============================================================ */
 function copyGameCode(code) {
@@ -700,6 +835,7 @@ function init() {
   DOM.roundNumber.textContent      = STATE.round;
   DOM.gameCodeDisplay.textContent  = STATE.gameCode;
   DOM.qrCodeLabel.textContent      = STATE.gameCode;
+  if (DOM.nextRoundBadge) DOM.nextRoundBadge.textContent = 'Round ' + (STATE.round + 1);
 
   // Timer
   updateTimerDisplay();
@@ -833,6 +969,7 @@ function renderRealQr(container, dataUri) {
 (function gameplayIntegration() {
   const gameId = API.getGameId();
   if (!gameId) return; // no live game -> keep the demo preview
+  window.__PH_LIVE = true; // demo handlers defer to this live layer
 
   const MIN_CORRECT = 3; // turn completes at 3 correct words
   const AUTO_WORDS  = 5; // MAX_WORDS_PER_TURN (backend caps at 5)
@@ -860,6 +997,7 @@ function renderRealQr(container, dataUri) {
 
   let matches = [];
   let scores = [];
+  let roundsCache = [];
   let roster = [];          // real team roster [{team_id, team_name, members:[...]}]
   let activeMatch = null;
   let turn = null;          // latest turn_play_payload (server truth)
@@ -871,12 +1009,14 @@ function renderRealQr(container, dataUri) {
 
   /* ---------- data loading ---------- */
   async function loadData() {
-    const [scoreRes, matchRes] = await Promise.all([
+    const [scoreRes, matchRes, roundRes] = await Promise.all([
       GameAPI.scores(gameId).catch(() => ({ scores: [] })),
       MatchAPI.listMatches(gameId).catch(() => ({ matches: [] })),
+      RoundAPI.listRounds(gameId).catch(() => ({ rounds: [] })),
     ]);
     scores = (scoreRes && scoreRes.scores) || [];
     matches = (matchRes && matchRes.matches) || [];
+    roundsCache = (roundRes && roundRes.rounds) || [];
     (scores || []).forEach((s) => {
       if (s.team_id && s.team_name) teamNameOf.register(s.team_id, s.team_name);
     });
@@ -973,6 +1113,30 @@ function renderRealQr(container, dataUri) {
     return 'Round ' + r;
   }
 
+  // The round a "Set Time" change should apply to: the lowest round number
+  // that is not yet started (from the rounds list), falling back to the round
+  // whose matches are currently being played.
+  function targetRoundNumber() {
+    if (roundsCache.length) {
+      const sorted = roundsCache.slice().sort((a, b) => a.round_number - b.round_number);
+      const notStarted = sorted.find((r) => !r.started_at);
+      const fallback = sorted.find((r) => r.round_number >= currentRoundFromMatches());
+      const pick = notStarted || fallback || sorted[0];
+      return pick ? pick.round_number : 1;
+    }
+    return currentRoundFromMatches();
+  }
+
+  function currentRoundFromMatches() {
+    if (!matches.length) return 1;
+    return orderedMatches()[0].round_number;
+  }
+
+  function roundByNumber(num) {
+    if (!roundsCache.length) return null;
+    return roundsCache.find((r) => r.round_number === num) || null;
+  }
+
   /* ---------- turn helpers ---------- */
   function setActiveTurn(payload) {
     turn = payload;
@@ -1056,29 +1220,27 @@ function renderRealQr(container, dataUri) {
   }
 
   /* ---------- UI rendering ---------- */
-  // "Current Turn" — list the teams that are actively playing in the current
-  // round (one row per pending match = the turn-owning team). One team is
-  // active at a time; clicking a row targets that team's match/turn in the
-  // console below.
-  function renderCurrentTeams() {
-    const el = $('current-teams');
-    if (!el) return;
+  // "Current Turn" — a dropdown of the pairs still playing in the current
+  // round (one option per pending match). Selecting an option targets that
+  // match/turn in the console below (custom-select enhanced).
+  function renderTeamSelect() {
+    const sel = $('team-select');
+    if (!sel) return;
+    const empty = $('team-select-empty');
     const pending = currentRoundMatches().filter((m) => m.status !== 'COMPLETED');
-    const rows = pending.map((m) => {
-      const isActive = !!(activeMatch && activeMatch.match_id === m.match_id);
-      const online = teamConnected(m.team_id);
+    const keep = activeMatch ? String(activeMatch.match_id) : '';
+    const opts = pending.map((m) => {
       const vs = m.opponent_team_id ? (' vs ' + teamNameOf(m.opponent_team_id)) : '';
-      return '<button type="button" class="current-teams__row' +
-        (isActive ? ' current-teams__row--active' : '') + '" data-match="' +
-        m.match_id + '" aria-pressed="' + (isActive ? 'true' : 'false') + '">' +
-        '<span class="current-teams__dot' + (online ? ' current-teams__dot--online' : '') + '"></span>' +
-        '<span class="current-teams__name">' + escHtml(teamNameOf(m.team_id)) + '</span>' +
-        (vs ? '<span class="current-teams__vs">' + escHtml(vs) + '</span>' : '') +
-        '<span class="current-teams__pts">' + teamScore(m.team_id) + ' pts</span>' +
-        '</button>';
+      return '<option value="' + m.match_id + '"' +
+        (String(m.match_id) === keep ? ' selected' : '') + '>' +
+        escHtml(teamNameOf(m.team_id) + vs) + '</option>';
     });
-    el.innerHTML = rows.join('') ||
-      '<div class="current-teams__empty">No teams playing yet</div>';
+    const placeholder = pending.length ? 'Select team pair…' : 'No playing teams yet';
+    sel.innerHTML = '<option value="">' + escHtml(placeholder) + '</option>' + opts.join('');
+    if (empty) empty.hidden = pending.length > 0;
+    const wrapper = sel.closest('.dd');
+    const api = wrapper && wrapper.__api;
+    if (api && api.renderOptions) api.renderOptions();
   }
 
   function renderCategory() {
@@ -1235,7 +1397,7 @@ function renderRealQr(container, dataUri) {
   }
 
   function renderAll() {
-    renderCurrentTeams();
+    renderTeamSelect();
     renderCategory();
     renderWord();
     renderQueue();
@@ -1248,6 +1410,11 @@ function renderRealQr(container, dataUri) {
     if (roundEl) roundEl.textContent = currentRoundLabel().replace('Round ', '');
     const lbBadge = document.querySelector('.leaderboard-card__round-badge');
     if (lbBadge) lbBadge.textContent = currentRoundLabel();
+    const nextBadge = $('next-round-badge');
+    if (nextBadge) {
+      const r = targetRoundNumber();
+      nextBadge.textContent = 'Round ' + (r + 1);
+    }
     tickDisplay();
   }
 
@@ -1571,14 +1738,12 @@ function renderRealQr(container, dataUri) {
   rebind('btn-penalty', (e) => handlePenalty(-3, e));
   rebind('btn-bonus', (e) => handlePenalty(+3, e));
 
-  // Current Turn team list — pick a pending match to control in the console.
-  // Mirrors the previous `#team-select` behavior but from the roster list.
-  const currentTeamsEl = $('current-teams');
-  if (currentTeamsEl) {
-    currentTeamsEl.addEventListener('click', (e) => {
-      const row = e.target.closest('.current-teams__row');
-      if (!row) return;
-      const mid = parseInt(row.getAttribute('data-match'), 10);
+  // Current Turn team-select — pick a pending match to control in the console.
+  const teamSelectEl = $('team-select');
+  if (teamSelectEl) {
+    teamSelectEl.addEventListener('change', () => {
+      const mid = parseInt(teamSelectEl.value, 10);
+      if (!mid) { activeMatch = null; setActiveTurn(null); renderAll(); return; }
       activeMatch = matches.find((m) => m.match_id === mid) || null;
       if (!activeMatch) { setActiveTurn(null); return; }
       // load an existing active/pending turn for this match if any
@@ -1598,6 +1763,115 @@ function renderRealQr(container, dataUri) {
       renderAll();
     });
   }
+
+  /* ---------- Set Time / Reset Timer / Next Round / Reset Round ---------- */
+  async function applySetTime() {
+    const mins = parseInt(($('input-minutes') || {}).value, 10) || 0;
+    const secs = parseInt(($('input-seconds') || {}).value, 10) || 0;
+    const total = mins * 60 + secs;
+    if (total < 1 || total > 300) {
+      toast('<i class="fa-solid fa-triangle-exclamation"></i> Timer must be between 0:01 and 5:00');
+      return;
+    }
+    const mode = $('mode-countup') && $('mode-countup').classList.contains('set-time-mode__btn--active')
+      ? 'COUNTUP' : 'COUNTDOWN';
+    const r = targetRoundNumber();
+    setBusy('btn-confirm-time', true);
+    try {
+      await RoundAPI.updateTimer(gameId, r, { timerSeconds: total, timerMode: mode })
+        .catch((err) => {
+          if (err && (err.code === 'ROUND_NOT_FOUND' || err.status === 404)) {
+            return RoundAPI.createRound(gameId, { roundNumber: r, timerSeconds: total, timerMode: mode });
+          }
+          throw err;
+        });
+      closeModal($('modal-set-time'));
+      toast('<i class="fa-regular fa-clock"></i> Round ' + r + ' timer set to ' + formatTime(total));
+      await loadData();
+      renderAll();
+    } catch (err) {
+      toast('<i class="fa-solid fa-triangle-exclamation"></i> ' + ((err && err.message) || 'Could not apply the timer.'));
+    } finally {
+      setBusy('btn-confirm-time', false);
+    }
+  }
+
+  function openSetTimeLive() {
+    const r = targetRoundNumber();
+    const roundObj = roundByNumber(r);
+    const total = roundObj && roundObj.timer_seconds ? roundObj.timer_seconds : 60;
+    const mode = roundObj && roundObj.timer_mode ? roundObj.timer_mode : 'COUNTDOWN';
+    if ($('set-time-for')) $('set-time-for').textContent = 'Applies to Round ' + r;
+    if ($('input-minutes')) $('input-minutes').value = String(Math.floor(total / 60));
+    if ($('input-seconds')) $('input-seconds').value = String(total % 60);
+    setTimeModeButtons(mode);
+    openModal($('modal-set-time'));
+  }
+
+  async function resetTimerLive() {
+    const active = turn && (turn.status === 'ACTIVE' || turn.status === 'PAUSED');
+    if (!active || !activeTurnId()) {
+      toast('<i class="fa-regular fa-clock"></i> No active turn to reset');
+      return;
+    }
+    setBusy('btn-timer-reset', true);
+    try {
+      await TurnAPI.end(activeTurnId());
+      setActiveTurn(null);
+      await loadData();
+      renderAll();
+      toast('<i class="fa-solid fa-rotate-left"></i> Turn ended — the next team starts fresh');
+    } catch (err) {
+      toast('<i class="fa-solid fa-triangle-exclamation"></i> ' + ((err && err.message) || 'Could not reset the timer.'));
+    } finally {
+      setBusy('btn-timer-reset', false);
+    }
+  }
+
+  async function nextRoundLive() {
+    const r = targetRoundNumber();
+    setBusy('btn-next-round', true);
+    try {
+      const payload = await RoundAPI.advanceRound(gameId, r);
+      toast('<i class="fa-solid fa-forward-step"></i> Advanced to Round ' + (payload.round_number || (r + 1)));
+      activeMatch = null;
+      setActiveTurn(null);
+      await loadData();
+      renderAll();
+    } catch (err) {
+      const map = {
+        NEXT_ROUND_MISSING: 'Set up the next round\u2019s matches first.',
+        ROUND_NOT_FOUND: 'This round has not been set up yet.',
+      };
+      toast('<i class="fa-solid fa-triangle-exclamation"></i> ' + (map[err.code] || (err && err.message) || 'Could not advance the round.'));
+    } finally {
+      setBusy('btn-next-round', false);
+    }
+  }
+
+  async function resetRoundLive() {
+    const r = targetRoundNumber();
+    if (!window.confirm('Reset Round ' + r + '? All turns, matches, and scores for this round will be erased.')) return;
+    setBusy('btn-reset-round', true);
+    try {
+      await RoundAPI.resetRound(gameId, r);
+      toast('<i class="fa-solid fa-rotate-left"></i> Round ' + r + ' reset');
+      activeMatch = null;
+      setActiveTurn(null);
+      await loadData();
+      renderAll();
+    } catch (err) {
+      toast('<i class="fa-solid fa-triangle-exclamation"></i> ' + ((err && err.message) || 'Could not reset the round.'));
+    } finally {
+      setBusy('btn-reset-round', false);
+    }
+  }
+
+  rebind('btn-set-time', () => { openSetTimeLive(); });
+  rebind('btn-confirm-time', applySetTime);
+  rebind('btn-timer-reset', resetTimerLive);
+  rebind('btn-next-round', nextRoundLive);
+  rebind('btn-reset-round', resetRoundLive);
 
   const viewAll = $('btn-view-all-teams');
   if (viewAll && typeof openModal === 'function') {

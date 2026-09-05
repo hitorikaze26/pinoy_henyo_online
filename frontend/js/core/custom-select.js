@@ -83,6 +83,7 @@
       close,
       toggle,
       renderOptions,
+      dropLift,
     };
     wrapper.__api = api;
 
@@ -130,11 +131,40 @@
     }
 
     /* ---------- open / close ---------- */
+    // Ancestors that create a stacking context (e.g. scroll-reveal sections
+    // with a `transform`) trap the absolute listbox below later siblings.
+    // While this dropdown is open, lift those ancestors so the listbox is
+    // guaranteed to paint above overlapping content.
+    let elevated = [];
+    function liftAncestors() {
+      elevated = [];
+      let n = wrapper.parentElement;
+      while (n && n !== document.body && n !== document.documentElement) {
+        const cs = getComputedStyle(n);
+        const isContext =
+          cs.transform !== 'none' ||
+          cs.perspective !== 'none' ||
+          cs.filter !== 'none' ||
+          (cs.backdropFilter || cs.webkitBackdropFilter) !== 'none' ||
+          /opacity|transform|filter|backdrop/.test(cs.willChange) ||
+          (cs.position !== 'static' && cs.zIndex !== 'auto') ||
+          parseFloat(cs.opacity) < 1;
+        if (isContext) elevated.push(n);
+        n = n.parentElement;
+      }
+      elevated.forEach((el) => el.classList.add('cs-elevate'));
+    }
+    function dropLift() {
+      elevated.forEach((el) => el.classList.remove('cs-elevate'));
+      elevated = [];
+    }
+
     function open() {
       renderOptions(); // re-sync label/options right before showing
       listbox.hidden = false;
       btn.setAttribute('aria-expanded', 'true');
       wrapper.classList.add('dd--open');
+      liftAncestors();
       active.wrapper = wrapper;
       const chosen = listbox.querySelector('.dd__option--selected') ||
         listbox.querySelector('.dd__option:not(.dd__option--disabled)');
@@ -144,6 +174,7 @@
       listbox.hidden = true;
       btn.setAttribute('aria-expanded', 'false');
       wrapper.classList.remove('dd--open');
+      dropLift();
       if (active.wrapper === wrapper) active.wrapper = null;
     }
     function toggle() { listbox.hidden ? open() : close(); }
@@ -259,6 +290,8 @@
       active.wrapper.classList.remove('dd--open');
       const b = active.wrapper.querySelector('.dd__button');
       if (b) b.setAttribute('aria-expanded', 'false');
+      const api = active.wrapper.__api;
+      if (api && api.dropLift) api.dropLift();
       active.wrapper = null;
     }
   });

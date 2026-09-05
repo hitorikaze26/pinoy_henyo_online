@@ -2,7 +2,16 @@ import pytest
 
 from app import create_app
 from app.extensions import db
-from app.models import Game, Match, TeamMember, Turn, TurnWord
+from app.models import (
+    Category,
+    Game,
+    Match,
+    Round,
+    Score,
+    TeamMember,
+    Turn,
+    TurnWord,
+)
 from app.services import gameplay_service
 
 HOST_TOKEN_HEADER = "X-Host-Token"
@@ -986,3 +995,202 @@ def test_readiness_detects_own_team_word(app, client):
 def test_readiness_requires_host(client):
     s = _basic_setup(client)
     assert client.get("/api/games/{}/readiness".format(s.game_id)).status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Round timer update / advance / reset
+# ---------------------------------------------------------------------------
+
+
+def _create_round_setup(client):
+    """A game with rounds 1 + 2, each with one head-to-head match, ready to play."""
+    s = _full_setup(client)
+    return s
+
+
+def test_update_round_timer(client):
+    s = _full_setup(client)
+    response = client.post(
+        "/api/games/{}/rounds/1/timer".format(s.game_id),
+        json={"timer_seconds": 120, "timer_mode": "COUNTUP"},
+        headers={HOST_TOKEN_HEADER: s.host},
+    )
+    assert response.status_code == 200
+    data = response.get_json()["data"]
+    assert data["round_number"] == 1
+    assert data["timer_seconds"] == 120
+    assert data["timer_mode"] == "COUNTUP"
+
+
+def test_update_round_timer_invalid_seconds(client):
+    s = _full_setup(client)
+    response = client.post(
+        "/api/games/{}/rounds/1/timer".format(s.game_id),
+        json={"timer_seconds": 0},
+        headers={HOST_TOKEN_HEADER: s.host},
+    )
+    assert response.status_code == 400
+    assert response.get_json()["error"]["code"] == "TIMER_CONFIG_INVALID"
+
+
+def test_update_round_timer_invalid_mode(client):
+    s = _full_setup(client)
+    response = client.post(
+        "/api/games/{}/rounds/1/timer".format(s.game_id),
+        json={"timer_mode": "SIDEWAYS"},
+        headers={HOST_TOKEN_HEADER: s.host},
+    )
+    assert response.status_code == 400
+    assert response.get_json()["error"]["code"] == "TIMER_CONFIG_INVALID"
+
+
+def test_update_round_timer_missing_args(client):
+    s = _full_setup(client)
+    response = client.post(
+        "/api/games/{}/rounds/1/timer".format(s.game_id),
+        json={},
+        headers={HOST_TOKEN_HEADER: s.host},
+    )
+    assert response.status_code == 400
+    assert response.get_json()["error"]["code"] == "TIMER_CONFIG_INVALID"
+
+
+def test_update_round_timer_round_missing(client):
+    s = _basic_setup(client)
+    response = client.post(
+        "/api/games/{}/rounds/1/timer".format(s.game_id),
+        json={"timer_seconds": 60},
+        headers={HOST_TOKEN_HEADER: s.host},
+    )
+    assert response.status_code == 404
+    assert response.get_json()["error"]["code"] == "ROUND_NOT_FOUND"
+
+
+def test_update_round_timer_locked_after_start(app, client):
+    s = _full_setup(client)
+    # Start round 1's turn so the round.started_at is set.
+    resp = client.post(
+        "/api/matches/{}/turn/start".format(s.match_a["match_id"]),
+        headers={HOST_TOKEN_HEADER: s.host},
+    )
+    assert resp.status_code == 200
+    response = client.post(
+        "/api/games/{}/rounds/1/timer".format(s.game_id),
+        json={"timer_seconds": 90},
+        headers={HOST_TOKEN_HEADER: s.host},
+    )
+    assert response.status_code == 409
+    assert response.get_json()["error"]["code"] == "ROUND_TIMER_LOCKED"
+
+
+def test_update_round_timer_requires_host(client):
+    s = _full_setup(client)
+    response = client.post(
+        "/api/games/{}/rounds/1/timer".format(s.game_id),
+        json={"timer_seconds": 60},
+    )
+    assert response.status_code == 401
+
+
+def test_advance_round(client):
+    s = _full_setup(client)
+    response = client.post(
+        "/api/games/{}/rounds/1/advance".format(s.game_id),
+        headers={HOST_TOKEN_HEADER: s.host},
+    )
+    assert response.status_code == 200
+    data = response.get_json()["data"]
+    assert data["round_number"] == 2
+
+
+def test_advance_round_no_next(app, client):
+    s = _full_setup(client)
+    # Delete round 2 so there is no next round.
+    with app.app_context():
+        round2 = db.session.query(Round).filter_by(game_id=s.game_id, round_number=2).first()
+        db.session.delete(round2)
+        db.session.commit()
+    response = client.post(
+        "/api/games/{}/rounds/1/advance".format(s.game_id),
+        headers={HOST_TOKEN_HEADER: s.host},
+    )
+    assert response.status_code == 409
+    assert response.get_json()["error"]["code"] == "NEXT_ROUND_MISSING"
+
+
+def test_reset_round(app, client):
+    s = _full_setup(client)
+    # Start and end a turn so a score is written, then reset.
+    client.post(
+        "/api/matches/{}/turn/start".format(s.match_a["match_id"]),
+        headers={HOST_TOKEN_HEADER: s.host},
+    )
+    response = client.post(
+        "/api/games/{}/rounds/1/reset".format(s.game_id),
+        headers={HOST_TOKEN_HEADER: s.host},
+    )
+    assert response.status_code == 200
+    data = response.get_json()["data"]
+    assert data["round_number"] == 1
+    assert data["status"] == "PENDING"
+    # Matches are reset to pending pending; turns/scores for the round cleared.
+    with app.app_context():
+        round_obj = db.session.query(Round).filter_by(game_id=s.game_id, round_number=1).first()
+        assert all(m.status == "PENDING" for m in round_obj.matches)
+        assert Turn.query.filter_by(round_id=round_obj.id).count() == 0
+        assert Score.query.filter_by(round_id=round_obj.id).count() == 0
+
+
+def test_round_controls_require_host(client):
+    s = _basic_setup(client)
+    url = "/api/games/{}/rounds/1".format(s.game_id)
+    assert client.post(url + "/timer", json={"timer_seconds": 60}).status_code == 401
+    assert client.post(url + "/advance").status_code == 401
+    assert client.post(url + "/reset").status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Default categories (lazy seeding)
+# ---------------------------------------------------------------------------
+
+
+def test_default_categories_seeded_on_list(client):
+    game_id, host = _create_game(client)
+    response = client.get(
+        "/api/games/{}/categories".format(game_id),
+        headers={HOST_TOKEN_HEADER: host},
+    )
+    assert response.status_code == 200
+    names = [c["name"] for c in response.get_json()["data"]["categories"]]
+    assert "Tao / People" in names
+    assert "Bagay / things / object" in names
+    assert "Lugar / place" in names
+    assert "Hayop / animal" in names
+    assert "Pagkain / food" in names
+    assert "Other" in names
+
+
+def test_default_categories_idempotent(client):
+    game_id, host = _create_game(client)
+    client.get(
+        "/api/games/{}/categories".format(game_id),
+        headers={HOST_TOKEN_HEADER: host},
+    )
+    response = client.get(
+        "/api/games/{}/categories".format(game_id),
+        headers={HOST_TOKEN_HEADER: host},
+    )
+    names = [c["name"] for c in response.get_json()["data"]["categories"]]
+    assert sum(1 for n in names if n == "Tao / People") == 1
+
+
+def test_default_categories_not_seeded_for_existing(client):
+    # A game that already has categories should never get defaults seeded.
+    s = _basic_setup(client)
+    _create_category(client, s.game_id, s.host, "Food")
+    response = client.get(
+        "/api/games/{}/categories".format(s.game_id),
+        headers={HOST_TOKEN_HEADER: s.host},
+    )
+    names = [c["name"] for c in response.get_json()["data"]["categories"]]
+    assert names == ["Food"]

@@ -453,6 +453,9 @@ p { line-height: 1.6; }
    Enhance `<select class="dd">` via js/core/custom-select.js.
    ============================================================ */
 .dd { position: relative; min-width: 0; }
+.dd--open { z-index: 400; }
+/* Ancestor stacking contexts lifted while a dropdown is open (see custom-select.js) */
+.cs-elevate { position: relative; z-index: 400; }
 .dd__native {
   position: absolute; width: 1px; height: 1px;
   margin: -1px; padding: 0; overflow: hidden;

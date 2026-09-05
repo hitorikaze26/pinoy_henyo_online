@@ -71,9 +71,16 @@ def list_categories(game_id):
     game, error = _load_game(game_id)
     if error is not None:
         return error
-    return success_response(
-        data={"categories": word_service.list_categories(game)}
-    )
+    if game.status in ("LOBBY", "SETUP", "READY"):
+        try:
+            categories = word_service.ensure_default_categories(game)
+            db.session.commit()
+        except word_service.WordServiceError as exc:
+            db.session.rollback()
+            return _handle(exc)
+    else:
+        categories = word_service.list_categories(game)
+    return success_response(data={"categories": categories})
 
 
 @categories_bp.patch("/categories/<int:category_id>")

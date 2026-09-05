@@ -140,6 +140,23 @@ def emit_round_started(round_obj):
     )
 
 
+def emit_round_updated(round_obj):
+    _emit(
+        game_room(round_obj.game_id),
+        "round_updated",
+        {
+            "game_id": round_obj.game_id,
+            "round_id": round_obj.id,
+            "round_number": round_obj.round_number,
+            "status": round_obj.status,
+            "timer_seconds": round_obj.timer_seconds,
+            "timer_mode": round_obj.timer_mode,
+            "started_at": round_obj.started_at,
+            "ended_at": round_obj.ended_at,
+        },
+    )
+
+
 def emit_match_started(match):
     data = {
         "game_id": match.game_id,

@@ -7,14 +7,17 @@ from ..models import (
     Game,
     GameEvent,
     Match,
+    Penalty,
     Round,
     RoundCategory,
+    Score,
     Team,
     TeamMember,
     Turn,
     TurnWord,
     Word,
 )
+from ..utils.time import utcnow
 
 ROUND_1 = 1
 ROUND_2 = 2
@@ -79,6 +82,16 @@ class RoundExistsError(GameplayServiceError):
 class RoundNotFoundError(GameplayServiceError):
     status = 404
     code = "ROUND_NOT_FOUND"
+
+
+class RoundTimerLockedError(GameplayServiceError):
+    status = 409
+    code = "ROUND_TIMER_LOCKED"
+
+
+class NextRoundMissingError(GameplayServiceError):
+    status = 409
+    code = "NEXT_ROUND_MISSING"
 
 
 class CategoriesRequiredError(GameplayServiceError):
@@ -188,6 +201,140 @@ def list_game_rounds(game):
         .order_by(Round.round_number)
         .all()
     )
+
+
+def update_round_timer(game, round_number, timer_seconds, timer_mode):
+    round_obj = get_round(game, round_number)
+    if round_obj is None:
+        raise RoundNotFoundError("The round has not been set up yet.")
+    if round_obj.started_at is not None:
+        raise RoundTimerLockedError(
+            "The timer cannot be changed once the round has started."
+        )
+    if timer_seconds is None and not timer_mode:
+        raise TimerConfigurationError(
+            "Provide timer_seconds and/or timer_mode."
+        )
+    if timer_seconds is not None:
+        if (
+            not isinstance(timer_seconds, int)
+            or isinstance(timer_seconds, bool)
+            or timer_seconds < 1
+            or timer_seconds > MAX_TIMER_SECONDS
+        ):
+            raise TimerConfigurationError(
+                "timer_seconds must be an integer between 1 and {}.".format(
+                    MAX_TIMER_SECONDS
+                )
+            )
+        round_obj.timer_seconds = timer_seconds
+    if timer_mode:
+        if timer_mode not in Round.TIMER_MODES:
+            raise TimerConfigurationError(
+                "timer_mode must be one of {}.".format(
+                    ", ".join(Round.TIMER_MODES)
+                )
+            )
+        round_obj.timer_mode = timer_mode
+    _record_event(
+        game,
+        "ROUND_TIMER_CHANGED",
+        {
+            "round_id": round_obj.id,
+            "round_number": round_obj.round_number,
+            "timer_seconds": round_obj.timer_seconds,
+            "timer_mode": round_obj.timer_mode,
+        },
+    )
+    return round_obj
+
+
+def advance_round(game, round_number):
+    round_obj = get_round(game, round_number)
+    if round_obj is None:
+        raise RoundNotFoundError("The round has not been set up yet.")
+    next_number = round_number + 1
+    next_round = get_round(game, next_number)
+    if next_round is None:
+        raise NextRoundMissingError(
+            "Round {} has not been set up yet.".format(next_number)
+        )
+    if not next_round.matches:
+        raise NextRoundMissingError(
+            "Round {} has no matches yet.".format(next_number)
+        )
+    if round_obj.ended_at is None:
+        round_obj.status = Round.STATUS_COMPLETED
+        round_obj.ended_at = utcnow()
+    for match in list(round_obj.matches):
+        if match.status != Match.STATUS_COMPLETED:
+            for turn in match.turns:
+                if turn.status in (Turn.STATUS_ACTIVE, Turn.STATUS_PAUSED):
+                    turn.status = Turn.STATUS_FAILED
+                    turn.ended_at = utcnow()
+            match.status = Match.STATUS_COMPLETED
+            match.ended_at = utcnow()
+    game.current_round = next_number
+    first = (
+        Match.query.filter_by(round_id=next_round.id)
+        .order_by(Match.match_order)
+        .first()
+    )
+    game.current_match_id = first.id if first is not None else None
+    _record_event(
+        game,
+        "ROUND_ADVANCED",
+        {
+            "round_id": round_obj.id,
+            "round_number": round_obj.round_number,
+            "next_round": next_number,
+        },
+    )
+    return next_round
+
+
+def reset_round(game, round_number):
+    round_obj = get_round(game, round_number)
+    if round_obj is None:
+        raise RoundNotFoundError("The round has not been set up yet.")
+    turn_ids = [
+        turn.id
+        for turn in Turn.query.filter_by(round_id=round_obj.id).all()
+    ]
+    if turn_ids:
+        TurnWord.query.filter(
+            TurnWord.turn_id.in_(turn_ids)
+        ).delete(synchronize_session=False)
+        Penalty.query.filter(
+            Penalty.turn_id.in_(turn_ids)
+        ).delete(synchronize_session=False)
+    Turn.query.filter_by(round_id=round_obj.id).delete(
+        synchronize_session=False
+    )
+    Score.query.filter_by(
+        game_id=game.id, round_id=round_obj.id
+    ).delete(synchronize_session=False)
+    for match in list(round_obj.matches):
+        match.status = Match.STATUS_PENDING
+        match.started_at = None
+        match.ended_at = None
+        match.winner_team_id = None
+    round_obj.status = Round.STATUS_PENDING
+    round_obj.started_at = None
+    round_obj.ended_at = None
+    if game.current_match_id is not None and any(
+        match.id == game.current_match_id for match in round_obj.matches
+    ):
+        game.current_match_id = None
+    _record_event(
+        game,
+        "ROUND_RESET",
+        {
+            "round_id": round_obj.id,
+            "round_number": round_obj.round_number,
+        },
+    )
+    return round_obj
 
 
 def session_is_team_leader(team, session_token):

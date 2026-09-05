@@ -227,6 +227,63 @@ def round_categories(game, round_number):
     return success_response(data={"categories": categories})
 
 
+@gameplay_bp.post("/games/<int:game_id>/rounds/<int:round_number>/timer")
+@require_host
+def update_round_timer(game, round_number):
+    body = request.get_json(silent=True) or {}
+    frozen = _ensure_mutable(game)
+    if frozen is not None:
+        return frozen
+    try:
+        round_obj = gameplay_service.update_round_timer(
+            game,
+            round_number,
+            body.get("timer_seconds"),
+            body.get("timer_mode"),
+        )
+        db.session.commit()
+    except gameplay_service.GameplayServiceError as exc:
+        db.session.rollback()
+        return _handle(exc)
+    realtime.emit_round_updated(round_obj)
+    return success_response(data=gameplay_service.round_payload(round_obj))
+
+
+@gameplay_bp.post("/games/<int:game_id>/rounds/<int:round_number>/advance")
+@require_host
+def advance_round(game, round_number):
+    frozen = _ensure_mutable(game)
+    if frozen is not None:
+        return frozen
+    try:
+        completed_round = gameplay_service.get_round(game, round_number)
+        next_round = gameplay_service.advance_round(game, round_number)
+        db.session.commit()
+    except gameplay_service.GameplayServiceError as exc:
+        db.session.rollback()
+        return _handle(exc)
+    if completed_round is not None:
+        realtime.announce_round_completed(completed_round)
+    realtime.emit_round_updated(next_round)
+    return success_response(data=gameplay_service.round_payload(next_round))
+
+
+@gameplay_bp.post("/games/<int:game_id>/rounds/<int:round_number>/reset")
+@require_host
+def reset_round(game, round_number):
+    frozen = _ensure_mutable(game)
+    if frozen is not None:
+        return frozen
+    try:
+        round_obj = gameplay_service.reset_round(game, round_number)
+        db.session.commit()
+    except gameplay_service.GameplayServiceError as exc:
+        db.session.rollback()
+        return _handle(exc)
+    realtime.emit_round_updated(round_obj)
+    return success_response(data=gameplay_service.round_payload(round_obj))
+
+
 # ---------------------------------------------------------------------------
 # Matches
 # ---------------------------------------------------------------------------
