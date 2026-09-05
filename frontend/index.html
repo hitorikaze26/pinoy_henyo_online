@@ -108,6 +108,11 @@
 
   </nav>
 
+  <!-- Sound toggle (floating, under the navbar) -->
+  <button class="sound-toggle" id="btn-sound" aria-label="Mute sound" title="Mute sound">
+    <i class="fa-solid fa-volume-high" id="sound-icon"></i>
+  </button>
+
   <!-- Mobile menu drawer -->
   <div class="mobile-menu" id="mobile-menu" aria-hidden="true">
     <a href="#howto"><i class="fa-solid fa-list-ol"></i> How to Play</a>
@@ -705,6 +710,7 @@
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
   <script src="js/core/runtime-config.js"></script>
   <script src="js/core/config.js"></script>
+  <script src="js/core/audio.js"></script>
   <script src="js/api/api.js"></script>
   <script src="js/api/game-api.js"></script>
   <script src="js/api/team-api.js"></script>

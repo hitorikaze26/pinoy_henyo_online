@@ -355,6 +355,40 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
 .mobile-menu a i { width: 18px; text-align: center; color: var(--primary-400); }
 
 /* ============================================================
+   SOUND TOGGLE — floating speaker (just under the navbar)
+   z-index sits between the navbar (100) and modal overlays (200).
+============================================================ */
+.sound-toggle {
+  position: fixed;
+  top: calc(64px + 0.9rem);
+  right: 1.25rem;
+  z-index: 150;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 1.05rem;
+  color: rgba(255,255,255,0.9);
+  background: rgba(30, 41, 59, 0.75);
+  border: 1px solid rgba(255,255,255,0.12);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.3), 0 0 0 1px rgba(49,154,251,0.06);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: background 0.2s, color 0.2s, transform 0.15s, box-shadow 0.2s;
+}
+.sound-toggle:hover {
+  background: rgba(49,154,251,0.28);
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.35), 0 0 14px rgba(49,154,251,0.4);
+}
+.sound-toggle:active { transform: scale(0.92); }
+.sound-toggle:focus-visible {
+  outline: 2px solid var(--primary-400);
+  outline-offset: 2px;
+}
+
+/* ============================================================
    HERO SECTION
 ============================================================ */
 .hero {

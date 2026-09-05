@@ -38,6 +38,31 @@ document.querySelectorAll('.btn-primary, .btn-secondary, .nav-btn').forEach(btn 
 });
 
 /* ============================================================
+   SOUND TOGGLE — floating speaker (under the navbar)
+   Music starts on page open (GameAudio); toggling mutes/unmutes
+   music and all UI effect sounds. UI effects only play while on.
+============================================================ */
+(function initSoundToggle() {
+  const btn  = document.getElementById('btn-sound');
+  const icon = document.getElementById('sound-icon');
+  if (!btn || !icon || !window.GameAudio) return;
+
+  const syncIcon = (enabled) => {
+    icon.className = enabled ? 'fa-solid fa-volume-high' : 'fa-solid fa-volume-xmark';
+    const label = enabled ? 'Mute sound' : 'Unmute sound';
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+  };
+
+  btn.addEventListener('click', () => {
+    const enabled = GameAudio.toggle();
+    syncIcon(enabled);
+  });
+
+  syncIcon(GameAudio.enabled);
+})();
+
+/* ============================================================
    MODAL SYSTEM
 ============================================================ */
 
@@ -50,6 +75,8 @@ function openModal(overlay) {
   overlay.setAttribute('aria-hidden', 'false');
   overlay.classList.add('open');
   document.body.style.overflow = 'hidden';
+
+  if (window.GameAudio) GameAudio.play('popup');
 
   // Focus the first focusable element inside the modal
   const focusable = overlay.querySelector(
@@ -65,6 +92,8 @@ function closeModal(overlay) {
   overlay.classList.remove('open');
   overlay.setAttribute('aria-hidden', 'true');
   document.body.style.overflow = '';
+
+  if (window.GameAudio) GameAudio.play('click');
 
   // Reset form + errors inside the modal
   const form = overlay.querySelector('form');
@@ -102,11 +131,13 @@ const overlayQr    = document.getElementById('modal-qr');
 ============================================================ */
 document.getElementById('start-btn').addEventListener('click', () => {
   console.log('[Pinoy Henyo] Start a Game clicked');
+  if (window.GameAudio) GameAudio.play('start');
   openModal(overlayStart);
 });
 
 document.getElementById('join-btn').addEventListener('click', () => {
   console.log('[Pinoy Henyo] Join Game clicked');
+  if (window.GameAudio) GameAudio.play('start');
   openModal(overlayJoin);
 });
 
@@ -164,6 +195,7 @@ document.getElementById('btn-are-you-host').addEventListener('click', async () =
 
     btn.disabled = false;
     btn.innerHTML = original;
+    if (window.GameAudio) GameAudio.play('confirm');
     closeModal(overlayStart);
 
     window.location.href = 'pages/host/host_dashboard.html';
@@ -171,6 +203,8 @@ document.getElementById('btn-are-you-host').addEventListener('click', async () =
     btn.disabled = false;
     btn.innerHTML = original;
     console.error('[Pinoy Henyo] Create host game failed', err);
+
+    if (window.GameAudio) GameAudio.play('error');
 
     if (err && err.code === 'RATE_LIMITED') {
       const wait = (err.retryAfter > 0) ? ` in ${err.retryAfter}s` : '';
@@ -207,11 +241,13 @@ function validateCreateField(input, errorEl, label, maxLen) {
   if (!value) {
     input.classList.add('error');
     errorEl.textContent = `Please enter a ${label.toLowerCase()}.`;
+    if (window.GameAudio) GameAudio.play('error');
     return null;
   }
   if (value.length > maxLen) {
     input.classList.add('error');
     errorEl.textContent = `${label} must be ${maxLen} characters or fewer.`;
+    if (window.GameAudio) GameAudio.play('error');
     return null;
   }
   input.classList.remove('error');
@@ -295,12 +331,15 @@ document.getElementById('form-start').addEventListener('submit', (e) => {
       closeModal(overlayStart);
       btn.disabled = false;
       btn.innerHTML = original;
+      if (window.GameAudio) GameAudio.play('confirm');
 
       window.location.href = 'pages/player/player.html';
     })
     .catch((err) => {
       btn.disabled = false;
       btn.innerHTML = original;
+
+      if (window.GameAudio) GameAudio.play('error');
 
       // Warm-up budget exhausted — tell the user and let them retry.
       if (err && err.code === 'SERVER_WAKE_TIMEOUT') {
@@ -361,6 +400,7 @@ document.getElementById('form-join').addEventListener('submit', async (e) => {
   if (!rawCode) {
     codeInput.classList.add('error');
     codeError.textContent = 'Please enter a game code.';
+    if (window.GameAudio) GameAudio.play('error');
     return;
   }
   codeInput.classList.remove('error');
@@ -375,16 +415,19 @@ document.getElementById('form-join').addEventListener('submit', async (e) => {
   if (teamName && teamCode) {
     teamnameInput.classList.add('error');
     teamnameError.textContent = 'Choose either a new team name OR a team code, not both.';
+    if (window.GameAudio) GameAudio.play('error');
     return;
   }
   if (!teamName && !teamCode) {
     teamcodeInput.classList.add('error');
     teamcodeError.textContent = 'Enter a team name to create a team, or a team code to join one.';
+    if (window.GameAudio) GameAudio.play('error');
     return;
   }
   if (teamName && teamName.length > START_TEAM_MAX) {
     teamnameInput.classList.add('error');
     teamnameError.textContent = `Team name must be ${START_TEAM_MAX} characters or fewer.`;
+    if (window.GameAudio) GameAudio.play('error');
     return;
   }
 
@@ -448,10 +491,13 @@ document.getElementById('form-join').addEventListener('submit', async (e) => {
     }
 
     closeModal(overlayJoin);
+    if (window.GameAudio) GameAudio.play('confirm');
     window.location.href = 'pages/player/player.html';
   } catch (err) {
     btn.disabled = false;
     btn.innerHTML = original;
+
+    if (window.GameAudio) GameAudio.play('error');
 
     if (err && err.status === 404) {
       codeInput.classList.add('error');
@@ -595,6 +641,7 @@ function handleQrScanned(raw) {
 
   if (!parsed || !parsed.gameCode) {
     stopCamera();
+    if (window.GameAudio) GameAudio.play('error');
     const errorBox = document.getElementById('qr-error');
     const errorMsg = document.getElementById('qr-error-msg');
     errorMsg.textContent = 'That is not a valid Pinoy Henyo QR code. Please scan the code on the host screen.';
@@ -611,6 +658,7 @@ function handleQrScanned(raw) {
   if (parsed.gameCode) gameCodeInput.value = parsed.gameCode;
   if (parsed.teamCode) document.getElementById('input-join-teamcode').value = parsed.teamCode;
 
+  if (window.GameAudio) GameAudio.play('notification');
   openModal(overlayJoin);
 }
 
