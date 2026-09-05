@@ -181,6 +181,10 @@ const API = (() => {
     saveMyGames(loadMyGames().filter((g) => String(g.game_id) !== String(gameId)));
   }
 
+  function getMyGames() {
+    return loadMyGames();
+  }
+
   function clearMyGames() {
     try { localStorage.removeItem(MY_GAMES_KEY); } catch (e) { /* ignore */ }
   }
