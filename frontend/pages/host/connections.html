@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Pinoy Henyo Online – Connections Tab" />
+  <title>Connections – Pinoy Henyo Online</title>
+
+  <link rel="icon" type="image/svg+xml" href="../../assets/logo/favicon.svg" />
+  <link rel="apple-touch-icon" href="../../assets/logo/apple-touch-icon.png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+
+  <!-- Global CSS (must load first) -->
+  <link rel="stylesheet" href="../../css/global.css" />
+  <link rel="stylesheet" href="../../css/pages/connections.css" />
+</head>
+<body>
+
+  <!-- ============================================================
+       TOP NAV BAR
+  ============================================================ -->
+  <header class="dash-nav" role="banner">
+
+    <div class="dash-nav__left">
+      <a href="../../index.html" class="dash-nav__logo-link" aria-label="Back to Lobby">
+        <img src="../../assets/logo/logo-pinoy-henyo-white.png" alt="Pinoy Henyo Online" class="dash-nav__logo" loading="eager" />
+      </a>
+    </div>
+
+    <div class="dash-nav__center">
+      <span class="dash-nav__round-label">Round</span>
+      <span class="dash-nav__round-num">1</span>
+    </div>
+
+    <div class="dash-nav__right">
+      <div class="dash-nav__live">
+        <span class="dash-nav__live-dot"></span>
+        <span class="dash-nav__live-text">Live</span>
+      </div>
+      <button class="dash-nav__code-btn" id="btn-copy-code" title="Click to copy">
+        <span id="game-code-display"></span>
+        <i class="fa-regular fa-copy" id="copy-icon"></i>
+      </button>
+    </div>
+
+  </header>
+
+  <!-- ============================================================
+       SHELL
+  ============================================================ -->
+  <div class="dash-shell">
+
+    <!-- SIDEBAR -->
+    <aside class="dash-sidebar" role="navigation" aria-label="Dashboard navigation">
+
+      <div class="sidebar__logo">
+        <img src="../../assets/logo/logo-pinoy-henyo-white.png" alt="Pinoy Henyo Online" class="sidebar__logo-img" loading="eager" />
+      </div>
+
+      <nav class="sidebar__nav">
+        <a href="host_dashboard.html" class="sidebar__nav-item">
+          <i class="fa-solid fa-gauge-high"></i><span>Dashboard</span>
+        </a>
+        <a href="teams.html" class="sidebar__nav-item">
+          <i class="fa-solid fa-users"></i><span>Teams</span>
+        </a>
+        <a href="words.html" class="sidebar__nav-item">
+          <i class="fa-solid fa-list"></i><span>Words</span>
+        </a>
+        <a href="connections.html" class="sidebar__nav-item sidebar__nav-item--active" aria-current="page">
+          <i class="fa-solid fa-wifi"></i><span>Connections</span>
+        </a>
+        <a href="#" class="sidebar__nav-item">
+          <i class="fa-solid fa-gear"></i><span>Settings</span>
+        </a>
+      </nav>
+
+      <div class="sidebar__footer">
+        <a href="../../index.html" class="sidebar__lobby-btn">
+          <i class="fa-solid fa-arrow-left"></i><span>Back to Lobby</span>
+        </a>
+      </div>
+
+    </aside>
+
+    <!-- MAIN -->
+    <main class="dash-main" role="main">
+
+      <!-- PAGE HEADER -->
+      <div class="page-header reveal">
+        <div class="page-header__icon">
+          <i class="fa-solid fa-wifi"></i>
+        </div>
+        <div class="page-header__text">
+          <h1 class="page-header__title">Connections</h1>
+          <p class="page-header__sub">Monitor device presence and manage phone connections per team.</p>
+        </div>
+      </div>
+
+      <!-- STATS CARDS -->
+      <div class="stats-grid">
+        <div class="stat-card reveal" style="--delay:0s">
+          <div class="stat-card__icon stat-card__icon--orange">
+            <i class="fa-solid fa-handshake"></i>
+          </div>
+          <div class="stat-card__body">
+            <p class="stat-card__label">Pending Requests</p>
+            <p class="stat-card__value" id="stat-pending-requests">0</p>
+          </div>
+        </div>
+        <div class="stat-card reveal" style="--delay:0.07s">
+          <div class="stat-card__icon stat-card__icon--green">
+            <i class="fa-solid fa-link"></i>
+          </div>
+          <div class="stat-card__body">
+            <p class="stat-card__label">Connected Teams</p>
+            <p class="stat-card__value" id="stat-connected-teams">0</p>
+          </div>
+        </div>
+        <div class="stat-card reveal" style="--delay:0.14s">
+          <div class="stat-card__icon stat-card__icon--purple">
+            <i class="fa-solid fa-mobile-screen"></i>
+          </div>
+          <div class="stat-card__body">
+            <p class="stat-card__label">Devices Online</p>
+            <p class="stat-card__value" id="stat-devices-online">0</p>
+          </div>
+        </div>
+        <div class="stat-card reveal" style="--delay:0.21s">
+          <div class="stat-card__icon stat-card__icon--red">
+            <i class="fa-solid fa-plug-circle-xmark"></i>
+          </div>
+          <div class="stat-card__body">
+            <p class="stat-card__label">Disconnected</p>
+            <p class="stat-card__value" id="stat-disconnected-teams">0</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- CONTROLS BAR -->
+      <div class="controls-bar reveal">
+        <div class="controls-bar__left">
+          <div class="controls-search">
+            <i class="fa-solid fa-magnifying-glass controls-search__icon"></i>
+            <input type="text" id="conn-search-input" class="controls-search__input" placeholder="Search team or player..." autocomplete="off" />
+          </div>
+        </div>
+        <div class="controls-bar__right">
+          <select class="controls-filter" id="conn-filter-select" aria-label="Filter connections">
+            <option value="all">All</option>
+            <option value="pending">Pending</option>
+            <option value="connected">Connected</option>
+            <option value="disconnected">Disconnected</option>
+          </select>
+          <button class="controls-btn controls-btn--refresh" id="btn-refresh-connections">
+            <i class="fa-solid fa-rotate"></i>
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      <!-- CONNECTIONS GRID -->
+      <div class="teams-grid" id="conn-grid">
+        <!-- Populated by JS -->
+      </div>
+
+      <!-- EMPTY STATE -->
+      <div class="empty-state" id="conn-empty" hidden>
+        <div class="empty-state__icon">
+          <i class="fa-solid fa-wifi"></i>
+        </div>
+        <h2 class="empty-state__title">No Connections Yet</h2>
+        <p class="empty-state__sub">Create teams and connect their phones to see device presence here.</p>
+        <button class="controls-btn controls-btn--refresh empty-state__btn" id="btn-refresh-empty">
+          <i class="fa-solid fa-rotate"></i>
+          Refresh
+        </button>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Copy toast -->
+  <div class="copy-toast" id="copy-toast" aria-live="polite"></div>
+
+  <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+  <script src="../../js/core/runtime-config.js"></script>
+  <script src="../../js/core/config.js"></script>
+  <script src="../../js/api/api.js"></script>
+  <script src="../../js/api/game-api.js"></script>
+  <script src="../../js/api/team-api.js"></script>
+  <script src="../../js/api/connect.js"></script>
+  <script src="../../js/api/realtime.js"></script>
+  <script src="../../js/host/connections.js"></script>
+</body>
+</html>
