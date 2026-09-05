@@ -394,7 +394,7 @@ def test_stale_sessions_expiry_and_reconnect(client, app):
         db.session.commit()
         expired = team_service.expire_stale_sessions(timeout_seconds=60)
         db.session.commit()
-        assert expired == 1
+        assert expired == [(game_id, team["team_id"], member_id)]
         assert row.disconnected_at is not None
         assert db.session.get(TeamMember, member_id).is_connected is False
 

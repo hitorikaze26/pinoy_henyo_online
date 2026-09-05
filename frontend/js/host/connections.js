@@ -97,13 +97,13 @@ function connectionToCardStatus(cs) {
   switch (cs) {
     case 'CONNECTED':            return 'connected';
     case 'CONNECTION_REQUESTED': return 'pending';
-    case 'DECLINED':             return 'disconnected';
+    case 'DECLINED':             return 'declined';
     case 'DISCONNECTED':         return 'disconnected';
     default:                     return 'none';
   }
 }
 function statusLabel(status) {
-  const map = { connected: 'Connected', pending: 'Pending Approval', disconnected: 'Disconnected', none: 'Not Connected' };
+  const map = { connected: 'Connected', pending: 'Pending Approval', declined: 'Declined', disconnected: 'Disconnected', none: 'Not Connected' };
   return map[status] || 'Not Connected';
 }
 
@@ -143,7 +143,7 @@ function computeStats() {
   STATE.teams.forEach(t => {
     if (t.status === 'pending') pending++;
     else if (t.status === 'connected') connectedTeams++;
-    else if (t.status === 'disconnected') disconnected++;
+    else if (t.status === 'disconnected' || t.status === 'declined' || t.status === 'none') disconnected++;
     t.members.forEach(m => { if (m.status === 'connected') devicesOnline++; });
   });
   return { pending, connectedTeams, disconnected, devicesOnline };
@@ -168,7 +168,13 @@ function renderStats(s) {
 function visibleTeams() {
   const q = STATE.query.trim().toLowerCase();
   return STATE.teams.filter(t => {
-    if (STATE.filter !== 'all' && t.status !== STATE.filter) return false;
+    if (STATE.filter !== 'all') {
+      if (STATE.filter === 'disconnected') {
+        if (t.status !== 'disconnected' && t.status !== 'declined' && t.status !== 'none') return false;
+      } else if (t.status !== STATE.filter) {
+        return false;
+      }
+    }
     if (!q) return true;
     if (String(t.name).toLowerCase().includes(q)) return true;
     if (t.leaderName && String(t.leaderName).toLowerCase().includes(q)) return true;
@@ -508,7 +514,20 @@ window.addEventListener('focus', () => refreshRoster());
   } catch (e) { console.warn('[connections] roster offline', e.message); }
 
   initRealtime(gameId);
+  updateRoundNav(gameId);
 })();
+
+/* ============================================================
+   ROUND NAV
+============================================================ */
+async function updateRoundNav(gameId) {
+  const roundEl = $('round-number');
+  if (!roundEl || !gameId) return;
+  try {
+    const status = await GameAPI.status(gameId);
+    roundEl.textContent = String((status && status.current_round) || 1);
+  } catch (e) { /* keep current label */ }
+}
 
 /* ============================================================
    REALTIME PRESENCE (host connections page)
@@ -603,9 +622,17 @@ function initRealtime(gameId) {
     reRender();
   });
 
+  rt.on('member_updated', (p) => {
+    if (!p) return;
+    const team = ensureTeam(p.team_id);
+    const m = memberById(team, p.member_id);
+    if (m && p.username) m.name = p.username;
+    reRender();
+  });
   rt.on('connection_requested', (p) => {
     if (!p || !p.team_id) return;
     const team = ensureTeam(p.team_id);
+    if (p.team_name) team.name = p.team_name;
     applyConnectionStatus(team, p.connection_status || 'CONNECTION_REQUESTED');
     reRender();
     showToast(`"${team.name}" wants to connect`);
@@ -613,6 +640,7 @@ function initRealtime(gameId) {
   rt.on('connection_approved', (p) => {
     if (!p || !p.team_id) return;
     const team = ensureTeam(p.team_id);
+    if (p.team_name) team.name = p.team_name;
     applyConnectionStatus(team, p.connection_status || 'CONNECTED');
     reRender();
     showToast(`"${team.name}" is now connected`);
@@ -620,14 +648,21 @@ function initRealtime(gameId) {
   rt.on('connection_declined', (p) => {
     if (!p || !p.team_id) return;
     const team = ensureTeam(p.team_id);
+    if (p.team_name) team.name = p.team_name;
     applyConnectionStatus(team, p.connection_status || 'DECLINED');
     reRender();
   });
   rt.on('connection_disconnected', (p) => {
     if (!p || !p.team_id) return;
     const team = ensureTeam(p.team_id);
+    if (p.team_name) team.name = p.team_name;
     applyConnectionStatus(team, p.connection_status || 'DISCONNECTED');
     reRender();
+  });
+
+  ['round_started', 'round_completed', 'game_started', 'game_paused',
+   'game_resumed', 'game_completed', 'match_started'].forEach((evt) => {
+    rt.on(evt, () => { updateRoundNav(rosterGameId || gameId); });
   });
 
   if (!rt.getSocket()) {

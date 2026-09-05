@@ -1,4 +1,4 @@
-import pytest
+﻿import pytest
 
 from app import create_app
 from app.extensions import db
@@ -232,7 +232,8 @@ def test_delete_category_cascades_words(client, app):
     )
     assert gone.status_code == 404
     listed = client.get("/api/games/{}/categories".format(game_id))
-    assert listed.get_json()["data"]["categories"] == []
+    names = [c["name"] for c in listed.get_json()["data"]["categories"]]
+    assert "Food" not in names  # deleted category is gone (defaults may be seeded)
 
 
 def test_create_category_game_not_found(client):
@@ -524,6 +525,66 @@ def test_host_edits_word(client, app):
     data = response.get_json()["data"]
     assert data["word_text"] == "Sinigang"
     assert data["normalized_word"] == "sinigang"
+
+
+def test_host_edits_word_category(client, app):
+    game_id, host_token = _create_game(client)
+    team_id = _create_team(app, game_id, "A1")
+    food = _create_category(client, game_id, host_token, "Food")
+    drinks = _create_category(client, game_id, host_token, "Drinks")
+    word_id = _submit(client, game_id, food, team_id, "Adobo").get_json()["data"][
+        "word_id"
+    ]
+
+    response = client.patch(
+        "/api/words/{}".format(word_id),
+        json={"word_text": "Adobo", "category_id": drinks},
+        headers={HOST_TOKEN_HEADER: host_token},
+    )
+    assert response.status_code == 200
+    data = response.get_json()["data"]
+    assert data["category_id"] == drinks
+    assert data["word_text"] == "Adobo"
+
+
+def test_host_edit_word_category_duplicate_check_is_category_aware(client, app):
+    game_id, host_token = _create_game(client)
+    team_id = _create_team(app, game_id, "A1")
+    food = _create_category(client, game_id, host_token, "Food")
+    drinks = _create_category(client, game_id, host_token, "Drinks")
+    _submit(client, game_id, food, team_id, "Adobo")
+    word_id = _submit(client, game_id, drinks, team_id, "Sinigang").get_json()[
+        "data"
+    ]["word_id"]
+
+    response = client.patch(
+        "/api/words/{}".format(word_id),
+        json={"word_text": "Adobo", "category_id": food},
+        headers={HOST_TOKEN_HEADER: host_token},
+    )
+    assert response.status_code == 409
+    assert response.get_json()["error"]["code"] == "DUPLICATE_WORD"
+
+
+def test_host_edit_word_category_not_in_game(client, app):
+    game_id, host_token = _create_game(client)
+    other_game_id, other_host = _create_game(client)
+    team_id = _create_team(app, game_id, "A1")
+    category_id = _create_category(client, game_id, host_token, "Food")
+    other_category = _create_category(
+        client, other_game_id, other_host, "Other Game Food"
+    )
+    word_id = _submit(client, game_id, category_id, team_id, "Adobo").get_json()[
+        "data"
+    ]["word_id"]
+
+    response = client.patch(
+        "/api/words/{}".format(word_id),
+        json={"category_id": other_category},
+        headers={HOST_TOKEN_HEADER: host_token},
+    )
+    assert response.status_code == 400
+    assert response.get_json()["error"]["code"] == "CATEGORY_NOT_IN_GAME"
 
 
 def test_host_disables_word(client, app):

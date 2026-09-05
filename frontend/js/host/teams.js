@@ -60,12 +60,12 @@ document.addEventListener('click', e => {
 /* ============================================================
    TOAST
 ============================================================ */
-function showToast(msg) {
+function showToast(msg, duration) {
   const t = $('copy-toast');
   t.textContent = msg;
   t.classList.add('show');
   clearTimeout(t._t);
-  t._t = setTimeout(() => t.classList.remove('show'), 2200);
+  t._t = setTimeout(() => t.classList.remove('show'), duration || 2200);
 }
 
 /* ============================================================
@@ -188,7 +188,7 @@ function connectionToCardStatus(cs) {
   switch (cs) {
     case 'CONNECTED':            return 'connected';
     case 'CONNECTION_REQUESTED': return 'pending';
-    case 'DECLINED':             return 'disconnected';
+    case 'DECLINED':             return 'declined';
     case 'DISCONNECTED':         return 'disconnected';
     default:                     return 'none';
   }
@@ -199,11 +199,11 @@ function applyConnectionStatus(team, cs) {
   return team;
 }
 function statusClass(status) {
-  const map = { connected: 'connected', waiting: 'waiting', pending: 'pending', disconnected: 'disconnected', none: 'none' };
+  const map = { connected: 'connected', waiting: 'waiting', pending: 'pending', declined: 'declined', disconnected: 'disconnected', none: 'none' };
   return map[status] || 'none';
 }
 function statusLabel(status) {
-  const map = { connected: 'Connected', waiting: 'Waiting', pending: 'Pending Approval', disconnected: 'Disconnected', none: 'Not Connected' };
+  const map = { connected: 'Connected', waiting: 'Waiting', pending: 'Pending Approval', declined: 'Declined', disconnected: 'Disconnected', none: 'Not Connected' };
   return map[status] || 'Not Connected';
 }
 
@@ -294,7 +294,8 @@ function renderTeams() {
     const matchSearch = !query || t.name.toLowerCase().includes(query);
     const matchFilter = filter === 'all'
       || t.status === filter
-      || (filter === 'waiting' && t.status === 'pending');
+      || (filter === 'waiting' && t.status === 'pending')
+      || (filter === 'disconnected' && (t.status === 'disconnected' || t.status === 'declined' || t.status === 'none'));
     return matchSearch && matchFilter;
   });
 
@@ -433,9 +434,11 @@ function escHtml(str) {
 /* ============================================================
    MEMBER ROW BUILDER (for Add / Edit forms)
 ============================================================ */
-function buildMemberRow(idx, name = '', role = 'Tagasagot') {
+function buildMemberRow(idx, name = '', role = 'Tagasagot', opts = {}) {
+  const { isLeader = false, memberId = null } = opts;
   const row = document.createElement('div');
-  row.className = 'member-row';
+  row.className = 'member-row' + (isLeader ? ' member-row--leader' : '');
+  if (memberId != null) row.dataset.memberId = String(memberId);
   row.innerHTML = `
     <input type="text" class="form-input member-name-input"
            placeholder="Player name" value="${escHtml(name)}" maxlength="40" />
@@ -443,17 +446,19 @@ function buildMemberRow(idx, name = '', role = 'Tagasagot') {
       <option value="Manghuhula"${role === 'Manghuhula' ? ' selected' : ''}>Manghuhula</option>
       <option value="Tagasagot"${role  === 'Tagasagot'  ? ' selected' : ''}>Tagasagot</option>
     </select>
-    <button type="button" class="member-row__remove" aria-label="Remove member">
+    <button type="button" class="member-row__remove" aria-label="Remove member"
+            ${isLeader ? 'disabled title="Cannot remove the team leader"' : ''}>
       <i class="fa-solid fa-trash"></i>
     </button>`;
-  row.querySelector('.member-row__remove').addEventListener('click', () => row.remove());
+  const rm = row.querySelector('.member-row__remove');
+  if (!isLeader) rm.addEventListener('click', () => row.remove());
   return row;
 }
 
 function getMemberRowsData(container) {
   return [...container.querySelectorAll('.member-row')].map(row => ({
     name: row.querySelector('.member-name-input').value.trim(),
-    role: row.querySelector('.member-role-select').value,
+    role: row.querySelector('select.member-role-select').value,
   })).filter(m => m.name);
 }
 
@@ -507,6 +512,10 @@ $('form-add-team').addEventListener('submit', async (e) => {
   errEl.textContent = '';
 
   const members = getMemberRowsData($('add-members-list'));
+  if (members.filter(m => m.role === 'Manghuhula').length > 1) {
+    showToast('Only one Manghuhula can be assigned per team.');
+    return;
+  }
 
   const gameId = API.getGameId();
   if (gameId) {
@@ -560,7 +569,9 @@ $('form-add-team').addEventListener('submit', async (e) => {
     } catch (err) {
       console.error('[Pinoy Henyo] create team failed', err);
       nameIn.classList.add('error');
-      errEl.textContent = err.message || 'Could not create the team.';
+      errEl.textContent = (err && err.code === 'DUPLICATE_MANGHUHULA')
+        ? 'Only one Manghuhula can be assigned per team.'
+        : (err.message || 'Could not create the team.');
     } finally {
       btn.disabled = false;
       btn.textContent = originalBtn;
@@ -603,7 +614,9 @@ function openEditTeam(teamId) {
 
   const listEl = $('edit-members-list');
   listEl.innerHTML = '';
-  team.members.forEach((m, i) => listEl.appendChild(buildMemberRow(i, m.name, m.role)));
+  team.members.forEach((m, i) => listEl.appendChild(
+    buildMemberRow(i, m.name, m.role, { isLeader: !!m.isLeader, memberId: m.id })
+  ));
 
   openModal($('modal-edit-team'));
 }
@@ -616,7 +629,7 @@ $('btn-add-member-edit').addEventListener('click', () => {
   list.appendChild(buildMemberRow(list.children.length));
 });
 
-$('form-edit-team').addEventListener('submit', e => {
+$('form-edit-team').addEventListener('submit', async e => {
   e.preventDefault();
   const team   = STATE.teams.find(t => t.id === STATE.activeEditTeamId);
   if (!team) return;
@@ -638,21 +651,101 @@ $('form-edit-team').addEventListener('submit', e => {
   nameIn.classList.remove('error');
   errEl.textContent = '';
 
+  // Rows keep the member id they were rendered with; new rows have none.
+  const rows = [...$$('#edit-members-list .member-row')].map(row => ({
+    name: row.querySelector('.member-name-input').value.trim(),
+    role: row.querySelector('select.member-role-select').value,
+    memberId: row.dataset.memberId ? parseInt(row.dataset.memberId, 10) : null,
+  })).filter(r => r.name);
+
+  if (rows.filter(r => r.role === 'Manghuhula').length > 1) {
+    showToast('Only one Manghuhula can be assigned per team.');
+    return;
+  }
+
+  const gameId = API.getGameId();
+  if (gameId) {
+    const btn = $('form-edit-team').querySelector('button[type="submit"]');
+    const original = btn.innerHTML;
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+    try {
+      const roleMap = { Manghuhula: 'MANGHUHULA', Tagasagot: 'TAGASAGOT' };
+      const prevMembers = team.members;
+      const prevById = new Map(prevMembers.map(m => [String(m.id), m]));
+
+      await API.withLoading('edit-team', async () => {
+        if (name !== team.name) {
+          await TeamAPI.updateTeamName(team.id, name);
+        }
+
+        // Removals: any existing member not present in the rows anymore.
+        for (const m of prevMembers) {
+          if (m.isLeader) continue; // the backend refuses leader removal anyway
+          const kept = rows.some(r => r.memberId != null && String(r.memberId) === String(m.id));
+          if (!kept) await TeamAPI.removeMember(m.id);
+        }
+
+        // Additions + renames + role changes.
+        const roleChanges = [];
+        for (const row of rows) {
+          if (row.memberId != null) {
+            const prior = prevById.get(String(row.memberId));
+            if (!prior) continue;
+            if (prior.name !== row.name) await TeamAPI.updateUsername(row.memberId, row.name);
+            if (prior.role !== row.role) roleChanges.push({ member_id: row.memberId, gameplay_role: roleMap[row.role] });
+          } else {
+            const created = await TeamAPI.addMember(team.id, row.name);
+            row.memberId = created.member_id;
+            roleChanges.push({ member_id: created.member_id, gameplay_role: roleMap[row.role] });
+          }
+        }
+        if (roleChanges.length) await TeamAPI.assignRoles(team.id, roleChanges);
+      });
+
+      team.name = name;
+      team.members = rows.map(r => {
+        const prior = r.memberId != null ? prevById.get(String(r.memberId)) : null;
+        return {
+          id: r.memberId != null ? r.memberId : STATE.nextMemberId++,
+          name: r.name,
+          role: r.role,
+          status: prior ? prior.status : 'none',
+          isLeader: prior ? !!prior.isLeader : false,
+        };
+      });
+      if (API.addKnownTeam) API.addKnownTeam(team.id, name);
+
+      closeModal($('modal-edit-team'));
+      render();
+      showToast(`Team "${name}" updated`);
+    } catch (err) {
+      console.error('[Pinoy Henyo] update team failed', err);
+      const code = (err && err.code) || '';
+      const map = {
+        DUPLICATE_MANGHUHULA: 'Only one Manghuhula can be assigned per team.',
+        NOT_TEAM_LEADER: 'The team leader cannot be removed from the team.',
+      };
+      showToast(map[code] || (err && err.message) || 'Could not save the team.', 4000);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = original;
+    }
+    return;
+  }
+
+  // Fallback (no game context): local demo behaviour.
   team.name = name;
-
-  // Preserve existing member statuses where possible, otherwise default to 'none'
-  const oldMap = Object.fromEntries(team.members.map(m => [m.id, m]));
-  const rows   = getMemberRowsData($('edit-members-list'));
-
-  team.members = rows.map((r, i) => {
-    const existing = team.members[i];
+  const rowsLocal = rows.map(r => {
+    const prior = r.memberId != null ? prevById.get(String(r.memberId)) : null;
     return {
-      id: existing ? existing.id : STATE.nextMemberId++,
+      id: r.memberId != null ? r.memberId : STATE.nextMemberId++,
       name: r.name,
       role: r.role,
-      status: existing ? existing.status : 'none',
+      status: prior ? prior.status : 'none',
     };
   });
+  team.members = rowsLocal;
 
   closeModal($('modal-edit-team'));
   render();
@@ -686,6 +779,7 @@ $('btn-confirm-remove').addEventListener('click', async () => {
     STATE.teams = STATE.teams.filter(t => t.id !== teamId);
     STATE.pendingRemoveTeamId = null;
     closeModal($('modal-remove-team'));
+    if (API.removeKnownTeam) API.removeKnownTeam(teamId);
     render();
     showToast(`Team "${name}" removed`);
   } catch (err) {
@@ -921,7 +1015,7 @@ $('btn-copy-code').addEventListener('click', () => copyText(GAME_CODE));
 $('btn-copy-connect').addEventListener('click',  () => copyText(GAME_CODE));
 $('btn-copy-code-2').addEventListener('click',   () => copyText(GAME_CODE));
 $('btn-share-link').addEventListener('click',    () => {
-  const url = `${location.origin}${location.pathname.replace('teams.html', '')}?code=${GAME_CODE}`;
+  const url = `${location.origin}/?code=${encodeURIComponent(GAME_CODE)}`;
   copyText(url);
   showToast('Link copied');
 });
@@ -1100,6 +1194,7 @@ function gameplayRole(role) {
 
 function seedRoster(teams) {
   STATE.teams = (teams || []).map(team => {
+    const leaderId = (team.leader && team.leader.member_id) || null;
     const t = {
       id: team.team_id,
       name: team.team_name || 'Team ' + team.team_id,
@@ -1110,6 +1205,7 @@ function seedRoster(teams) {
         name: m.username,
         role: gameplayRole(m.gameplay_role),
         status: m.is_connected ? 'connected' : 'disconnected',
+        isLeader: m.device_role === 'TEAM_LEADER' || m.member_id === leaderId,
       })),
     };
     t.status = connectionToCardStatus(t.connectionStatus);
@@ -1257,7 +1353,21 @@ function renderRealQr(container, dataUri) {
     if (vis) renderRealQr(vis, qrDataUri);
     if (modal) renderRealQr(modal, qrDataUri);
   } catch (e) { console.warn('[teams] QR offline', e.message); }
+
+  updateRoundNav(gameId);
 })();
+
+/* ============================================================
+   ROUND NAV
+============================================================ */
+async function updateRoundNav(gameId) {
+  const roundEl = $('round-number');
+  if (!roundEl || !gameId) return;
+  try {
+    const status = await GameAPI.status(gameId);
+    roundEl.textContent = String((status && status.current_round) || 1);
+  } catch (e) { /* keep current label */ }
+}
 
 /* ============================================================
    REALTIME PRESENCE (host teams page)
@@ -1405,6 +1515,11 @@ function renderRealQr(container, dataUri) {
     const team = ensureTeam(p.team_id);
     applyConnectionStatus(team, p.connection_status || 'DISCONNECTED');
     reRender();
+  });
+
+  ['round_started', 'round_completed', 'game_started', 'game_paused',
+   'game_resumed', 'game_completed', 'match_started'].forEach((evt) => {
+    rt.on(evt, () => { updateRoundNav(rosterGameId || gameId); });
   });
 
   // Connect the host socket; on (re)connect re-fetch the roster so teams

@@ -4,7 +4,7 @@ import pytest
 
 from app import create_app
 from app.extensions import db
-from app.models import Game
+from app.models import Game, TeamMember
 from app.services import game_service, team_service
 from app.services.maintenance import (
     expire_stale_device_sessions,
@@ -164,3 +164,59 @@ def test_expire_stale_device_sessions_marks_disconnected(app, client):
     with app.app_context():
         sess = team_service._get_device_session(session_token)
         assert sess.disconnected_at is not None
+
+
+def test_expire_stale_sweep_reports_swept_sessions(app, client):
+    data = _create_game(client)
+    game_id = data["game_id"]
+
+    team_resp = client.post(
+        "/api/games/{}/teams".format(game_id),
+        json={"team_name": "Team A", "username": "Juan"},
+    )
+    assert team_resp.status_code == 201
+    team_data = team_resp.get_json()["data"]
+    leader = team_data["leader"]
+
+    conn_resp = client.post(
+        "/api/devices/connect",
+        json={"connection_token": leader["connection_token"], "device_id": "dev-1"},
+    )
+    assert conn_resp.status_code == 201
+    session_token = conn_resp.get_json()["data"]["session_token"]
+
+    with app.app_context():
+        sess = team_service._get_device_session(session_token)
+        sess.last_heartbeat = utcnow() - timedelta(seconds=9999)
+        db.session.commit()
+
+        swept = team_service.expire_stale_sessions(timeout_seconds=60)
+        assert swept == [(game_id, team_data["team_id"], leader["member_id"])]
+
+        member = db.session.get(TeamMember, leader["member_id"])
+        assert member.is_connected is False
+
+
+def test_expire_stale_sweep_skips_fresh_sessions(app, client):
+    data = _create_game(client)
+    game_id = data["game_id"]
+
+    team_resp = client.post(
+        "/api/games/{}/teams".format(game_id),
+        json={"team_name": "Team A", "username": "Juan"},
+    )
+    assert team_resp.status_code == 201
+    leader = team_resp.get_json()["data"]["leader"]
+
+    conn_resp = client.post(
+        "/api/devices/connect",
+        json={"connection_token": leader["connection_token"], "device_id": "dev-1"},
+    )
+    assert conn_resp.status_code == 201
+    session_token = conn_resp.get_json()["data"]["session_token"]
+
+    with app.app_context():
+        swept = team_service.expire_stale_sessions(timeout_seconds=60)
+        assert swept == []
+        sess = team_service._get_device_session(session_token)
+        assert sess.disconnected_at is None

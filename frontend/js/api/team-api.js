@@ -92,20 +92,22 @@ const TeamAPI = (() => {
     return API.request(`/teams/${teamId}`, { session: true });
   }
 
-  // PATCH /api/teams/<team_id>  { team_name }  (team-leader session or host)
+  // PATCH /api/teams/<team_id>  { team_name }  (host or team-leader session)
   function updateTeamName(teamId, teamName) {
     return API.request(`/teams/${teamId}`, {
       method: 'PATCH',
       body: { team_name: teamName },
+      host: true,
       session: true,
     });
   }
 
-  // PATCH /api/members/<member_id>  { username }  (own session or host)
+  // PATCH /api/members/<member_id>  { username }  (host or the member's own session)
   function updateUsername(memberId, username) {
     return API.request(`/members/${memberId}`, {
       method: 'PATCH',
       body: { username },
+      host: true,
       session: true,
     });
   }

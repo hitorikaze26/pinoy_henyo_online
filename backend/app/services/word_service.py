@@ -415,23 +415,32 @@ def _authorize_modify(game, word, actor):
         )
 
 
-def update_word(word, game, new_text, actor):
+def update_word(word, game, new_text, actor, category_id=None):
     _authorize_modify(game, word, actor)
+    if category_id is not None:
+        category = db.session.get(Category, category_id)
+    else:
+        category = db.session.get(Category, word.category_id)
+    if category is None or category.game_id != game.id:
+        raise CategoryNotInGameError(
+            "The category does not belong to this game."
+        )
     text = _validate_word_text(new_text)
     normalized = normalize_word(text)
-    if normalized != word.normalized_word:
-        existing = Word.query.filter(
-            Word.game_id == game.id,
-            Word.category_id == word.category_id,
-            Word.normalized_word == normalized,
-            Word.id != word.id,
-        ).first()
-        if existing is not None:
-            raise DuplicateWordError(
-                "Another word with the same name already exists in this category."
-            )
+    existing = Word.query.filter(
+        Word.game_id == game.id,
+        Word.category_id == category.id,
+        Word.normalized_word == normalized,
+        Word.id != word.id,
+    ).first()
+    if existing is not None:
+        raise DuplicateWordError(
+            "Another word with the same name already exists in this category."
+        )
     word.word_text = text
     word.normalized_word = normalized
+    if category_id is not None:
+        word.category_id = category.id
     _record_event(
         game,
         "WORD_UPDATED",

@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Pinoy Henyo Online – Host Settings" />
+  <title>Host Settings – Pinoy Henyo Online</title>
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="../../assets/logo/favicon.svg" />
+  <link rel="apple-touch-icon" href="../../assets/logo/apple-touch-icon.png" />
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Chivo+Mono:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+
+  <!-- Global CSS (must load first) -->
+  <link rel="stylesheet" href="../../css/global.css" />
+  <!-- Host chrome: top nav, sidebar, modals (shared with the dashboard) -->
+  <link rel="stylesheet" href="../../css/pages/host_dashboard.css" />
+  <!-- Settings Stylesheet -->
+  <link rel="stylesheet" href="../../css/pages/settings.css" />
+</head>
+
+<body>
+
+  <!-- ============================================================
+       TOP NAV BAR (shared host chrome)
+  ============================================================ -->
+  <header class="dash-nav" id="dash-nav" role="banner">
+
+    <!-- Left: Logo → links back to lobby -->
+    <div class="dash-nav__left">
+      <a href="../../index.html" class="dash-nav__logo-link" aria-label="Back to Lobby">
+        <img
+          src="../../assets/logo/logo-pinoy-henyo-white.png"
+          alt="Pinoy Henyo Online"
+          class="dash-nav__logo"
+          loading="eager"
+        />
+      </a>
+    </div>
+
+    <!-- Center: Round indicator -->
+    <div class="dash-nav__center">
+      <span class="dash-nav__round-label">Round</span>
+      <span class="dash-nav__round-num" id="round-number">1</span>
+    </div>
+
+    <!-- Right: Live indicator + Game code -->
+    <div class="dash-nav__right">
+      <div class="dash-nav__live">
+        <span class="dash-nav__live-dot" aria-label="Live"></span>
+        <span class="dash-nav__live-text">Live</span>
+      </div>
+      <button class="dash-nav__code-btn" id="btn-copy-code" aria-label="Copy game code" title="Click to copy">
+        <span id="game-code-display">------</span>
+        <i class="fa-regular fa-copy" id="copy-icon"></i>
+      </button>
+    </div>
+
+  </header>
+
+  <!-- ============================================================
+       SHELL: Sidebar + Main
+  ============================================================ -->
+  <div class="dash-shell">
+
+    <!-- SIDEBAR -->
+    <aside class="dash-sidebar" role="navigation" aria-label="Dashboard navigation">
+
+      <div class="sidebar__logo">
+        <img src="../../assets/logo/logo-pinoy-henyo-white.png" alt="Pinoy Henyo Online" class="sidebar__logo-img" loading="eager" />
+      </div>
+
+      <nav class="sidebar__nav">
+        <a href="host_dashboard.html" class="sidebar__nav-item">
+          <i class="fa-solid fa-gauge-high"></i><span>Dashboard</span>
+        </a>
+        <a href="teams.html" class="sidebar__nav-item">
+          <i class="fa-solid fa-users"></i><span>Teams</span>
+        </a>
+        <a href="words.html" class="sidebar__nav-item">
+          <i class="fa-solid fa-list"></i><span>Words</span>
+        </a>
+        <a href="connections.html" class="sidebar__nav-item">
+          <i class="fa-solid fa-wifi"></i><span>Connections</span>
+        </a>
+        <a href="settings.html" class="sidebar__nav-item sidebar__nav-item--active" aria-current="page">
+          <i class="fa-solid fa-gear"></i><span>Settings</span>
+        </a>
+      </nav>
+
+      <div class="sidebar__footer">
+        <a href="../../index.html" class="sidebar__lobby-btn">
+          <i class="fa-solid fa-arrow-left"></i><span>Back to Lobby</span>
+        </a>
+      </div>
+
+    </aside>
+
+    <!-- MAIN -->
+    <main class="dash-main" role="main">
+
+      <!-- PAGE HEADER -->
+      <div class="page-header reveal">
+        <div class="page-header__icon">
+          <i class="fa-solid fa-gear"></i>
+        </div>
+        <div class="page-header__text">
+          <h1 class="page-header__title">Host Settings</h1>
+          <p class="page-header__sub">Configure the game experience, timers, audio, and host controls.</p>
+        </div>
+      </div>
+
+      <!-- NO-SESSION STATE -->
+      <div class="empty-state empty-state--nosession reveal" id="settings-nosession" hidden>
+        <div class="empty-state__icon">
+          <i class="fa-solid fa-circle-info"></i>
+        </div>
+        <h2 class="empty-state__title">Create a game to manage game settings</h2>
+        <p class="empty-state__sub">Audio and player display preferences work anytime. Game rules, timers, and host controls unlock once a game is active.</p>
+        <button class="controls-btn empty-state__btn" id="btn-nosession-goto">
+          <i class="fa-solid fa-gauge-high"></i> Go to Host Dashboard
+        </button>
+      </div>
+
+      <div class="settings-stack" id="settings-stack">
+
+        <!-- ====================================================
+             GAME SETTINGS
+        ==================================================== -->
+        <section class="settings-card reveal" id="card-game" aria-labelledby="game-title">
+          <div class="settings-card__header">
+            <div class="settings-card__title">
+              <i class="fa-solid fa-gamepad"></i>
+              <h2 class="settings-card__name" id="game-title">Game</h2>
+            </div>
+            <span class="settings-card__badge" id="game-lock-badge" hidden>Locked while playing</span>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-row__info">
+              <p class="setting-row__title">Number of Rounds <span class="chip chip--rule">Fixed rule</span></p>
+              <p class="setting-row__sub">Pinoy Henyo is always played in two rounds.</p>
+            </div>
+            <div class="setting-row__control setting-row__control--readonly">
+              <span class="setting-pill-value">2 Rounds</span>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-row__info">
+              <p class="setting-row__title">Round 1 Categories <span class="chip chip--rule">Fixed rule</span></p>
+              <p class="setting-row__sub">Round 1 uses only the categories you select on the Words tab.</p>
+            </div>
+            <div class="setting-row__control setting-row__control--readonly">
+              <span class="setting-pill-value">Selected</span>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-row__info">
+              <p class="setting-row__title">Round 2 Categories <span class="chip chip--rule">Fixed rule</span></p>
+              <p class="setting-row__sub">Round 2 draws from all available categories.</p>
+            </div>
+            <div class="setting-row__control setting-row__control--readonly">
+              <span class="setting-pill-value">All</span>
+            </div>
+          </div>
+
+          <div class="setting-row is-live-config">
+            <div class="setting-row__info">
+              <p class="setting-row__title">Max Words per Team <span class="chip chip--pref">Preference</span></p>
+              <p class="setting-row__sub">Stored on this device and pre-filled for new games.</p>
+            </div>
+            <div class="setting-row__control">
+              <select class="controls-filter dd dd--pill" id="set-game-maxwords" aria-label="Max words per team">
+                <option value="3">3 words</option>
+                <option value="4">4 words</option>
+                <option value="5" selected>5 words</option>
+                <option value="6">6 words</option>
+                <option value="8">8 words</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-row__info">
+              <p class="setting-row__title">Points per Correct Word <span class="chip chip--rule">Fixed rule</span></p>
+              <p class="setting-row__sub">Scoring is fixed at one point for every correct answer.</p>
+            </div>
+            <div class="setting-row__control setting-row__control--readonly">
+              <span class="setting-pill-value">1 Point</span>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-row__info">
+              <p class="setting-row__title">Passing Words <span class="chip chip--rule">Fixed rule</span></p>
+              <p class="setting-row__sub">Passing is irreversible — the word is skipped and cannot be answered again in that turn.</p>
+            </div>
+            <div class="setting-row__control setting-row__control--readonly">
+              <span class="setting-pill-value">Final</span>
+            </div>
+          </div>
+
+          <div class="setting-row is-live-config">
+            <div class="setting-row__info">
+              <p class="setting-row__title">Time Penalty per Wrong Answer <span class="chip chip--pref">Preference</span></p>
+              <p class="setting-row__sub">Matches the -3s / +3s controls on the dashboard.</p>
+            </div>
+            <div class="setting-row__control">
+              <select class="controls-filter dd dd--pill" id="set-game-penalty" aria-label="Time penalty per wrong answer">
+                <option value="0">0s</option>
+                <option value="3" selected>3s</option>
+                <option value="5">5s</option>
+                <option value="10">10s</option>
+              </select>
+            </div>
+          </div>
+
+          <p class="settings-card__foot">
+            These are the shared game rules. Changing a preference here only affects the host's own defaults for future games.
+          </p>
+        </section>
+
+        <!-- ====================================================
+             TIMER SETTINGS
+        ==================================================== -->
+        <section class="settings-card reveal" id="card-timer" aria-labelledby="timer-title">
+          <div class="settings-card__header">
+            <div class="settings-card__title">
+              <i class="fa-regular fa-clock"></i>
+              <h2 class="settings-card__name" id="timer-title">Timer</h2>
+            </div>
+            <span class="settings-card__badge" id="timer-lock-badge" hidden>Locked while playing</span>
+          </div>
+
+          <div class="setting-row is-live-config">
+            <div class="setting-row__info">
+              <p class="setting-row__title">Turn Length</p>
+              <p class="setting-row__sub">Pre-fills the Set Time timer on the dashboard. Capped at 5:00.</p>
+            </div>
+            <div class="setting-row__control setting-row__control--time">
+              <div class="set-time-inputs">
+                <div class="set-time-group">
+                  <label class="set-time-label" for="set-timer-min">Minutes</label>
+                  <input type="number" id="set-timer-min" class="set-time-input" min="0" max="5" value="1" />
+                </div>
+                <span class="set-time-colon">:</span>
+                <div class="set-time-group">
+                  <label class="set-time-label" for="set-timer-sec">Seconds</label>
+                  <input type="number" id="set-timer-sec" class="set-time-input" min="0" max="59" value="35" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="setting-row is-live-config">
+            <div class="setting-row__info">
+              <p class="setting-row__title">Timer Direction</p>
+              <p class="setting-row__sub">Counts down from the turn length, or counts up from zero.</p>
+            </div>
+            <div class="setting-row__control">
+              <div class="seg" role="group" aria-label="Timer direction">
+                <button type="button" class="seg__btn seg__btn--active" id="set-timer-mode-countdown" data-mode="countdown" aria-pressed="true">
+                  <i class="fa-solid fa-arrow-down"></i> Countdown
+                </button>
+                <button type="button" class="seg__btn" id="set-timer-mode-countup" data-mode="countup" aria-pressed="false">
+                  <i class="fa-solid fa-arrow-up"></i> Count Up
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="setting-row is-live-config">
+            <div class="setting-row__info">
+              <p class="setting-row__title">Warning Threshold</p>
+              <p class="setting-row__sub">Timer warning sound and styling begin in the final seconds.</p>
+            </div>
+            <div class="setting-row__control">
+              <select class="controls-filter dd dd--pill" id="set-timer-warn" aria-label="Warning threshold">
+                <option value="5">5s left</option>
+                <option value="10" selected>10s left</option>
+                <option value="15">15s left</option>
+                <option value="30">30s left</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="setting-row is-live-config">
+            <div class="setting-row__info">
+              <p class="setting-row__title">Presets</p>
+              <p class="setting-row__sub">Quick-set the turn length to a common value.</p>
+            </div>
+            <div class="setting-row__control">
+              <div class="timer-presets">
+                <button class="preset-btn" data-seconds="60">1:00</button>
+                <button class="preset-btn" data-seconds="90">1:30</button>
+                <button class="preset-btn" data-seconds="120">2:00</button>
+                <button class="preset-btn" data-seconds="180">3:00</button>
+                <button class="preset-btn" data-seconds="300">5:00</button>
+              </div>
+            </div>
+          </div>
+
+          <p class="settings-card__foot">Timer values are saved on this device and used to pre-fill the Set Time modal when the game is not running.</p>
+        </section>
+
+        <!-- ====================================================
+             AUDIO SETTINGS
+        ==================================================== -->
+        <section class="settings-card reveal" id="card-audio" aria-labelledby="audio-title">
+          <div class="settings-card__header">
+            <div class="settings-card__title">
+              <i class="fa-solid fa-volume-high"></i>
+              <h2 class="settings-card__name" id="audio-title">Audio</h2>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-row__info">
+              <p class="setting-row__title">Background Music</p>
+              <p class="setting-row__sub">Plays the selected track on the host dashboard.</p>
+            </div>
+            <div class="setting-row__control">
+              <label class="setting-switch">
+                <input type="checkbox" id="set-audio-music-on" checked />
+                <span class="setting-switch__track" aria-hidden="true"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-row__info">
+              <p class="setting-row__title">Music Volume</p>
+              <p class="setting-row__sub">Applies immediately to background music playback.</p>
+            </div>
+            <div class="setting-row__control setting-row__control--slider">
+              <div class="slider-wrap">
+                <input type="range" id="set-audio-music-vol" class="set-slider" min="0" max="100" step="1" value="40" aria-label="Music volume" />
+                <span class="slider-wrap__val" id="set-audio-music-vol-val">40%</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-row__info">
+              <p class="setting-row__title">Music Track</p>
+              <p class="setting-row__sub">Tracks listed below are files inside the project's <code>assets/sounds</code> folder.</p>
+            </div>
+            <div class="setting-row__control setting-row__control--stacked">
+              <select class="controls-filter dd dd--pill" id="set-audio-track" aria-label="Music track"></select>
+              <button class="controls-btn controls-btn--refresh" id="btn-audio-preview">
+                <i class="fa-solid fa-play"></i>
+                Preview
+              </button>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-row__info">
+              <p class="setting-row__title">Sound Effects</p>
+              <p class="setting-row__sub">UI clicks, confirms, notifications, and timer cues.</p>
+            </div>
+            <div class="setting-row__control">
+              <label class="setting-switch">
+                <input type="checkbox" id="set-audio-sfx-on" checked />
+                <span class="setting-switch__track" aria-hidden="true"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-row__info">
+              <p class="setting-row__title">Effects Volume</p>
+              <p class="setting-row__sub">Applies immediately to UI sound effects.</p>
+            </div>
+            <div class="setting-row__control setting-row__control--slider">
+              <div class="slider-wrap">
+                <input type="range" id="set-audio-sfx-vol" class="set-slider" min="0" max="100" step="1" value="60" aria-label="Effects volume" />
+                <span class="slider-wrap__val" id="set-audio-sfx-vol-val">60%</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-row__info">
+              <p class="setting-row__title">Test Sound</p>
+              <p class="setting-row__sub">Your browser may block audio until you interact with the page once.</p>
+            </div>
+            <div class="setting-row__control setting-row__control--stacked">
+              <button class="controls-btn controls-btn--refresh" data-test-sound="click">
+                <i class="fa-solid fa-comment"></i> Click
+              </button>
+              <button class="controls-btn controls-btn--refresh" data-test-sound="notification">
+                <i class="fa-solid fa-bell"></i> Alert
+              </button>
+              <button class="controls-btn controls-btn--refresh" data-test-sound="confirm">
+                <i class="fa-solid fa-check"></i> Confirm
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ====================================================
+             TEAMS & CONNECTIONS SETTINGS
+        ==================================================== -->
+        <section class="settings-card reveal" id="card-teams" aria-labelledby="teams-title">
+          <div class="settings-card__header">
+            <div class="settings-card__title">
+              <i class="fa-solid fa-users"></i>
+              <h2 class="settings-card__name" id="teams-title">Teams &amp; Connections</h2>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-row__info">
+              <p class="setting-row__title">Allow New Teams</p>
+              <p class="setting-row__sub">Whether teams may join while the game is in the lobby or setup.</p>
+            </div>
+            <div class="setting-row__control">
+              <label class="setting-switch">
+                <input type="checkbox" id="set-teams-allow-new" checked />
+                <span class="setting-switch__track" aria-hidden="true"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-row__info">
+              <p class="setting-row__title">Auto-Approve Connections</p>
+              <p class="setting-row__sub">When off (default), the host approves each device on the dashboard. This preference only stores the intent; the approval flow stays manual for now.</p>
+            </div>
+            <div class="setting-row__control">
+              <label class="setting-switch">
+                <input type="checkbox" id="set-teams-autoapprove" />
+                <span class="setting-switch__track" aria-hidden="true"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-row__info">
+              <p class="setting-row__title">Max Teams</p>
+              <p class="setting-row__sub">Preferred team-count default for new games.</p>
+            </div>
+            <div class="setting-row__control">
+              <select class="controls-filter dd dd--pill" id="set-teams-maxteams" aria-label="Max teams">
+                <option value="4">4</option>
+                <option value="6">6</option>
+                <option value="8" selected>8</option>
+                <option value="10">10</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-row__info">
+              <p class="setting-row__title">Max Members per Team</p>
+              <p class="setting-row__sub">Preferred member-count default for new teams.</p>
+            </div>
+            <div class="setting-row__control">
+              <select class="controls-filter dd dd--pill" id="set-teams-maxmembers" aria-label="Max members per team">
+                <option value="4">4</option>
+                <option value="6" selected>6</option>
+                <option value="8">8</option>
+              </select>
+            </div>
+          </div>
+        </section>
+
+        <!-- ====================================================
+             PLAYER DISPLAY SETTINGS
+        ==================================================== -->
+        <section class="settings-card reveal" id="card-display" aria-labelledby="display-title">
+          <div class="settings-card__header">
+            <div class="settings-card__title">
+              <i class="fa-solid fa-display"></i>
+              <h2 class="settings-card__name" id="display-title">Player Display</h2>
+            </div>
+          </div>
+          <p class="settings-card__intro">Display preferences are saved on this device and will be applied to player screens in a future update.</p>
+
+          <div class="setting-row">
+            <div class="setting-row__info">
+              <p class="setting-row__title">Show Player Names</p>
+            </div>
+            <div class="setting-row__control">
+              <label class="setting-switch">
+                <input type="checkbox" id="set-display-names" checked />
+                <span class="setting-switch__track" aria-hidden="true"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-row__info">
+              <p class="setting-row__title">Show Role Labels</p>
+              <p class="setting-row__sub">Displays Manghuhula / Tagasagot on the player side.</p>
+            </div>
+            <div class="setting-row__control">
+              <label class="setting-switch">
+                <input type="checkbox" id="set-display-roles" checked />
+                <span class="setting-switch__track" aria-hidden="true"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-row__info">
+              <p class="setting-row__title">Show Scores</p>
+              <p class="setting-row__sub">Live points visible to teams during play.</p>
+            </div>
+            <div class="setting-row__control">
+              <label class="setting-switch">
+                <input type="checkbox" id="set-display-scores" checked />
+                <span class="setting-switch__track" aria-hidden="true"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-row__info">
+              <p class="setting-row__title">Show QR Join Code</p>
+              <p class="setting-row__sub">Lets teams pull up the host screen on their own phones.</p>
+            </div>
+            <div class="setting-row__control">
+              <label class="setting-switch">
+                <input type="checkbox" id="set-display-qr" checked />
+                <span class="setting-switch__track" aria-hidden="true"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-row__info">
+              <p class="setting-row__title">Show Round &amp; Category</p>
+              <p class="setting-row__sub">Keeps teams informed which round and category is active.</p>
+            </div>
+            <div class="setting-row__control">
+              <label class="setting-switch">
+                <input type="checkbox" id="set-display-round" checked />
+                <span class="setting-switch__track" aria-hidden="true"></span>
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <!-- ====================================================
+             HOST CONTROLS
+        ==================================================== -->
+        <section class="settings-card reveal" id="card-host" aria-labelledby="host-title">
+          <div class="settings-card__header">
+            <div class="settings-card__title">
+              <i class="fa-solid fa-screwdriver-wrench"></i>
+              <h2 class="settings-card__name" id="host-title">Host Controls</h2>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-row__info">
+              <p class="setting-row__title">Game Code</p>
+              <p class="setting-row__sub">Share this with teams so they can join the game.</p>
+            </div>
+            <div class="setting-row__control setting-row__control--code">
+              <span class="game-code-pill" id="settings-game-code">------</span>
+              <button class="controls-btn controls-btn--refresh" id="btn-settings-copy">
+                <i class="fa-regular fa-copy"></i> Copy
+              </button>
+              <button class="controls-btn controls-btn--refresh" id="btn-settings-qr">
+                <i class="fa-solid fa-qrcode"></i> QR
+              </button>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-row__info">
+              <p class="setting-row__title">Lock Game</p>
+              <p class="setting-row__sub">Locks team actions in this host's team view. Local device preference.</p>
+            </div>
+            <div class="setting-row__control">
+              <label class="setting-switch">
+                <input type="checkbox" id="set-host-lock" />
+                <span class="setting-switch__track" aria-hidden="true"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-row__info">
+              <p class="setting-row__title">Pause / Resume Game</p>
+              <p class="setting-row__sub">Freeze the game, then pick it right back up. Only available once the game has started.</p>
+            </div>
+            <div class="setting-row__control">
+              <button class="controls-btn controls-btn--refresh" id="btn-pause-resume" disabled>
+                <i class="fa-solid fa-pause" id="btn-pause-resume-icon"></i>
+                <span id="btn-pause-resume-label">Pause Game</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-row__info">
+              <p class="setting-row__title">End Game</p>
+              <p class="setting-row__sub">Finish the game and reveal the final standings.</p>
+            </div>
+            <div class="setting-row__control">
+              <button class="controls-btn controls-btn--danger" id="btn-end-game" disabled>
+                <i class="fa-solid fa-flag-checkered"></i> End Game
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ====================================================
+             DANGER ZONE
+        ==================================================== -->
+        <section class="settings-card settings-card--danger reveal" id="card-danger" aria-labelledby="danger-title">
+          <div class="settings-card__header">
+            <div class="settings-card__title">
+              <i class="fa-solid fa-triangle-exclamation"></i>
+              <h2 class="settings-card__name" id="danger-title">Danger Zone</h2>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-row__info">
+              <p class="setting-row__title">Leave Game</p>
+              <p class="setting-row__sub">Ends this device's host session and returns to the lobby. The game, teams, words, and scores stay on the server — reopen it from My Games on the lobby.</p>
+            </div>
+            <div class="setting-row__control">
+              <button class="controls-btn controls-btn--danger" id="btn-leave-game">
+                <i class="fa-solid fa-right-from-bracket"></i> Leave Game
+              </button>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-row__info">
+              <p class="setting-row__title">Delete Saved Game</p>
+              <p class="setting-row__sub">Remove this game from this device's saved list only. The server copy is not deleted. This cannot be undone.</p>
+            </div>
+            <div class="setting-row__control">
+              <button class="controls-btn controls-btn--danger-ghost" id="btn-delete-saved">
+                <i class="fa-solid fa-trash"></i> Delete Saved Game
+              </button>
+            </div>
+          </div>
+        </section>
+
+      </div><!-- /.settings-stack -->
+
+    </main>
+  </div><!-- /.dash-shell -->
+
+  <!-- ============================================================
+       MODALS
+  ============================================================ -->
+
+  <!-- QR Code Modal -->
+  <div class="dash-modal-overlay" id="modal-settings-qr" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="settings-qr-title">
+    <div class="dash-modal">
+      <button class="dash-modal__close" id="close-settings-qr" aria-label="Close">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+      <h2 class="dash-modal__title" id="settings-qr-title">
+        <i class="fa-solid fa-qrcode"></i>
+        Scan to Join
+      </h2>
+      <p class="dash-modal__subtitle">Show this to players to join the game.</p>
+      <div class="qr-modal-visual" id="settings-qr-grid" aria-label="QR Code"></div>
+      <div class="qr-modal-code">
+        <span id="settings-qr-code-text">------</span>
+        <button class="qr-modal-copy" id="btn-settings-qr-copy" aria-label="Copy code">
+          <i class="fa-regular fa-copy"></i>
+        </button>
+      </div>
+      <div class="dash-modal__actions">
+        <button class="dash-modal__cancel" id="btn-close-settings-qr">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pause Game Confirm Modal -->
+  <div class="dash-modal-overlay" id="modal-confirm-pause" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="confirm-pause-title">
+    <div class="dash-modal">
+      <button class="dash-modal__close" id="close-confirm-pause" aria-label="Close">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+      <h2 class="dash-modal__title" id="confirm-pause-title">
+        <i class="fa-solid fa-pause"></i>
+        Pause the game?
+      </h2>
+      <p class="dash-modal__subtitle">The game will be frozen for all teams until you resume it.</p>
+      <div class="dash-modal__actions">
+        <button class="dash-modal__cancel" id="cancel-confirm-pause">Not now</button>
+        <button class="dash-modal__confirm" id="confirm-pause-btn">
+          <i class="fa-solid fa-pause"></i> Pause Game
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- End Game Confirm Modal -->
+  <div class="dash-modal-overlay" id="modal-confirm-end" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="confirm-end-title">
+    <div class="dash-modal">
+      <button class="dash-modal__close" id="close-confirm-end" aria-label="Close">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+      <h2 class="dash-modal__title" id="confirm-end-title">
+        <i class="fa-solid fa-flag-checkered"></i>
+        End the game?
+      </h2>
+      <p class="dash-modal__subtitle">This finishes the game and reveals the final standings. It cannot be reopened after this.</p>
+      <div class="dash-modal__actions">
+        <button class="dash-modal__cancel" id="cancel-confirm-end">Keep playing</button>
+        <button class="dash-modal__confirm dash-modal__confirm--danger" id="confirm-end-btn">
+          <i class="fa-solid fa-flag-checkered"></i> End Game
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Leave Game Confirm Modal -->
+  <div class="dash-modal-overlay" id="modal-confirm-leave" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="confirm-leave-title">
+    <div class="dash-modal">
+      <button class="dash-modal__close" id="close-confirm-leave" aria-label="Close">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+      <h2 class="dash-modal__title" id="confirm-leave-title">
+        <i class="fa-solid fa-right-from-bracket"></i>
+        Leave this game?
+      </h2>
+      <p class="dash-modal__subtitle">Your host session on this device ends and you return to the lobby. The game stays available on the server, and you can reopen it from My Games.</p>
+      <div class="dash-modal__actions">
+        <button class="dash-modal__cancel" id="cancel-confirm-leave">Stay</button>
+        <button class="dash-modal__confirm" id="confirm-leave-btn">
+          <i class="fa-solid fa-right-from-bracket"></i> Leave Game
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Saved Game Modal -->
+  <div class="dash-modal-overlay" id="modal-confirm-delete" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="confirm-delete-title">
+    <div class="dash-modal">
+      <button class="dash-modal__close" id="close-confirm-delete" aria-label="Close">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+      <h2 class="dash-modal__title" id="confirm-delete-title">
+        <i class="fa-solid fa-trash"></i>
+        Delete saved game?
+      </h2>
+      <p class="dash-modal__subtitle">
+        Type the game code <strong id="delete-game-hint">------</strong> to remove it from this device.
+      </p>
+      <div class="settings-delete">
+        <input type="text" id="input-delete-code" class="set-time-input" maxlength="16" placeholder="GAME CODE" autocomplete="off" />
+        <p class="settings-delete__error" id="delete-error"></p>
+      </div>
+      <div class="dash-modal__actions">
+        <button class="dash-modal__cancel" id="cancel-confirm-delete">Cancel</button>
+        <button class="dash-modal__confirm dash-modal__confirm--danger" id="confirm-delete-btn" disabled>
+          <i class="fa-solid fa-trash"></i> Delete Forever
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="copy-toast" id="copy-toast" aria-live="polite"></div>
+
+  <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+  <script src="../../js/core/runtime-config.js"></script>
+  <script src="../../js/core/config.js"></script>
+  <script src="../../js/core/audio.js"></script>
+  <script src="../../js/api/api.js"></script>
+  <script src="../../js/api/game-api.js"></script>
+  <script src="../../js/api/connect.js"></script>
+  <script src="../../js/api/realtime.js"></script>
+  <script src="../../js/core/modal.js"></script>
+  <script src="../../js/core/notifications.js"></script>
+  <script src="../../js/core/custom-select.js"></script>
+  <script src="../../js/host/settings.js"></script>
+</body>
+</html>

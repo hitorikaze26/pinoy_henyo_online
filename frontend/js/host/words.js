@@ -73,7 +73,7 @@ function addRipple(btn, e) {
 document.addEventListener('click', e => {
   const btn = e.target.closest(
     '.hdr-btn, .btn-confirm, .btn-danger, .btn-cancel, .bulk-btn, ' +
-    '.lock-bar__btn, .connect-action-btn, .dash-nav__code-btn, ' +
+    '.connect-action-btn, .dash-nav__code-btn, ' +
     '.tbl-btn, .filter-pill, .view-toggle__btn'
   );
   if (btn) addRipple(btn, e);
@@ -147,7 +147,7 @@ document.addEventListener('keydown', e => {
 ============================================================ */
 function populateSelects() {
   const catSelects  = ['add-category', 'edit-category'];
-  const teamSelects = ['add-team', 'edit-team'];
+  const teamSelects = ['add-team'];
 
   catSelects.forEach(id => {
     const el = $(id);
@@ -209,7 +209,7 @@ function renderSummary() {
     ? 'All rounds have their categories ready!'
     : anySetup
       ? 'Some rounds are missing configured categories.'
-      : 'No rounds configured yet. Set up Round 1 &amp; Round 2 below.';
+      : 'No rounds configured yet. Set up Round 1 & Round 2 below.';
 }
 
 function setRoundBadge(id, ready) {
@@ -221,31 +221,31 @@ function setRoundBadge(id, ready) {
 }
 
 /* ============================================================
-   RENDER LOCK BAR
-============================================================ */
+   RENDER LOCK STATUS (read-only — backed by game status)
+   ============================================================ */
 function renderLockBar() {
-  const btn   = $('btn-lock-words');
   const barIcon  = $('lock-bar-icon');
   const barLabel = $('lock-bar-label');
-  const btnIcon  = $('lock-btn-icon');
-  const btnLabel = $('lock-btn-label');
+  const statusEl = $('lock-status');
+  const statusIcon = $('lock-btn-icon');
+  const statusLabel = $('lock-btn-label');
   const addBtn   = $('btn-add-word');
   const addBtnEmpty = $('btn-add-word-empty');
 
   if (STATE.locked) {
-    btn.classList.add('locked');
     barIcon.className  = 'fa-solid fa-lock';
     barLabel.textContent = 'Words Locked';
-    btnIcon.className  = 'fa-solid fa-lock-open';
-    btnLabel.textContent = 'Unlock Words';
+    statusIcon.className  = 'fa-solid fa-lock';
+    statusLabel.textContent = 'Locked';
+    statusEl.classList.add('locked');
     if (addBtn)      addBtn.disabled = true;
     if (addBtnEmpty) addBtnEmpty.disabled = true;
   } else {
-    btn.classList.remove('locked');
     barIcon.className  = 'fa-solid fa-lock-open';
     barLabel.textContent = 'Words Unlocked';
-    btnIcon.className  = 'fa-solid fa-lock';
-    btnLabel.textContent = 'Lock Words';
+    statusIcon.className  = 'fa-solid fa-lock-open';
+    statusLabel.textContent = 'Unlocked';
+    statusEl.classList.remove('locked');
     if (addBtn)      addBtn.disabled = false;
     if (addBtnEmpty) addBtnEmpty.disabled = false;
   }
@@ -330,16 +330,9 @@ function statusLabel(s) {
   return map[s] || s;
 }
 
-function roundHtml(round) {
-  if (!round) return `<span class="round-pill round-pill--none">â€”</span>`;
-  return `<span class="round-pill round-pill--${round}">
-    <i class="fa-solid fa-circle-${round}" style="font-size:0.6rem"></i> R${round}
-  </span>`;
-}
-
 /* ============================================================
    RENDER TABLE
-============================================================ */
+   ============================================================ */
 function renderTable() {
   const words  = getFilteredWords();
   const tbody  = $('word-table-body');
@@ -372,7 +365,6 @@ function renderTable() {
         <td class="word-cell">${esc(w.word)}</td>
         <td><span class="cat-badge">${esc(w.category)}</span></td>
         <td>${esc(w.team || 'â€”')}</td>
-        <td>${roundHtml(w.round)}</td>
         <td>
           <span class="status-dot status-dot--${esc(w.status)}">
             <span class="status-dot__circle"></span>
@@ -462,30 +454,39 @@ function renderBulkBar() {
   $('bulk-count').textContent = `${count} word${count !== 1 ? 's' : ''} selected`;
 }
 
-$('bulk-r1').addEventListener('click', () => {
-  STATE.words.forEach(w => {
-    if (STATE.selectedIds.has(w.id)) { w.round = 1; w.status = 'selected'; }
-  });
-  STATE.selectedIds.clear();
-  renderBulkBar();
-  renderTable();
-  showToast(`Assigned to Round 1`);
-});
-
-$('bulk-r2').addEventListener('click', () => {
-  STATE.words.forEach(w => {
-    if (STATE.selectedIds.has(w.id)) { w.round = 2; w.status = 'selected'; }
-  });
-  STATE.selectedIds.clear();
-  renderBulkBar();
-  renderTable();
-  showToast(`Assigned to Round 2`);
-});
-
-$('bulk-delete').addEventListener('click', () => {
+$('bulk-delete').addEventListener('click', async () => {
   const count = STATE.selectedIds.size;
+  if (!count) return;
   if (!confirm(`Delete ${count} word${count !== 1 ? 's' : ''}? This cannot be undone.`)) return;
-  STATE.words = STATE.words.filter(w => !STATE.selectedIds.has(w.id));
+  const ids = [...STATE.selectedIds];
+
+  // Real backend integration when a host game context exists.
+  if (window.WordAPI && API.getGameId()) {
+    const btn = $('bulk-delete');
+    btn.disabled = true;
+    try {
+      for (const id of ids) {
+        try { await WordAPI.deleteWord(id, { asHost: true }); }
+        catch (e) { console.warn('[Pinoy Henyo] bulk delete word failed', id, e); }
+      }
+      STATE.words = STATE.words.filter(w => !ids.includes(w.id));
+      STATE.totalWords = Math.max(0, STATE.totalWords - ids.length);
+      STATE.selectedIds.clear();
+      renderBulkBar();
+      render();
+      showToast(`${ids.length} word${ids.length !== 1 ? 's' : ''} deleted`);
+      await refreshWordPool();
+    } catch (err) {
+      console.error('[Pinoy Henyo] bulk delete failed', err);
+      showToast(err.message || 'Could not delete the selected words.');
+    } finally {
+      btn.disabled = false;
+    }
+    return;
+  }
+
+  STATE.words = STATE.words.filter(w => !ids.includes(w.id));
+  STATE.totalWords = Math.max(0, STATE.totalWords - ids.length);
   STATE.selectedIds.clear();
   renderBulkBar();
   renderTable();
@@ -571,7 +572,6 @@ function renderByTeam() {
           ${ws.map(w => `
             <div class="group-word-chip">
               ${esc(w.word)}
-              <span class="group-word-chip__team">${roundHtml(w.round)}</span>
             </div>`).join('')}
         </div>
       </div>`).join('');
@@ -651,10 +651,11 @@ function attachGroupToggle(container) {
    ADD WORD
 ============================================================ */
 function openAddWord() {
-  if (STATE.locked) { showToast('Words are locked. Unlock first.'); return; }
+  if (STATE.locked) { showToast('Words are locked.'); return; }
   $('form-add').reset();
   $('err-add-word').textContent = '';
   $('err-add-category').textContent = '';
+  $('err-add-team').textContent = '';
   populateSelects();
   openModal('modal-add');
 }
@@ -668,6 +669,8 @@ $('form-add').addEventListener('submit', e => {
   e.preventDefault();
   const wordIn = $('add-word');
   const catIn  = $('add-category');
+  const teamIn = $('add-team');
+  const hosted = !!(window.WordAPI && API.getGameId());
   let valid    = true;
 
   if (!wordIn.value.trim()) {
@@ -682,14 +685,21 @@ $('form-add').addEventListener('submit', e => {
     valid = false;
   } else { catIn.classList.remove('error'); $('err-add-category').textContent = ''; }
 
+  // Hosted games require a real submitting team (the backend rejects
+  // team-less words). Do not silently fall back to a local demo row.
+  if (hosted && !teamIn.value) {
+    teamIn.classList.add('error');
+    $('err-add-team').textContent = 'Please select the team that submitted this word.';
+    valid = false;
+  } else { teamIn.classList.remove('error'); $('err-add-team').textContent = ''; }
+
   if (!valid) return;
 
   const newWord = {
     word:     wordIn.value.trim(),
     category: catIn.value,
-    team:     $('add-team').value  || null,
-    round:    $('add-round').value ? +$('add-round').value : null,
-    status:   $('add-round').value ? 'selected' : 'available',
+    team:     teamIn.value || null,
+    status:   'available',
   };
 
   // Check duplicate
@@ -707,10 +717,10 @@ $('form-add').addEventListener('submit', e => {
 
 async function commitAddWord(data) {
   // Real backend integration when a host game context exists.
-  // The backend requires a submitting team for every word, so the host
-  // must pick which team the word belongs to (add-team select).
-  const selectedTeamId = parseInt($('add-team').value, 10);
-  if (window.WordAPI && API.getGameId() && selectedTeamId) {
+  // The backend requires a submitting team for every word, and the add form
+  // already enforces a team selection in hosted mode.
+  if (window.WordAPI && API.getGameId()) {
+    const selectedTeamId = parseInt($('add-team').value, 10);
     const categoryId = window.CATEGORY_NAME_TO_ID ? window.CATEGORY_NAME_TO_ID[data.category] : null;
     const btn = $('form-add').querySelector('button[type="submit"]');
     const original = btn.textContent;
@@ -726,7 +736,6 @@ async function commitAddWord(data) {
         word: created.word_text,
         category: created.category_name || data.category,
         team: created.team_name || null,
-        round: null,
         status: mapWordStatus(created.status),
       });
       STATE.totalWords++;
@@ -736,7 +745,7 @@ async function commitAddWord(data) {
       showToast(`"${data.word}" added`);
     } catch (err) {
       console.error('[Pinoy Henyo] add word failed', err);
-      if (err.code === 'DUPLICATE_SUBMIT') { showToast(err.message); return; }
+      if (err.code === 'DUPLICATE_SUBMIT' || err.code === 'DUPLICATE_WORD') { showToast(err.message || 'Duplicate word.'); return; }
       $('err-add-category').textContent = err.message || 'Could not add the word.';
       $('add-category').classList.add('error');
     } finally {
@@ -771,7 +780,7 @@ $('btn-dup-keep').addEventListener('click',  () => {
    EDIT WORD
 ============================================================ */
 function openEditWord(id) {
-  if (STATE.locked) { showToast('Words are locked. Unlock first.'); return; }
+  if (STATE.locked) { showToast('Words are locked.'); return; }
   const w = STATE.words.find(x => x.id === id);
   if (!w) return;
   STATE.pendingEditId = id;
@@ -780,8 +789,7 @@ function openEditWord(id) {
   $('edit-word').value     = w.word;
   $('edit-category').value = w.category;
   $('edit-team').value     = w.team  || '';
-  $('edit-round').value    = w.round ? String(w.round) : '';
-  $('edit-subtitle').textContent = `Editing "${w.word}"`;
+  $('edit-subtitle').textContent = `Editing "${w.word}"` + (w.team ? ` — ${w.team}` : '');
 
   $('err-edit-word').textContent = '';
   $('err-edit-category').textContent = '';
@@ -816,14 +824,20 @@ $('form-edit').addEventListener('submit', async e => {
   if (!w) return;
 
   // Real backend integration when a host game context exists.
+  // The backend persists word text + category (PATCH /words/:id).
   if (window.WordAPI && API.getGameId()) {
+    const categoryId = window.CATEGORY_NAME_TO_ID ? window.CATEGORY_NAME_TO_ID[catIn.value] : null;
+    if (!categoryId) {
+      $('err-edit-category').textContent = 'Please select a valid category.';
+      return;
+    }
     const btn = $('form-edit').querySelector('button[type="submit"]');
     const original = btn.textContent;
     btn.disabled = true;
     btn.textContent = 'Saving…';
     try {
       await API.withLoading('edit-word', () =>
-        WordAPI.updateWord(w.id, wordIn.value.trim(), { asHost: true })
+        WordAPI.updateWord(w.id, wordIn.value.trim(), { asHost: true, categoryId })
       );
       w.word     = wordIn.value.trim();
       w.category = catIn.value;
@@ -843,8 +857,7 @@ $('form-edit').addEventListener('submit', async e => {
   w.word     = wordIn.value.trim();
   w.category = catIn.value;
   w.team     = $('edit-team').value  || null;
-  w.round    = $('edit-round').value ? +$('edit-round').value : null;
-  w.status   = w.round ? 'selected' : 'available';
+  w.status   = 'available';
 
   closeModal('modal-edit');
   render();
@@ -855,7 +868,7 @@ $('form-edit').addEventListener('submit', async e => {
    DELETE WORD
 ============================================================ */
 function openDeleteWord(id) {
-  if (STATE.locked) { showToast('Words are locked. Unlock first.'); return; }
+  if (STATE.locked) { showToast('Words are locked.'); return; }
   const w = STATE.words.find(x => x.id === id);
   if (!w) return;
   STATE.pendingDeleteId = id;
@@ -906,69 +919,8 @@ $('btn-confirm-delete').addEventListener('click', async () => {
 });
 
 /* ============================================================
-   LOCK / UNLOCK WORDS
-============================================================ */
-function openLockModal() {
-  const icon  = $('lock-modal-icon');
-  const title = $('lock-title');
-  const sub   = $('lock-modal-sub');
-  const body  = $('lock-modal-body');
-  const cIcon = $('confirm-lock-icon');
-  const cLbl  = $('confirm-lock-label');
-
-  if (STATE.locked) {
-    icon.className     = 'fa-solid fa-lock-open';
-    title.textContent  = 'Unlock Words';
-    sub.textContent    = 'Allow editing words again.';
-    body.textContent   = 'Unlocking will allow adding, editing, and deleting words.';
-    cIcon.className    = 'fa-solid fa-lock-open';
-    cLbl.textContent   = 'Unlock Words';
-  } else {
-    icon.className     = 'fa-solid fa-lock';
-    title.textContent  = 'Lock Words';
-    sub.textContent    = 'Confirm before starting the game.';
-    body.textContent   = 'Once locked, words cannot be added, edited, or deleted.';
-    cIcon.className    = 'fa-solid fa-lock';
-    cLbl.textContent   = 'Lock Words';
-  }
-  openModal('modal-lock');
-}
-
-$('btn-lock-words').addEventListener('click', openLockModal);
-$('close-lock').addEventListener('click',    () => closeModal('modal-lock'));
-$('cancel-lock').addEventListener('click',   () => closeModal('modal-lock'));
-$('btn-confirm-lock').addEventListener('click', () => {
-  STATE.locked = !STATE.locked;
-  closeModal('modal-lock');
-  renderLockBar();
-  renderTable();
-  showToast(STATE.locked ? 'Words locked' : 'Words unlocked');
-});
-
-/* ============================================================
-   RANDOMIZE
-============================================================ */
-$('btn-randomize').addEventListener('click', () => {
-  if (STATE.locked) { showToast('Words are locked. Unlock first.'); return; }
-  // Fisher-Yates shuffle round assignments among available words
-  const available = STATE.words.filter(w => !w.round);
-  for (let i = available.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [available[i], available[j]] = [available[j], available[i]];
-  }
-  // Assign first half to R1, second to R2
-  const half = Math.ceil(available.length / 2);
-  available.forEach((w, i) => {
-    const target = STATE.words.find(x => x.id === w.id);
-    if (target) { target.round = i < half ? 1 : 2; target.status = 'selected'; }
-  });
-  render();
-  showToast('Words randomized');
-});
-
-/* ============================================================
    WORD STATUS PANEL (real per-team-per-category readiness)
-============================================================ */
+   ============================================================ */
 $('btn-assign-words').addEventListener('click', () => {
   STATE.showAssign = true;
   $('assign-section').hidden = false;
@@ -1006,7 +958,7 @@ function renderWordStatus() {
     const totalCount = catNames.reduce((n, c) => n + cats[c].length, 0);
     const rows = catNames.map(cat => {
       const count = cats[cat].length;
-      const cls = count >= 3 ? 'ok' : (count >= 5 ? 'more' : 'warn');
+      const cls = count >= 5 ? 'more' : (count >= 3 ? 'ok' : 'warn');
       const chip = count >= 5
         ? `<span class="ws-ready-chip more">Max 5 reached</span>`
         : `<span class="ws-ready-chip ${count >= 3 ? 'ready' : ''}">${count >= 3 ? 'Ready' : 'Need ' + (3 - count) + ' more'}</span>`;
@@ -1036,6 +988,7 @@ function renderWordStatus() {
    - GameAPI.status (current_round / current_match_id)
 ============================================================ */
 let _setupBusy = false;
+const _pendingMatches = window.__MATCH_DRAFT = [];
 
 function setupToast(msg) { showToast(msg); }
 
@@ -1260,7 +1213,13 @@ function reorderMatchRow(btn, roundNum) {
   }).then(() => refreshMatches()).catch(err => setupToast(err.message || 'Could not reorder.'));
 }
 
-$('matches-round').addEventListener('change', refreshMatches);
+$('matches-round').addEventListener('change', () => {
+  if (_pendingMatches.length) {
+    _pendingMatches.length = 0;
+    setupToast('Match draft cleared — add matches for the selected round.');
+  }
+  refreshMatches();
+});
 
 $('btn-add-match').addEventListener('click', () => {
   const teams = API.getKnownTeams();
@@ -1277,8 +1236,6 @@ $('btn-add-match').addEventListener('click', () => {
 
 $('close-match').addEventListener('click',  () => closeModal('modal-match'));
 $('cancel-match').addEventListener('click', () => closeModal('modal-match'));
-
-const _pendingMatches = window.__MATCH_DRAFT = [];
 
 $('form-match').addEventListener('submit', e => {
   e.preventDefault();
@@ -1383,8 +1340,7 @@ init();
    ============================================================ */
 function mapWordStatus(status) {
   if (status === 'SELECTED') return 'selected';
-  if (status === 'DISABLED') return 'available';
-  if (status === 'AVAILABLE') return 'available';
+  if (status === 'DISABLED') return 'disabled';
   return 'available';
 }
 
@@ -1433,7 +1389,6 @@ function mapWordStatus(status) {
         word: w.word_text,
         category: w.category_name || 'Other',
         team: w.team_name || null,
-        round: null,
         status: mapWordStatus(w.status),
       }));
       STATE.words = wordsList;
@@ -1446,6 +1401,8 @@ function mapWordStatus(status) {
         if (typeof statusData.word_pool_locked === 'boolean') {
           STATE.locked = statusData.word_pool_locked;
         }
+        const roundEl = $('round-number');
+        if (roundEl) roundEl.textContent = String((statusData && statusData.current_round) || 1);
       } catch (e) { /* status offline */ }
       populateSelects();
       render();
@@ -1465,18 +1422,32 @@ function mapWordStatus(status) {
     }, 120);
   }
 
-  try {
+  // Refetch and refresh all category-derived state (selects, pills, tags,
+  // name→id map, counts). Used on load and after category mutations.
+  async function fetchCategories() {
     const catData = await WordAPI.listCategories(gameId);
-    const cats = (catData.categories || []).map(c => ({ id: c.category_id, name: c.name })).filter(c => c.name);
+    const cats = (catData.categories || [])
+      .map(c => ({ id: c.category_id, name: c.name, word_count: c.word_count || 0 }))
+      .filter(c => c.name);
     window.CATEGORY_NAME_TO_ID = {};
     cats.forEach(c => { window.CATEGORY_NAME_TO_ID[c.name] = c.id; });
-    if (cats.length) {
-      STATE.categories = cats;
-      CATEGORIES.length = 0;
-      cats.forEach(c => CATEGORIES.push(c.name));
-      if (typeof STATE.totalCategories === 'number') STATE.totalCategories = cats.length;
-    }
-  } catch (e) { console.warn('[words] categories offline', e.message); }
+    STATE.categories = cats;
+    CATEGORIES.length = 0;
+    cats.forEach(c => CATEGORIES.push(c.name));
+    STATE.totalCategories = cats.length;
+    return cats;
+  }
+
+  async function reloadCategories() {
+    await fetchCategories();
+    populateSelects();
+    render();
+    await refreshWordPool();
+    if (window.RoundAPI) { try { await refreshRounds(); } catch (e) { /* ignore */ } }
+  }
+
+  try { await fetchCategories(); }
+  catch (e) { console.warn('[words] categories offline', e.message); }
 
   await refreshWordPool();
 
@@ -1487,6 +1458,128 @@ function mapWordStatus(status) {
     await refreshRounds();
     await refreshMatches();
   }
+
+  // ---------------- Manage Categories modal ----------------
+  const manageCatsList = $('manage-cats-list');
+  const newCatName = $('new-cat-name');
+
+  async function renderManageCategories() {
+    manageCatsList.innerHTML = '<p style="color:rgba(255,255,255,0.35)">Loading categories…</p>';
+    try {
+      const cats = await fetchCategories();
+      if (!cats.length) {
+        manageCatsList.innerHTML = '<p style="color:rgba(255,255,255,0.5)">No categories yet. Add one above.</p>';
+        return;
+      }
+      manageCatsList.innerHTML = cats.map(c => `
+        <div class="cat-manage-row" data-id="${c.id}">
+          <span class="cat-manage-row__name">${esc(c.name)}</span>
+          <span class="cat-manage-row__count">${c.word_count} word${c.word_count !== 1 ? 's' : ''}</span>
+          <div class="cat-manage-row__actions">
+            <button class="cat-manage-row__btn cat-manage-row__btn--rename" data-id="${c.id}" title="Rename">
+              <i class="fa-solid fa-pen"></i>
+            </button>
+            <button class="cat-manage-row__btn cat-manage-row__btn--delete" data-id="${c.id}" data-name="${esc(c.name)}" title="Delete">
+              <i class="fa-solid fa-trash"></i>
+            </button>
+          </div>
+        </div>`).join('');
+
+      manageCatsList.querySelectorAll('.cat-manage-row__btn--rename').forEach(btn => {
+        btn.addEventListener('click', () => startRenameCat(btn));
+      });
+      manageCatsList.querySelectorAll('.cat-manage-row__btn--delete').forEach(btn => {
+        btn.addEventListener('click', () => deleteCatRow(btn));
+      });
+    } catch (e) {
+      manageCatsList.innerHTML = `<p style="color:rgba(255,255,255,0.5)">${esc(e.message || 'Could not load categories.')}</p>`;
+    }
+  }
+
+  async function deleteCatRow(btn) {
+    if (STATE.locked) { showToast('Categories are locked once the game starts.'); return; }
+    const id = parseInt(btn.dataset.id, 10);
+    const name = btn.dataset.name;
+    if (!confirm(`Delete category "${name}"? All of its words will also be removed.`)) return;
+    btn.disabled = true;
+    try {
+      await API.withLoading('delete-category', () => WordAPI.deleteCategory(id));
+      showToast(`Category "${name}" deleted`);
+      await reloadCategories();
+      await renderManageCategories();
+    } catch (err) {
+      console.error('[Pinoy Henyo] delete category failed', err);
+      showToast(err.message || 'Could not delete the category.');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function startRenameCat(btn) {
+    if (STATE.locked) { showToast('Categories are locked once the game starts.'); return; }
+    const row = btn.closest('.cat-manage-row');
+    const id = parseInt(btn.dataset.id, 10);
+    const cur = row.querySelector('.cat-manage-row__name').textContent;
+    const nameEl = row.querySelector('.cat-manage-row__name');
+    nameEl.innerHTML = `<input type="text" class="form-input cat-manage-row__input" maxlength="50" value="${esc(cur)}" />`;
+    const input = nameEl.querySelector('input');
+    btn.outerHTML = `<span class="cat-manage-row__btn cat-manage-row__btn--save" data-id="${id}" title="Save"><i class="fa-solid fa-check"></i></span>`;
+    const saveBtn = row.querySelector('.cat-manage-row__btn--save');
+
+    const finish = async () => {
+      const next = input.value.trim();
+      if (!next) { nameEl.textContent = cur; return; }
+      if (next === cur) { nameEl.textContent = cur; return; }
+      try {
+        await API.withLoading('rename-category', () => WordAPI.updateCategory(id, next));
+        showToast('Category renamed');
+        await reloadCategories();
+        await renderManageCategories();
+      } catch (err) {
+        console.error('[Pinoy Henyo] rename category failed', err);
+        showToast(err.message || 'Could not rename the category.');
+        nameEl.textContent = cur;
+        await renderManageCategories();
+      }
+    };
+
+    saveBtn.addEventListener('click', finish);
+    input.addEventListener('keydown', ev => {
+      if (ev.key === 'Enter') { ev.preventDefault(); finish(); }
+      if (ev.key === 'Escape') { nameEl.textContent = cur; }
+    });
+    input.focus();
+    input.select();
+  }
+
+  $('btn-manage-cats').addEventListener('click', async () => {
+    openModal('modal-manage-cats');
+    await renderManageCategories();
+  });
+  $('close-manage-cats').addEventListener('click', () => closeModal('modal-manage-cats'));
+  $('close-manage-cats-2').addEventListener('click', () => closeModal('modal-manage-cats'));
+
+  $('form-add-category').addEventListener('submit', async e => {
+    e.preventDefault();
+    if (STATE.locked) { showToast('Categories are locked once the game starts.'); return; }
+    const name = newCatName.value.trim();
+    if (!name) { $('err-new-cat').textContent = 'Category name is required.'; return; }
+    $('err-new-cat').textContent = '';
+    const btn = $('form-add-category').querySelector('button[type="submit"]');
+    btn.disabled = true;
+    try {
+      await API.withLoading('create-category', () => WordAPI.createCategory(gameId, name));
+      newCatName.value = '';
+      showToast(`Category "${name}" added`);
+      await reloadCategories();
+      await renderManageCategories();
+    } catch (err) {
+      console.error('[Pinoy Henyo] create category failed', err);
+      $('err-new-cat').textContent = err.message || 'Could not add the category.';
+    } finally {
+      btn.disabled = false;
+    }
+  });
 
   // Host realtime socket: keep this setup page in sync with the game
   // lifecycle so round/match/word changes made elsewhere (or by the server)

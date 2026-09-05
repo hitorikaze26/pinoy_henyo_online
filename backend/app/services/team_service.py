@@ -614,19 +614,32 @@ def disconnect_device(session_token, device_id=None):
 
 
 def expire_stale_sessions(timeout_seconds):
-    """Mark device sessions that missed their heartbeat as disconnected."""
+    """Mark device sessions that missed their heartbeat as disconnected.
+
+    Returns a list of ``(game_id, team_id, member_id)`` tuples describing each
+    member whose presence flipped to offline, so callers can fan out realtime
+    disconnect events after committing.
+    """
     cutoff = utcnow() - timedelta(seconds=timeout_seconds)
     stale = DeviceSession.query.filter(
         DeviceSession.disconnected_at.is_(None),
         DeviceSession.last_heartbeat < cutoff,
     ).all()
     now = utcnow()
+    disconnected_members = {}
     for session in stale:
         session.disconnected_at = now
         member = session.member
-        if member is not None and not _member_has_active_session(member.id):
-            member.is_connected = False
-    return len(stale)
+        if member is None or _member_has_active_session(member.id):
+            continue
+        member.is_connected = False
+        if member.id not in disconnected_members:
+            disconnected_members[member.id] = (
+                session.game_id,
+                session.team_id,
+                member.id,
+            )
+    return list(disconnected_members.values())
 
 
 # ---------------------------------------------------------------------------

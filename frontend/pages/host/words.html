@@ -31,7 +31,7 @@
     </div>
     <div class="dash-nav__center">
       <span class="dash-nav__round-label">Round</span>
-      <span class="dash-nav__round-num">1</span>
+      <span class="dash-nav__round-num" id="round-number">1</span>
     </div>
     <div class="dash-nav__right">
       <div class="dash-nav__live">
@@ -68,7 +68,7 @@
         <a href="connections.html" class="sidebar__nav-item">
           <i class="fa-solid fa-wifi"></i><span>Connections</span>
         </a>
-        <a href="#" class="sidebar__nav-item">
+        <a href="settings.html" class="sidebar__nav-item">
           <i class="fa-solid fa-gear"></i><span>Settings</span>
         </a>
       </nav>
@@ -90,18 +90,15 @@
           </div>
           <div>
             <h1 class="page-header__title">Words</h1>
-            <p class="page-header__sub">Manage and assign words for each round.</p>
+            <p class="page-header__sub">Manage the word pool, categories, rounds, and matches.</p>
           </div>
         </div>
         <div class="page-header__actions">
           <button class="hdr-btn hdr-btn--primary" id="btn-add-word">
             <i class="fa-solid fa-plus"></i> Add Word
           </button>
-          <button class="hdr-btn hdr-btn--secondary" id="btn-randomize">
-            <i class="fa-solid fa-shuffle"></i> Randomize
-          </button>
           <button class="hdr-btn hdr-btn--secondary" id="btn-assign-words">
-            <i class="fa-solid fa-clipboard-list"></i> Assign Words
+            <i class="fa-solid fa-clipboard-list"></i> Word Status
           </button>
         </div>
       </div>
@@ -162,12 +159,15 @@
       <div class="lock-bar reveal" id="lock-bar" style="--delay:0.12s">
         <div class="lock-bar__left">
           <i class="fa-solid fa-lock-open" id="lock-bar-icon"></i>
-          <span id="lock-bar-label">Words Unlocked</span>
+          <div class="lock-bar__labels">
+            <span id="lock-bar-label">Words Unlocked</span>
+            <span class="lock-bar__hint" id="lock-bar-hint">Words lock automatically once the game starts.</span>
+          </div>
         </div>
-        <button class="lock-bar__btn" id="btn-lock-words">
-          <i class="fa-solid fa-lock" id="lock-btn-icon"></i>
-          <span id="lock-btn-label">Lock Words</span>
-        </button>
+        <span class="lock-bar__status" id="lock-status">
+          <i class="fa-solid fa-lock-open" id="lock-btn-icon"></i>
+          <span id="lock-btn-label">Unlocked</span>
+        </span>
       </div>
 
       <!-- FILTERS & SEARCH -->
@@ -188,6 +188,9 @@
           <div class="filter-pills" id="cat-pills" role="group" aria-label="Filter by category">
             <!-- Populated by JS -->
           </div>
+          <button type="button" class="filter-row__manage" id="btn-manage-cats" title="Add, rename, or delete categories">
+            <i class="fa-solid fa-tag"></i> Manage
+          </button>
         </div>
 
         <!-- Team pills -->
@@ -235,7 +238,6 @@
                 <th scope="col" class="sortable" data-col="word">Word <i class="fa-solid fa-sort"></i></th>
                 <th scope="col" class="sortable" data-col="category">Category <i class="fa-solid fa-sort"></i></th>
                 <th scope="col" class="sortable" data-col="team">Team <i class="fa-solid fa-sort"></i></th>
-                <th scope="col" class="sortable" data-col="round">Round <i class="fa-solid fa-sort"></i></th>
                 <th scope="col">Status</th>
                 <th scope="col">Actions</th>
               </tr>
@@ -249,12 +251,6 @@
         <!-- Bulk action bar -->
         <div class="bulk-bar" id="bulk-bar" hidden>
           <span id="bulk-count">0 selected</span>
-          <button class="bulk-btn bulk-btn--round" id="bulk-r1">
-            <i class="fa-solid fa-circle-1"></i> Assign to Round 1
-          </button>
-          <button class="bulk-btn bulk-btn--round" id="bulk-r2">
-            <i class="fa-solid fa-circle-2"></i> Assign to Round 2
-          </button>
           <button class="bulk-btn bulk-btn--danger" id="bulk-delete">
             <i class="fa-solid fa-trash"></i> Delete
           </button>
@@ -475,14 +471,7 @@
           <select id="add-team" class="form-select dd">
             <option value="">— No team —</option>
           </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="add-round"><i class="fa-solid fa-layer-group"></i> Round</label>
-          <select id="add-round" class="form-select dd">
-            <option value="">— Unassigned —</option>
-            <option value="1">Round 1</option>
-            <option value="2">Round 2</option>
-          </select>
+          <span class="form-error" id="err-add-team"></span>
         </div>
         <div class="modal__actions">
           <button type="button" class="btn-cancel" id="cancel-add">Cancel</button>
@@ -520,17 +509,7 @@
         </div>
         <div class="form-group">
           <label class="form-label" for="edit-team"><i class="fa-solid fa-users"></i> Team</label>
-          <select id="edit-team" class="form-select dd">
-            <option value="">— No team —</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="edit-round"><i class="fa-solid fa-layer-group"></i> Round</label>
-          <select id="edit-round" class="form-select dd">
-            <option value="">— Unassigned —</option>
-            <option value="1">Round 1</option>
-            <option value="2">Round 2</option>
-          </select>
+          <input type="text" id="edit-team" class="form-input" readonly placeholder="—" />
         </div>
         <div class="modal__actions">
           <button type="button" class="btn-cancel" id="cancel-edit">Cancel</button>
@@ -588,26 +567,32 @@
     </div>
   </div>
 
-  <!-- LOCK CONFIRMATION -->
-  <div class="modal-overlay" id="modal-lock" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="lock-title">
+  <!-- MANAGE CATEGORIES -->
+  <div class="modal-overlay" id="modal-manage-cats" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="manage-cats-title">
     <div class="modal">
-      <button class="modal__close" id="close-lock"><i class="fa-solid fa-xmark"></i></button>
+      <button class="modal__close" id="close-manage-cats"><i class="fa-solid fa-xmark"></i></button>
       <div class="modal__header">
-        <div class="modal__icon modal__icon--orange"><i class="fa-solid fa-lock" id="lock-modal-icon"></i></div>
+        <div class="modal__icon modal__icon--blue"><i class="fa-solid fa-tags"></i></div>
         <div>
-          <h2 class="modal__title" id="lock-title">Lock Words</h2>
-          <p class="modal__subtitle" id="lock-modal-sub">Confirm before starting the game.</p>
+          <h2 class="modal__title" id="manage-cats-title">Manage Categories</h2>
+          <p class="modal__subtitle">Add, rename, or delete categories for this game.</p>
         </div>
       </div>
-      <p class="modal__body-text" id="lock-modal-body">
-        Once locked, words cannot be added, edited, or deleted.
-      </p>
+      <form class="modal__form" id="form-add-category" novalidate>
+        <div class="form-group">
+          <label class="form-label" for="new-cat-name"><i class="fa-solid fa-plus"></i> New Category</label>
+          <div class="cat-add-row">
+            <input type="text" id="new-cat-name" class="form-input" maxlength="50" placeholder="e.g. Movies, Brands" />
+            <button type="submit" class="btn-confirm cat-add-row__btn"><i class="fa-solid fa-plus"></i> Add</button>
+          </div>
+          <span class="form-error" id="err-new-cat"></span>
+        </div>
+      </form>
+      <div id="manage-cats-list" class="cats-list">
+        <p style="color:rgba(255,255,255,0.35)">Loading categories…</p>
+      </div>
       <div class="modal__actions">
-        <button type="button" class="btn-cancel" id="cancel-lock">Cancel</button>
-        <button type="button" class="btn-confirm" id="btn-confirm-lock">
-          <i class="fa-solid fa-lock" id="confirm-lock-icon"></i>
-          <span id="confirm-lock-label">Lock Words</span>
-        </button>
+        <button type="button" class="btn-cancel" id="close-manage-cats-2">Close</button>
       </div>
     </div>
   </div>

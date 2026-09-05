@@ -322,25 +322,25 @@ ul, ol { list-style: none; }
 }
 .lock-bar__left i { font-size: 0.9rem; color: var(--accent-1-400); }
 
-.lock-bar__btn {
+.lock-bar__labels {
+  display: flex; flex-direction: column; gap: 0.1rem;
+}
+.lock-bar__hint {
+  font-family: 'Inter', sans-serif; font-size: 0.72rem; font-weight: 500;
+  color: rgba(255,255,255,0.35);
+}
+
+.lock-bar__status {
   display: inline-flex; align-items: center; gap: 0.45rem;
   padding: 0.55rem 1.1rem; border-radius: var(--r-full);
   font-family: 'Baloo 2', sans-serif; font-size: 0.875rem; font-weight: 700;
-  background: var(--dash-surface-2); border: 1px solid var(--dash-border);
-  color: rgba(255,255,255,0.7);
-  transition: background 0.2s, color 0.2s, transform 0.18s, box-shadow 0.18s;
-  cursor: pointer;
+  background: rgba(68,166,51,0.14); border: 1px solid rgba(68,166,51,0.3);
+  color: var(--secondary-400);
 }
-.lock-bar__btn:hover { background: var(--dash-surface-3); color: #fff; transform: translateY(-1px); }
-.lock-bar__btn.locked {
+.lock-bar__status.locked {
   background: rgba(238,147,38,0.15); border-color: rgba(238,147,38,0.3);
   color: var(--accent-1-400);
 }
-.lock-bar__btn.locked:hover { background: rgba(238,147,38,0.22); }
-
-/* Lock icon transition */
-.lock-bar__btn i { transition: transform 0.35s cubic-bezier(0.34,1.56,0.64,1); }
-.lock-bar__btn:hover i { transform: scale(1.2); }
 
 /* ============================================================
    FILTERS PANEL
@@ -388,6 +388,21 @@ ul, ol { list-style: none; }
   text-transform: uppercase; color: rgba(255,255,255,0.35);
   white-space: nowrap; flex-shrink: 0;
 }
+
+.filter-row__manage {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  margin-left: auto; padding: 0.35rem 0.85rem;
+  border-radius: var(--r-full);
+  font-family: 'Baloo 2', sans-serif; font-size: 0.78rem; font-weight: 700;
+  background: var(--dash-surface-2); border: 1px solid var(--dash-border);
+  color: rgba(255,255,255,0.6); cursor: pointer;
+  transition: background 0.18s, color 0.18s, border-color 0.18s, transform 0.18s;
+}
+.filter-row__manage:hover {
+  background: var(--dash-surface-3); color: var(--primary-300);
+  border-color: rgba(49,154,251,0.35);
+}
+.filter-row__manage:active { transform: scale(0.97); }
 
 /* Filter pills */
 .filter-pills { display: flex; flex-wrap: wrap; gap: 0.4rem; }
@@ -977,3 +992,32 @@ ul, ol { list-style: none; }
 .cats-list label:hover { background: var(--dash-surface-3); }
 .cats-list input[type="checkbox"] { accent-color: var(--primary-400); }
 .cats-list .cat-count { margin-left: auto; font-size: 0.72rem; color: rgba(255,255,255,0.42); }
+
+/* Manage Categories modal */
+.cat-add-row { display: flex; align-items: center; gap: 0.5rem; }
+.cat-add-row .form-input { flex: 1; }
+.cat-add-row__btn { flex-shrink: 0; }
+
+.cat-manage-row {
+  display: flex; align-items: center; gap: 0.6rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px; background: rgba(255,255,255,0.035);
+  font-size: 0.88rem; color: rgba(255,255,255,0.8);
+}
+.cat-manage-row__name { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.cat-manage-row__count { margin-left: auto; font-size: 0.72rem; color: rgba(255,255,255,0.42); white-space: nowrap; }
+.cat-manage-row__actions { display: inline-flex; gap: 0.35rem; flex-shrink: 0; }
+.cat-manage-row__btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.7rem; height: 1.7rem; border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.1); background: transparent;
+  color: rgba(255,255,255,0.55); cursor: pointer;
+  transition: background 0.15s, color 0.15s, transform 0.15s;
+}
+.cat-manage-row__btn:hover { background: var(--dash-surface-3); transform: scale(1.08); }
+.cat-manage-row__btn:active { transform: scale(0.96); }
+.cat-manage-row__btn--rename:hover { color: var(--primary-300); border-color: rgba(49,154,251,0.4); }
+.cat-manage-row__btn--delete:hover { color: var(--accent-2-400); border-color: rgba(238,73,73,0.4); }
+.cat-manage-row__btn--save { color: var(--secondary-400); border-color: rgba(68,166,51,0.4); }
+.cat-manage-row__input { padding: 0.3rem 0.5rem; font-size: 0.85rem; }

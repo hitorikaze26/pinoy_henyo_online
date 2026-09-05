@@ -347,6 +347,11 @@ const API = (() => {
     persist();
   }
   function getKnownTeams() { return (ctx.teams || []).slice(); }
+  function removeKnownTeam(teamId) {
+    if (teamId == null) return;
+    ctx.teams = (ctx.teams || []).filter((t) => String(t.team_id) !== String(teamId));
+    persist();
+  }
   function clearKnownTeams() { ctx.teams = []; persist(); }
   function getSessionContext() { return { ...ctx }; }
 
@@ -546,6 +551,7 @@ const API = (() => {
     getHostGameId,
     addKnownTeam,
     getKnownTeams,
+    removeKnownTeam,
     clearKnownTeams,
     getSessionContext,
     clearTokens,

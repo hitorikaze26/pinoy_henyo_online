@@ -13,7 +13,7 @@ from datetime import timedelta
 
 from ..extensions import db
 from ..models import Game
-from ..services import game_service, team_service
+from ..services import game_service, realtime, team_service
 from ..utils.time import utcnow
 
 logger = logging.getLogger(__name__)
@@ -26,13 +26,22 @@ TERMINAL_STATUSES = (
 
 
 def expire_stale_device_sessions(timeout_seconds):
-    """Mark device sessions that missed their heartbeat as disconnected."""
+    """Mark device sessions that missed their heartbeat as disconnected.
+
+    Disconnects that were detected by the sweep (rather than a socket close)
+    are fanned out over realtime so connected hosts learn about them live.
+    """
     if timeout_seconds <= 0:
         return 0
-    count = team_service.expire_stale_sessions(timeout_seconds)
-    if count:
+    swept = team_service.expire_stale_sessions(timeout_seconds)
+    if swept:
         db.session.commit()
-    return count
+        for game_id, team_id, member_id in swept:
+            try:
+                realtime.emit_team_disconnected(game_id, team_id, member_id)
+            except Exception as exc:  # noqa: BLE001 - never kill the sweep
+                logger.exception("emit_team_disconnected failed: %s", exc)
+    return len(swept)
 
 
 def reconcile_orphaned_games(host_timeout_seconds, now=None):

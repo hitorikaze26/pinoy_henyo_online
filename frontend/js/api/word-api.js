@@ -62,11 +62,13 @@ const WordAPI = (() => {
     });
   }
 
-  // PATCH /api/words/<word_id>  { word_text }
+  // PATCH /api/words/<word_id>  { word_text, category_id? }
   function updateWord(wordId, wordText, opts = {}) {
+    const body = { word_text: wordText };
+    if (opts.categoryId) body.category_id = opts.categoryId;
     return API.request(`/words/${wordId}`, {
       method: 'PATCH',
-      body: { word_text: wordText },
+      body,
       host: opts.asHost === false ? false : true,
       session: opts.asHost === false,
     });

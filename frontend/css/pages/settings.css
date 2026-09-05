@@ -1,0 +1,502 @@
+/* ============================================================
+   HOST SETTINGS — page styles.
+   Loads AFTER global.css + host_dashboard.css (shared chrome).
+   ============================================================ */
+
+/* ============================================================
+   MAIN / REVEAL
+   ============================================================ */
+.dash-main {
+  margin-left: var(--sidebar-w);
+  padding: 2rem 2rem calc(2rem + var(--conn-bar-h));
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+  min-width: 0;
+}
+
+.reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.55s ease, transform 0.55s ease;
+  transition-delay: var(--delay, 0s);
+  will-change: opacity, transform;
+}
+.reveal.visible { opacity: 1; transform: translateY(0); }
+
+/* ============================================================
+   PAGE HEADER
+   ============================================================ */
+.page-header { display: flex; align-items: center; gap: 1rem; }
+.page-header__icon {
+  width: 48px; height: 48px; border-radius: var(--r-md);
+  background: rgba(238,147,38,0.15);
+  border: 1px solid rgba(238,147,38,0.3);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.3rem; color: var(--accent-1-400);
+  flex-shrink: 0;
+}
+.page-header__title {
+  font-family: 'Baloo 2', sans-serif;
+  font-size: 1.7rem; font-weight: 800; color: #fff; line-height: 1.1;
+}
+.page-header__sub {
+  font-size: 0.875rem; color: rgba(255,255,255,0.45); margin-top: 0.15rem;
+}
+
+/* ============================================================
+   CONTROLS BUTTONS (page variants)
+   ============================================================ */
+.controls-btn {
+  display: inline-flex; align-items: center; gap: 0.45rem;
+  padding: 0.55rem 1rem; border-radius: var(--r-full);
+  font-family: 'Baloo 2', sans-serif; font-size: 0.875rem; font-weight: 700;
+  cursor: pointer; position: relative; overflow: hidden;
+  transition: transform 0.18s, box-shadow 0.18s, background 0.18s;
+  will-change: transform;
+}
+.controls-btn:hover  { transform: translateY(-2px); }
+.controls-btn:active { transform: scale(0.96); }
+
+.controls-btn--refresh {
+  background: var(--dash-surface-2);
+  border: 1px solid var(--dash-border);
+  color: rgba(255,255,255,0.75);
+}
+.controls-btn--refresh:hover { background: var(--dash-surface-3); color: #fff; }
+.controls-btn--refresh:disabled { opacity: 0.4; pointer-events: none; }
+
+.controls-btn--danger {
+  background: rgba(184,3,30,0.14);
+  border: 1px solid rgba(184,3,30,0.45);
+  color: #ffb4bf;
+}
+.controls-btn--danger:hover { background: var(--accent-2-500); border-color: var(--accent-2-500); color: #fff; }
+.controls-btn--danger:disabled { opacity: 0.4; pointer-events: none; }
+
+.controls-btn--danger-ghost {
+  background: transparent;
+  border: 1px dashed rgba(184,3,30,0.5);
+  color: rgba(255,168,180,0.85);
+}
+.controls-btn--danger-ghost:hover { background: rgba(184,3,30,0.16); color: #ffb4bf; }
+
+.controls-btn.is-busy {
+  opacity: 0.6;
+  pointer-events: none;
+}
+.controls-btn:disabled {
+  opacity: 0.4;
+  pointer-events: none;
+  transform: none;
+}
+.controls-btn:disabled:hover { transform: none; }
+
+/* ============================================================
+   EMPTY STATE (no active game)
+   ============================================================ */
+.empty-state {
+  display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
+  text-align: center;
+  padding: 2.25rem 1.5rem;
+  background: var(--dash-surface);
+  border: 1px solid var(--dash-border);
+  border-radius: var(--r-lg);
+}
+.empty-state__icon {
+  width: 52px; height: 52px; border-radius: var(--r-full);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.4rem; color: var(--primary-400);
+  background: rgba(49,154,251,0.14);
+  margin-bottom: 0.25rem;
+}
+.empty-state__title {
+  font-family: 'Baloo 2', sans-serif;
+  font-size: 1.3rem; font-weight: 800; color: rgba(255,255,255,0.7);
+}
+.empty-state__sub { font-size: 0.875rem; color: rgba(255,255,255,0.35); max-width: 430px; line-height: 1.6; }
+.empty-state__btn  { margin-top: 0.5rem; }
+
+.empty-state--nosession { border-color: rgba(238,147,38,0.35); }
+.empty-state--nosession .empty-state__icon {
+  color: #e0b54b;
+  background: rgba(238,147,38,0.14);
+}
+.empty-state--nosession .empty-state__title { color: #e0b54b; }
+
+/* ============================================================
+   SETTINGS STACK
+   ============================================================ */
+.settings-stack {
+  width: 100%;
+  max-width: 880px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+}
+
+/* ============================================================
+   SETTINGS CARD
+   ============================================================ */
+.settings-card {
+  background: var(--dash-surface);
+  border: 1px solid var(--dash-border);
+  border-radius: var(--r-lg);
+  padding: 1.3rem 1.5rem 1.15rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.settings-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid var(--dash-border);
+  margin-bottom: 0.4rem;
+}
+
+.settings-card__title {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.settings-card__title i { color: var(--primary-400); font-size: 1.05rem; }
+.settings-card__name {
+  font-family: 'Baloo 2', sans-serif;
+  font-size: 1.2rem; font-weight: 800; color: #fff;
+}
+
+.settings-card__badge {
+  font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.3rem 0.7rem;
+  border-radius: var(--r-full);
+  background: rgba(238,147,38,0.14);
+  border: 1px solid rgba(238,147,38,0.35);
+  color: #f5c06a;
+}
+
+.settings-card__intro {
+  font-size: 0.82rem; color: rgba(255,255,255,0.45);
+  margin: 0.6rem 0 0.2rem;
+}
+
+.settings-card__foot {
+  font-size: 0.78rem; color: rgba(255,255,255,0.35);
+  margin-top: 0.9rem; padding-top: 0.8rem;
+  border-top: 1px solid var(--dash-border-soft);
+}
+
+/* Danger zone card */
+.settings-card--danger {
+  border-color: rgba(184,3,30,0.3);
+}
+.settings-card--danger .settings-card__header { border-bottom-color: rgba(184,3,30,0.2); }
+.settings-card--danger .settings-card__title i { color: var(--accent-2-400); }
+
+/* ============================================================
+   SETTING ROW  (description left / control right)
+   ============================================================ */
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  padding: 0.85rem 0;
+  border-bottom: 1px solid var(--dash-border-soft);
+}
+.setting-row:last-child { border-bottom: none; }
+
+.setting-row__info { flex: 1; min-width: 0; }
+.setting-row__title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: rgba(255,255,255,0.9);
+}
+.setting-row__sub {
+  font-size: 0.8rem;
+  color: rgba(255,255,255,0.4);
+  margin-top: 0.2rem;
+  line-height: 1.5;
+}
+.setting-row__sub code {
+  font-family: 'Chivo Mono', monospace;
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.55);
+}
+
+.setting-row__control {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+.setting-row__control--stacked { row-gap: 0.5rem; }
+.setting-row__control--readonly { flex-shrink: 1; }
+
+/* Read-only value pill */
+.setting-pill-value {
+  padding: 0.32rem 0.9rem;
+  border-radius: var(--r-full);
+  background: var(--dash-surface-2);
+  border: 1px solid var(--dash-border);
+  color: rgba(255,255,255,0.8);
+  font-family: 'Chivo Mono', monospace;
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Chips: Fixed rule / Preference */
+.chip {
+  display: inline-block;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0.16rem 0.5rem;
+  border-radius: var(--r-full);
+  vertical-align: middle;
+}
+.chip--rule {
+  background: rgba(49,154,251,0.13);
+  border: 1px solid rgba(49,154,251,0.3);
+  color: var(--primary-400);
+}
+.chip--pref {
+  background: rgba(238,147,38,0.12);
+  border: 1px solid rgba(238,147,38,0.32);
+  color: #f5c06a;
+}
+
+/* ============================================================
+   SWITCHES
+   ============================================================ */
+.setting-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+.setting-switch input {
+  position: absolute;
+  opacity: 0;
+  width: 1px; height: 1px;
+  pointer-events: none;
+}
+.setting-switch__track {
+  position: relative;
+  width: 52px; height: 28px;
+  border-radius: var(--r-full);
+  background: var(--dash-surface-3);
+  border: 1px solid rgba(255,255,255,0.14);
+  transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
+}
+.setting-switch__track::after {
+  content: '';
+  position: absolute;
+  top: 3px; left: 3px;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.7);
+  transition: transform 0.2s, background 0.2s;
+}
+.setting-switch input:checked + .setting-switch__track {
+  background: var(--primary-500);
+  border-color: var(--primary-400);
+  box-shadow: 0 0 10px rgba(49,154,251,0.35);
+}
+.setting-switch input:checked + .setting-switch__track::after {
+  transform: translateX(24px);
+  background: #fff;
+}
+.setting-switch input:focus-visible + .setting-switch__track {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.setting-switch input:disabled + .setting-switch__track {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ============================================================
+   SLIDERS
+   ============================================================ */
+.setting-row__control--slider { width: min(260px, 100%); }
+
+.slider-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+}
+.set-slider {
+  flex: 1;
+  min-width: 120px;
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: var(--r-full);
+  background: var(--dash-surface-3);
+  outline: none;
+}
+.set-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: var(--primary-400);
+  border: 2px solid #fff;
+  box-shadow: 0 0 8px rgba(49,154,251,0.5);
+  cursor: pointer;
+}
+.set-slider::-moz-range-thumb {
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: var(--primary-400);
+  border: 2px solid #fff;
+  box-shadow: 0 0 8px rgba(49,154,251,0.5);
+  cursor: pointer;
+}
+.slider-wrap__val {
+  font-family: 'Chivo Mono', monospace;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: rgba(255,255,255,0.7);
+  min-width: 42px;
+  text-align: right;
+}
+
+/* ============================================================
+   SEGMENTED CONTROL  (timer direction)
+   ============================================================ */
+.seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem;
+  border-radius: var(--r-full);
+  background: var(--dash-surface-2);
+  border: 1px solid var(--dash-border);
+}
+.seg__btn {
+  padding: 0.42rem 0.9rem;
+  border-radius: var(--r-full);
+  font-family: 'Baloo 2', sans-serif;
+  font-size: 0.85rem; font-weight: 700;
+  color: rgba(255,255,255,0.55);
+  transition: background 0.18s, color 0.18s;
+}
+.seg__btn:hover { color: rgba(255,255,255,0.9); }
+.seg__btn--active {
+  background: var(--primary-600);
+  color: #fff;
+  box-shadow: 0 3px 10px rgba(24,131,229,0.4);
+}
+.seg__btn--active:hover { color: #fff; }
+.seg__btn:disabled { opacity: 0.45; pointer-events: none; }
+
+/* ============================================================
+   TIMER PRESETS
+   ============================================================ */
+.timer-presets {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+/* ============================================================
+   GAME CODE PILL (host controls)
+   ============================================================ */
+.setting-row__control--code { flex-shrink: 1; }
+
+.game-code-pill {
+  padding: 0.5rem 1.1rem;
+  border-radius: var(--r-md);
+  background: rgba(238,147,38,0.12);
+  border: 1px solid rgba(238,147,38,0.4);
+  color: #f5c06a;
+  font-family: 'Chivo Mono', monospace;
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   DELETE CONFIRM vs. settings modal extra
+   ============================================================ */
+.settings-delete {
+  margin-top: 0.9rem;
+}
+.settings-delete .set-time-input {
+  width: 100%;
+  text-align: center;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-family: 'Chivo Mono', monospace;
+  font-weight: 700;
+}
+.settings-delete__error {
+  margin: 0.5rem 0 0;
+  font-size: 0.82rem;
+  color: #f87171;
+  min-height: 1.1em;
+}
+
+/* ============================================================
+   IN-PROGRESS LOCK: fade out controls that are not editable
+   ============================================================ */
+.settings-card.is-locked .setting-row.is-live-config {
+  opacity: 0.55;
+}
+.settings-card.is-locked .setting-row.is-live-config .controls-filter,
+.settings-card.is-locked .setting-row.is-live-config .set-time-input,
+.settings-card.is-locked .setting-row.is-live-config select.dd,
+.settings-card.is-locked .setting-row.is-live-config input,
+.settings-card.is-locked .setting-row.is-live-config .seg__btn {
+  opacity: 0.6;
+}
+.set-time-input:disabled { opacity: 0.55; }
+
+/* ============================================================
+   RESPONSIVE — single column, no horizontal overflow
+   ============================================================ */
+@media (max-width: 640px) {
+  .dash-main {
+    margin-left: 0; /* sidebar collapses to bottom bar */
+    padding: 1.25rem 1rem calc(1.25rem + var(--conn-bar-h));
+  }
+  .settings-card {
+    padding: 1.1rem 1.1rem 0.95rem;
+  }
+  .setting-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.7rem;
+  }
+  .setting-row__control {
+    justify-content: flex-start;
+  }
+  .setting-row__control--slider,
+  .setting-row__control--time {
+    width: 100%;
+  }
+  .setting-row__control--code {
+    flex-wrap: wrap;
+  }
+  .game-code-pill {
+    width: 100%;
+    text-align: center;
+  }
+}

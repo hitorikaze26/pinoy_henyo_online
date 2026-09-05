@@ -157,7 +157,11 @@ def update_word(word_id):
         return error
     try:
         word = word_service.update_word(
-            word, word.game, body.get("word_text"), actor
+            word,
+            word.game,
+            body.get("word_text"),
+            actor,
+            category_id=body.get("category_id"),
         )
         db.session.commit()
     except word_service.WordServiceError as exc:
