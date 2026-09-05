@@ -49,10 +49,8 @@ const DOM = {
   // Control panel
   currentCategory: $('current-category'),
   currentWord:     $('current-word'),
-  teamSelect:      $('team-select'),
   btnSound:        $('btn-sound'),
   soundIcon:       $('sound-icon'),
-  btnSetTime:      $('btn-set-time'),
   btnPenalty:      $('btn-penalty'),
   btnPausePlay:    $('btn-pause-play'),
   pauseIcon:       $('pause-icon'),
@@ -67,7 +65,6 @@ const DOM = {
   timerPanel:     $('timer-display-panel'),
   timerState:     $('timer-state'),
   timerCard:      $('timer-card'),
-  btnTimerReset:  $('btn-timer-reset'),
 
   // Progress
   wordsCorrectEl: $('words-correct'),
@@ -93,14 +90,6 @@ const DOM = {
   totalCount:         $('total-count'),
   connectionTeamChips: $('connection-team-chips'),
   btnShowQr:          $('btn-show-qr'),
-
-  // Set Time Modal
-  modalSetTime:   $('modal-set-time'),
-  inputMinutes:   $('input-minutes'),
-  inputSeconds:   $('input-seconds'),
-  btnConfirmTime: $('btn-confirm-time'),
-  btnCancelTime:  $('btn-cancel-time'),
-  closeSetTime:   $('close-set-time'),
 
   // All Teams Modal
   modalAllTeams:  $('modal-all-teams'),
@@ -375,7 +364,7 @@ function renderCurrentWord(animate = true) {
 /** Sync the team select and per-turn stat displays */
 function renderActiveTeam() {
   // Keep select in sync with STATE
-  if (DOM.teamSelect.value !== String(STATE.activeTeamIndex)) {
+  if (DOM.teamSelect && DOM.teamSelect.value !== String(STATE.activeTeamIndex)) {
     DOM.teamSelect.value = STATE.activeTeamIndex;
   }
 
@@ -544,15 +533,6 @@ function onTimerEnd() {
   console.log('[Pinoy Henyo] Timer ended');
 }
 
-function setTimerDuration(totalSeconds) {
-  STATE.timerTotal = totalSeconds;
-  STATE.timerLeft  = totalSeconds;
-  resetTimer();
-}
-
-// Timer button events
-DOM.btnTimerReset.addEventListener('click', (e) => { addRipple(DOM.btnTimerReset, e); resetTimer(); });
-
 // Central pause/play button in control panel
 DOM.btnPausePlay.addEventListener('click', (e) => {
   addRipple(DOM.btnPausePlay, e);
@@ -641,83 +621,13 @@ DOM.btnStop.addEventListener('click', (e) => {
   console.log('[Pinoy Henyo] Round stopped');
 });
 
-/* ============================================================
-   TEAM SELECT DROPDOWN
-============================================================ */
-DOM.teamSelect.addEventListener('change', () => {
-  STATE.activeTeamIndex = parseInt(DOM.teamSelect.value, 10);
-
-  // Reset turn counters for new team
-  STATE.wordsCorrect = 0;
-  STATE.wordsPassed  = 0;
-
-  renderActiveTeam();
-  renderProgress();
-  renderLeaderboard();
-  renderTeamStatus();
-  resetTimer();
-
-  showToast(`<i class="fa-solid fa-arrows-rotate"></i> Now: ${escHtml(STATE.teams[STATE.activeTeamIndex].name)}`);
-  console.log('[Pinoy Henyo] Active team →', STATE.teams[STATE.activeTeamIndex]);
-});
-
-/* ============================================================
-   NEXT ROUND BUTTON
-============================================================ */
-document.getElementById('btn-next-round').addEventListener('click', (e) => {
-  addRipple(document.getElementById('btn-next-round'), e);
-
-  STATE.round += 1;
-
-  // Update round number in nav
-  DOM.roundNumber.textContent = STATE.round;
-
-  // Update badge on the button
-  document.getElementById('next-round-badge').textContent = `Round ${STATE.round + 1}`;
-
-  // Reset turn counters for the new round
-  STATE.wordsCorrect = 0;
-  STATE.wordsPassed  = 0;
-  STATE.wordIndex    = 0;
-
-  renderCurrentWord(true);
-  renderWordQueue();
-  renderActiveTeam();
-  renderProgress();
-  resetTimer();
-
-  showToast(`Round ${STATE.round} started`);
-  console.log('[Pinoy Henyo] Next round →', STATE.round);
-
-  // Keep leaderboard round badge in sync
-  const roundBadge = document.querySelector('.leaderboard-card__round-badge');
-  if (roundBadge) roundBadge.textContent = `Round ${STATE.round}`;
-});
-
-/* ============================================================
-   RESET ROUND BUTTON
-============================================================ */
-document.getElementById('btn-reset-round').addEventListener('click', (e) => {
-  addRipple(document.getElementById('btn-reset-round'), e);
-
-  if (!confirm(`Reset Round ${STATE.round}?\n\nThis will:\n• Reset the timer\n• Reset word index to the first word\n• Clear correct/pass counters for the current turn\n\nScores will NOT be changed.`)) return;
-
-  // Reset word index and turn counters — keep round number and scores intact
-  STATE.wordIndex    = 0;
-  STATE.wordsCorrect = 0;
-  STATE.wordsPassed  = 0;
-
-  renderCurrentWord(true);
-  renderWordQueue();
-  renderActiveTeam();
-  renderProgress();
-  resetTimer();
-
-  showToast(`Round ${STATE.round} reset`);
-  console.log('[Pinoy Henyo] Round reset →', STATE.round);
-});
+// Sound toggle — drives the real audio engine (shared core/audio.js).
 DOM.btnSound.addEventListener('click', () => {
-  STATE.soundOn = !STATE.soundOn;
+  const stateBefore = STATE.soundOn;
+  if (window.GameAudio && stateBefore) window.GameAudio.play('click');
+  STATE.soundOn = window.GameAudio
+    ? window.GameAudio.toggle()
+    : !stateBefore;
   DOM.soundIcon.className = STATE.soundOn
     ? 'fa-solid fa-volume-high'
     : 'fa-solid fa-volume-xmark';
@@ -758,39 +668,6 @@ document.querySelectorAll('.sidebar__nav-item').forEach(item => {
 });
 
 /* ============================================================
-   SET TIME MODAL
-============================================================ */
-DOM.btnSetTime.addEventListener('click', () => {
-  const m = Math.floor(STATE.timerLeft / 60);
-  const s = STATE.timerLeft % 60;
-  DOM.inputMinutes.value = m;
-  DOM.inputSeconds.value = s;
-  openModal(DOM.modalSetTime);
-});
-
-DOM.closeSetTime.addEventListener('click',  () => closeModal(DOM.modalSetTime));
-DOM.btnCancelTime.addEventListener('click', () => closeModal(DOM.modalSetTime));
-
-// Preset buttons
-document.querySelectorAll('.preset-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const secs = parseInt(btn.dataset.seconds, 10);
-    DOM.inputMinutes.value = Math.floor(secs / 60);
-    DOM.inputSeconds.value = secs % 60;
-  });
-});
-
-DOM.btnConfirmTime.addEventListener('click', () => {
-  const m    = Math.max(0, Math.min(9,  parseInt(DOM.inputMinutes.value, 10) || 0));
-  const s    = Math.max(0, Math.min(59, parseInt(DOM.inputSeconds.value, 10) || 0));
-  const total = m * 60 + s;
-  if (total === 0) { showToast('⚠️ Please set a time greater than 0'); return; }
-  setTimerDuration(total);
-  closeModal(DOM.modalSetTime);
-  showToast(`⏱️ Timer set to ${formatTime(total)}`);
-});
-
-/* ============================================================
    ALL TEAMS MODAL
 ============================================================ */
 DOM.btnViewAllTeams.addEventListener('click', () => {
@@ -823,12 +700,6 @@ function init() {
   DOM.roundNumber.textContent      = STATE.round;
   DOM.gameCodeDisplay.textContent  = STATE.gameCode;
   DOM.qrCodeLabel.textContent      = STATE.gameCode;
-
-  // Populate team select dropdown
-  DOM.teamSelect.innerHTML = STATE.teams.map((t, i) =>
-    `<option value="${i}">${t.name}</option>`
-  ).join('');
-  DOM.teamSelect.value = STATE.activeTeamIndex;
 
   // Timer
   updateTimerDisplay();
@@ -1185,21 +1056,29 @@ function renderRealQr(container, dataUri) {
   }
 
   /* ---------- UI rendering ---------- */
-  function renderSelect() {
-    const sel = $('team-select');
-    if (!sel) return;
-    const playable = playableMatches();
-    const options = playable.length
-      ? playable.map((m) => {
-          const opp = m.opponent_team_id
-            ? (' vs ' + teamNameOf(m.opponent_team_id))
-            : '';
-          return '<option value="' + m.match_id + '">Round ' + m.round_number +
-            ' - ' + teamNameOf(m.team_id) + opp + '</option>';
-        })
-      : ['<option value="">No pending matches</option>'];
-    sel.innerHTML = options.join('');
-    if (activeMatch) sel.value = String(activeMatch.match_id);
+  // "Current Turn" — list the teams that are actively playing in the current
+  // round (one row per pending match = the turn-owning team). One team is
+  // active at a time; clicking a row targets that team's match/turn in the
+  // console below.
+  function renderCurrentTeams() {
+    const el = $('current-teams');
+    if (!el) return;
+    const pending = currentRoundMatches().filter((m) => m.status !== 'COMPLETED');
+    const rows = pending.map((m) => {
+      const isActive = !!(activeMatch && activeMatch.match_id === m.match_id);
+      const online = teamConnected(m.team_id);
+      const vs = m.opponent_team_id ? (' vs ' + teamNameOf(m.opponent_team_id)) : '';
+      return '<button type="button" class="current-teams__row' +
+        (isActive ? ' current-teams__row--active' : '') + '" data-match="' +
+        m.match_id + '" aria-pressed="' + (isActive ? 'true' : 'false') + '">' +
+        '<span class="current-teams__dot' + (online ? ' current-teams__dot--online' : '') + '"></span>' +
+        '<span class="current-teams__name">' + escHtml(teamNameOf(m.team_id)) + '</span>' +
+        (vs ? '<span class="current-teams__vs">' + escHtml(vs) + '</span>' : '') +
+        '<span class="current-teams__pts">' + teamScore(m.team_id) + ' pts</span>' +
+        '</button>';
+    });
+    el.innerHTML = rows.join('') ||
+      '<div class="current-teams__empty">No teams playing yet</div>';
   }
 
   function renderCategory() {
@@ -1356,7 +1235,7 @@ function renderRealQr(container, dataUri) {
   }
 
   function renderAll() {
-    renderSelect();
+    renderCurrentTeams();
     renderCategory();
     renderWord();
     renderQueue();
@@ -1367,8 +1246,6 @@ function renderRealQr(container, dataUri) {
     renderConnections();
     const roundEl = $('round-number');
     if (roundEl) roundEl.textContent = currentRoundLabel().replace('Round ', '');
-    const navBadge = $('next-round-badge');
-    if (navBadge && matches.length) navBadge.textContent = currentRoundLabel();
     const lbBadge = document.querySelector('.leaderboard-card__round-badge');
     if (lbBadge) lbBadge.textContent = currentRoundLabel();
     tickDisplay();
@@ -1693,17 +1570,17 @@ function renderRealQr(container, dataUri) {
   rebind('btn-stop', (e) => handleAction('timeout', e));
   rebind('btn-penalty', (e) => handlePenalty(-3, e));
   rebind('btn-bonus', (e) => handlePenalty(+3, e));
-  rebind('btn-timer-reset', () => {
-    if (turn && isTurnRunning(turn)) { toast('Timer is server-controlled. Pause to stop it.'); }
-    else toast('Start a turn to run the server timer.');
-  });
-  rebind('btn-set-time', () => {
-    toast('Timer is server-authoritative. Set the round timer during setup.');
-  });
-  rebind('team-select', () => {
-    const v = $('team-select') ? $('team-select').value : '';
-    activeMatch = v ? pendingMatchForId(parseInt(v, 10)) : null;
-    if (activeMatch) {
+
+  // Current Turn team list — pick a pending match to control in the console.
+  // Mirrors the previous `#team-select` behavior but from the roster list.
+  const currentTeamsEl = $('current-teams');
+  if (currentTeamsEl) {
+    currentTeamsEl.addEventListener('click', (e) => {
+      const row = e.target.closest('.current-teams__row');
+      if (!row) return;
+      const mid = parseInt(row.getAttribute('data-match'), 10);
+      activeMatch = matches.find((m) => m.match_id === mid) || null;
+      if (!activeMatch) { setActiveTurn(null); return; }
       // load an existing active/pending turn for this match if any
       TurnAPI.listTurns(activeMatch.match_id).then((d) => {
         const turns = (d && d.turns) || [];
@@ -1718,35 +1595,15 @@ function renderRealQr(container, dataUri) {
           renderAll();
         })();
       }).catch(() => { setActiveTurn(null); renderAll(); });
-    } else {
-      setActiveTurn(null);
-    }
-    renderAll();
-  }, 'change');
+      renderAll();
+    });
+  }
 
   const viewAll = $('btn-view-all-teams');
   if (viewAll && typeof openModal === 'function') {
     const fresh = viewAll.cloneNode(true);
     viewAll.replaceWith(fresh);
     fresh.addEventListener('click', () => { renderAllTeams(); openModal($('modal-all-teams')); });
-  }
-
-  const nextRound = $('btn-next-round');
-  if (nextRound) {
-    const fresh = nextRound.cloneNode(true);
-    nextRound.replaceWith(fresh);
-    fresh.addEventListener('click', () => {
-      toast('Select the next round\'s match from the dropdown to continue.');
-    });
-  }
-
-  const resetRound = $('btn-reset-round');
-  if (resetRound) {
-    const fresh = resetRound.cloneNode(true);
-    resetRound.replaceWith(fresh);
-    fresh.addEventListener('click', () => {
-      toast('Round reset is not supported by the backend. Use Stop to end a turn.');
-    });
   }
 
   /* ---------- connection approval (dashboard) ----------

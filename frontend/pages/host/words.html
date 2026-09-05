@@ -376,7 +376,7 @@
             <div class="setup-card__body">
               <div class="setup-round-select">
                 <label for="matches-round">Round</label>
-                <select id="matches-round" class="form-select">
+                <select id="matches-round" class="form-select dd">
                   <option value="1">Round 1</option>
                   <option value="2">Round 2</option>
                 </select>
@@ -407,13 +407,13 @@
       <h2 class="modal__title"><i class="fa-solid fa-ranking-star"></i> Add Match</h2>
       <form class="modal__form" id="form-match" novalidate>
         <label for="match-team" class="form-label">Team</label>
-        <select id="match-team" class="form-select">
+        <select id="match-team" class="form-select dd">
           <option value="">Select team</option>
         </select>
         <span class="form-error" id="err-match-team"></span>
 
         <label for="match-opponent" class="form-label">Opponent (optional)</label>
-        <select id="match-opponent" class="form-select">
+        <select id="match-opponent" class="form-select dd">
           <option value="">— No opponent / Free round —</option>
         </select>
         <span class="form-error" id="err-match-opponent"></span>
@@ -465,20 +465,20 @@
         </div>
         <div class="form-group">
           <label class="form-label" for="add-category"><i class="fa-solid fa-tag"></i> Category</label>
-          <select id="add-category" class="form-select" required>
+          <select id="add-category" class="form-select dd" required>
             <option value="">Select category</option>
           </select>
           <span class="form-error" id="err-add-category"></span>
         </div>
         <div class="form-group">
           <label class="form-label" for="add-team"><i class="fa-solid fa-users"></i> Team</label>
-          <select id="add-team" class="form-select">
+          <select id="add-team" class="form-select dd">
             <option value="">— No team —</option>
           </select>
         </div>
         <div class="form-group">
           <label class="form-label" for="add-round"><i class="fa-solid fa-layer-group"></i> Round</label>
-          <select id="add-round" class="form-select">
+          <select id="add-round" class="form-select dd">
             <option value="">— Unassigned —</option>
             <option value="1">Round 1</option>
             <option value="2">Round 2</option>
@@ -513,20 +513,20 @@
         </div>
         <div class="form-group">
           <label class="form-label" for="edit-category"><i class="fa-solid fa-tag"></i> Category</label>
-          <select id="edit-category" class="form-select" required>
+          <select id="edit-category" class="form-select dd" required>
             <option value="">Select category</option>
           </select>
           <span class="form-error" id="err-edit-category"></span>
         </div>
         <div class="form-group">
           <label class="form-label" for="edit-team"><i class="fa-solid fa-users"></i> Team</label>
-          <select id="edit-team" class="form-select">
+          <select id="edit-team" class="form-select dd">
             <option value="">— No team —</option>
           </select>
         </div>
         <div class="form-group">
           <label class="form-label" for="edit-round"><i class="fa-solid fa-layer-group"></i> Round</label>
-          <select id="edit-round" class="form-select">
+          <select id="edit-round" class="form-select dd">
             <option value="">— Unassigned —</option>
             <option value="1">Round 1</option>
             <option value="2">Round 2</option>
@@ -626,6 +626,7 @@
   <script src="../../js/api/match-api.js"></script>
   <script src="../../js/api/connect.js"></script>
   <script src="../../js/api/realtime.js"></script>
+  <script src="../../js/core/custom-select.js"></script>
   <script src="../../js/host/words.js"></script>
 </body>
 </html>

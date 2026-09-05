@@ -101,10 +101,6 @@
           <i class="fa-solid fa-wifi"></i>
           <span>Connections</span>
         </a>
-        <a href="#" class="sidebar__nav-item" id="nav-settings">
-          <i class="fa-solid fa-gear"></i>
-          <span>Settings</span>
-        </a>
       </nav>
 
       <!-- Sidebar Footer: Back to Lobby -->
@@ -138,10 +134,8 @@
               <i class="fa-solid fa-bolt"></i>
               Current Turn
             </p>
-            <div class="ctrl-card__team-wrap">
-              <select class="ctrl-card__team-select" id="team-select" aria-label="Select active team">
-                <!-- Options populated by JS -->
-              </select>
+            <div class="ctrl-card__team-wrap current-teams" id="current-teams">
+              <!-- Playing teams, one active at a time (populated by JS) -->
             </div>
           </div>
 
@@ -172,19 +166,6 @@
               <!-- Populated by JS -->
             </div>
           </div>
-
-          <!-- Next Round -->
-          <button class="next-round-btn" id="btn-next-round" aria-label="Advance to next round">
-            <i class="fa-solid fa-forward-step"></i>
-            <span>Next Round</span>
-            <span class="next-round-btn__badge" id="next-round-badge">Round 2</span>
-          </button>
-
-          <!-- Reset Round -->
-          <button class="reset-round-btn" id="btn-reset-round" aria-label="Reset current round">
-            <i class="fa-solid fa-rotate-left"></i>
-            <span>Reset Round</span>
-          </button>
 
         </section>
 
@@ -244,14 +225,6 @@
                 <button class="ctrl-btn ctrl-btn--save" id="btn-save-game" aria-label="Save game checkpoint" title="Save a checkpoint of this game">
                   <i class="fa-solid fa-floppy-disk"></i>
                   Save
-                </button>
-                <button class="ctrl-btn ctrl-btn--settime" id="btn-set-time" aria-label="Set time">
-                  <i class="fa-regular fa-clock"></i>
-                  Set Time
-                </button>
-                <button class="ctrl-btn ctrl-btn--reset" id="btn-timer-reset" aria-label="Reset timer">
-                  <i class="fa-solid fa-rotate-left"></i>
-                  Reset
                 </button>
                 <button class="ctrl-btn ctrl-btn--stop" id="btn-stop" aria-label="Stop round" title="Stop round">
                   <i class="fa-solid fa-stop"></i>
@@ -408,42 +381,7 @@
        MODALS
   ============================================================ -->
 
-  <!-- Set Time Modal -->
-  <div class="dash-modal-overlay" id="modal-set-time" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="set-time-title">
-    <div class="dash-modal">
-      <button class="dash-modal__close" id="close-set-time" aria-label="Close">
-        <i class="fa-solid fa-xmark"></i>
-      </button>
-      <h2 class="dash-modal__title" id="set-time-title">
-        <i class="fa-regular fa-clock"></i>
-        Set Timer
-      </h2>
-      <div class="set-time-inputs">
-        <div class="set-time-group">
-          <label class="set-time-label" for="input-minutes">Minutes</label>
-          <input type="number" id="input-minutes" class="set-time-input" min="0" max="9" value="1" />
-        </div>
-        <span class="set-time-colon">:</span>
-        <div class="set-time-group">
-          <label class="set-time-label" for="input-seconds">Seconds</label>
-          <input type="number" id="input-seconds" class="set-time-input" min="0" max="59" value="35" />
-        </div>
-      </div>
-      <div class="dash-modal__presets">
-        <button class="preset-btn" data-seconds="60">1:00</button>
-        <button class="preset-btn" data-seconds="90">1:30</button>
-        <button class="preset-btn" data-seconds="120">2:00</button>
-        <button class="preset-btn" data-seconds="180">3:00</button>
-      </div>
-      <div class="dash-modal__actions">
-        <button class="dash-modal__confirm" id="btn-confirm-time">
-          <i class="fa-solid fa-check"></i>
-          Apply
-        </button>
-        <button class="dash-modal__cancel" id="btn-cancel-time">Cancel</button>
-      </div>
-    </div>
-  </div>
+  <!-- Set Time Modal removed: the timer is server-authoritative (See #modal-all-teams below). -->
 
   <!-- View All Teams Modal -->
   <div class="dash-modal-overlay" id="modal-all-teams" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="all-teams-title">
@@ -596,6 +534,7 @@
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
   <script src="../../js/core/runtime-config.js"></script>
   <script src="../../js/core/config.js"></script>
+  <script src="../../js/core/audio.js"></script>
   <script src="../../js/api/api.js"></script>
   <script src="../../js/api/game-api.js"></script>
   <script src="../../js/api/team-api.js"></script>

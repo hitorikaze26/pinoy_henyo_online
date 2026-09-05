@@ -439,7 +439,7 @@ function buildMemberRow(idx, name = '', role = 'Tagasagot') {
   row.innerHTML = `
     <input type="text" class="form-input member-name-input"
            placeholder="Player name" value="${escHtml(name)}" maxlength="40" />
-    <select class="form-select member-role-select">
+    <select class="form-select dd member-role-select">
       <option value="Manghuhula"${role === 'Manghuhula' ? ' selected' : ''}>Manghuhula</option>
       <option value="Tagasagot"${role  === 'Tagasagot'  ? ' selected' : ''}>Tagasagot</option>
     </select>
