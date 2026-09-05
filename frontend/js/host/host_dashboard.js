@@ -64,6 +64,8 @@ const DOM = {
 
   // Timer
   timerDisplay:   $('timer-display'),
+  timerPanel:     $('timer-display-panel'),
+  timerState:     $('timer-state'),
   timerCard:      $('timer-card'),
   btnTimerReset:  $('btn-timer-reset'),
 
@@ -163,7 +165,32 @@ document.querySelectorAll(
   '.dash-modal__confirm, .preset-btn, .sidebar__logout-btn, .sidebar__nav-item'
 ).forEach(btn => btn.addEventListener('click', e => addRipple(btn, e)));
 
-/** Show a brief toast message */
+/** Escape HTML so user-provided strings can be safely embedded in toast HTML */
+function escHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/** Reflect the timer state on the display panel + status pill.
+    state: 'ready' | 'running' | 'paused' | 'warning' | 'critical' */
+function setTimerState(state, label) {
+  const panel = DOM.timerPanel;
+  const pill  = DOM.timerState;
+  ['ready', 'running', 'paused', 'warning', 'critical'].forEach(c => {
+    if (panel) panel.classList.remove(c);
+    if (pill)  pill.classList.remove(c);
+  });
+  if (panel) panel.classList.add(state);
+  if (pill)  pill.classList.add(state);
+  const fallback = { ready: 'Ready', running: 'Running', paused: 'Paused', warning: 'Hurry up!', critical: 'Last 10s' };
+  if (pill) pill.textContent = label || fallback[state] || '';
+}
+
+/** Show a brief toast message (HTML-aware so FA icons render) */
 function showToast(msg) {
   let toast = document.querySelector('.copy-toast');
   if (!toast) {
@@ -171,7 +198,7 @@ function showToast(msg) {
     toast.className = 'copy-toast';
     document.body.appendChild(toast);
   }
-  toast.textContent = msg;
+  toast.innerHTML = msg;
   toast.classList.add('show');
   clearTimeout(toast._timer);
   toast._timer = setTimeout(() => toast.classList.remove('show'), 2000);
@@ -316,8 +343,8 @@ function renderWordQueue() {
     items.push(`
       <div class="queue-item${isNext ? ' queue-item--next' : ''}">
         <span class="queue-item__index">${isNext ? '→' : i}</span>
-        <span>${entry.word}</span>
-        ${isNext ? '<span style="margin-left:auto;font-size:0.7rem;color:var(--primary-400);font-weight:700;">NEXT</span>' : ''}
+        <span>${escHtml(entry.word)}</span>
+        ${isNext ? '<span class="queue-item__tag">NEXT</span>' : ''}
       </div>`);
   }
   DOM.wordQueue.innerHTML = items.join('');
@@ -452,9 +479,6 @@ function renderAllTeamsTable() {
 function updateTimerDisplay() {
   DOM.timerDisplay.textContent = formatTime(STATE.timerLeft);
 
-  // Update timer state class
-  DOM.timerDisplay.classList.remove('running', 'warning', 'critical');
-
   if (STATE.timerLeft <= 0) {
     DOM.timerDisplay.textContent = '0:00';
     stopTimer();
@@ -464,12 +488,14 @@ function updateTimerDisplay() {
 
   if (STATE.timerRunning) {
     if (STATE.timerLeft <= 10) {
-      DOM.timerDisplay.classList.add('critical');
+      setTimerState('critical');
     } else if (STATE.timerLeft <= 20) {
-      DOM.timerDisplay.classList.add('warning');
+      setTimerState('warning');
     } else {
-      DOM.timerDisplay.classList.add('running');
+      setTimerState('running');
     }
+  } else {
+    setTimerState('ready');
   }
 }
 
@@ -499,7 +525,7 @@ function pauseTimer() {
   DOM.btnPausePlay.classList.remove('playing');
   DOM.pauseIcon.className = 'fa-solid fa-play';
 
-  DOM.timerDisplay.classList.remove('running', 'warning', 'critical');
+  setTimerState('paused');
 }
 
 function resetTimer() {
@@ -513,8 +539,8 @@ function stopTimer() {
 }
 
 function onTimerEnd() {
-  DOM.timerDisplay.classList.add('critical');
-  showToast('<i class="fa-regular fa-clock"></i> Time\'s up!');
+  setTimerState('critical', 'Time\u2019s up!');
+  showToast('<i class="fa-regular fa-clock"></i> Time\u2019s up!');
   console.log('[Pinoy Henyo] Timer ended');
 }
 
@@ -567,7 +593,7 @@ DOM.btnCorrect.addEventListener('click', (e) => {
   renderLeaderboard();
   renderTeamStatus();
 
-  showToast(`<i class="fa-solid fa-check"></i> Correct! +1 for ${team.name}`);
+  showToast(`<i class="fa-solid fa-check"></i> Correct! +1 for ${escHtml(team.name)}`);
   console.log('[Pinoy Henyo] Correct →', team);
 
   nextWord(true);
@@ -583,7 +609,7 @@ DOM.btnPass.addEventListener('click', (e) => {
 
   DOM.currentPasses.textContent = team.passes;
   renderTeamStatus();
-  showToast(`⏭️ Passed — ${team.name}`);
+  showToast(`<i class="fa-solid fa-forward"></i> Passed \u2014 ${escHtml(team.name)}`);
   console.log('[Pinoy Henyo] Pass →', team);
 
   nextWord(true);
@@ -631,7 +657,7 @@ DOM.teamSelect.addEventListener('change', () => {
   renderTeamStatus();
   resetTimer();
 
-  showToast(`🔄 Now: ${STATE.teams[STATE.activeTeamIndex].name}`);
+  showToast(`<i class="fa-solid fa-arrows-rotate"></i> Now: ${escHtml(STATE.teams[STATE.activeTeamIndex].name)}`);
   console.log('[Pinoy Henyo] Active team →', STATE.teams[STATE.activeTeamIndex]);
 });
 
@@ -705,10 +731,10 @@ DOM.btnSound.addEventListener('click', () => {
 function copyGameCode(code) {
   if (navigator.clipboard) {
     navigator.clipboard.writeText(code)
-      .then(() => showToast(`📋 Copied: ${code}`))
-      .catch(() => showToast(`Game code: ${code}`));
+      .then(() => showToast(`<i class="fa-solid fa-clipboard-check"></i> Copied: ${escHtml(code)}`))
+      .catch(() => showToast(`<i class="fa-solid fa-key"></i> Game code: ${escHtml(code)}`));
   } else {
-    showToast(`Game code: ${code}`);
+    showToast(`<i class="fa-solid fa-key"></i> Game code: ${escHtml(code)}`);
   }
   // Brief icon swap feedback
   DOM.copyIcon.className = 'fa-solid fa-check';
@@ -1090,7 +1116,7 @@ function renderRealQr(container, dataUri) {
       tickId = setInterval(tickDisplay, TICK_MS);
       pollId = setInterval(pollTurn, POLL_MS);
     }
-    renderTurn();
+    renderAll();
   }
 
   function isTurnRunning(p) {
@@ -1141,15 +1167,20 @@ function renderRealQr(container, dataUri) {
     const el = $('timer-display');
     if (!el) return;
     el.textContent = text;
-    el.classList.remove('running', 'warning', 'critical');
-    if (p && isTurnRunning(p)) {
-      const val = p.timer_mode === 'COUNTUP'
-        ? (p.elapsed_seconds || 0)
-        : (p.remaining_seconds || 0);
-      const frac = p.starting_seconds ? val / p.starting_seconds : 0;
-      if (frac <= 0.2) el.classList.add('critical');
-      else if (frac <= 0.4) el.classList.add('warning');
-      else el.classList.add('running');
+    if (!p) { setTimerState('ready'); return; }
+    if (p.status === 'PAUSED') { setTimerState('paused'); return; }
+    if (!isTurnRunning(p)) { setTimerState('ready'); return; }
+    const val = p.timer_mode === 'COUNTUP'
+      ? (p.elapsed_seconds || 0)
+      : (p.remaining_seconds || 0);
+    const frac = p.starting_seconds ? val / p.starting_seconds : 0;
+    if (p.timer_mode === 'COUNTUP') {
+      if (val >= (p.starting_seconds || 0) || frac >= 0.9) setTimerState('warning');
+      else setTimerState('running');
+    } else {
+      if (frac <= 0.2) setTimerState('critical');
+      else if (frac <= 0.4) setTimerState('warning');
+      else setTimerState('running');
     }
   }
 
@@ -1206,11 +1237,14 @@ function renderRealQr(container, dataUri) {
     const items = (turn.words || []).slice();
     el.innerHTML = items.map((w, i) => {
       const label = w.result === 'CORRECT' ? '✓' : (w.result === 'PASSED' ? '⏭' : (w.result === 'FAILED' ? '✗' : ''));
+      const resCls = label
+        ? ' queue-item__result--' + (label === '✓' ? 'correct' : label === '⏭' ? 'passed' : 'failed')
+        : '';
       const cls = w.word_id === turn.current_word_id && !label ? ' queue-item--next' : '';
       return '<div class="queue-item' + cls + '">' +
         '<span class="queue-item__index">' + (label || (i + 1)) + '</span>' +
         '<span>' + (w.word_text || '...') + '</span>' +
-        (label ? '<span style="margin-left:auto;font-weight:700">' + label + '</span>' : '') +
+        (label ? '<span class="queue-item__result' + resCls + '">' + label + '</span>' : '') +
         '</div>';
     }).join('');
   }

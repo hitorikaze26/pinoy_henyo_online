@@ -298,10 +298,11 @@ ul, ol { list-style: none; }
 }
 
 .code-val {
-  font-family: 'Baloo 2', monospace;
+  font-family: 'Chivo Mono', monospace;
   font-weight: 800;
   letter-spacing: 0.06em;
   color: var(--accent-1-400);
+  font-variant-numeric: tabular-nums;
 }
 
 .inline-copy-btn {
@@ -421,8 +422,51 @@ ul, ol { list-style: none; }
 .tagasagot-row i { font-size: 0.7rem; color: var(--secondary-400); }
 
 /* ============================================================
-   QR PLACEHOLDER (teams tab)
+   TEAM CONNECTION CARD (teams tab)
 ============================================================ */
+.player-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid var(--border);
+}
+.player-card__head .player-card__title {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Connection status pill */
+.conn-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.32rem 0.7rem;
+  border-radius: var(--r-full);
+  font-family: 'Baloo 2', sans-serif;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  border: 1px solid var(--border);
+  color: rgba(255,255,255,0.5);
+  background: rgba(255,255,255,0.04);
+  flex-shrink: 0;
+}
+.conn-pill--connected    { color: #D6F5CD; background: rgba(68,166,51,0.16); border-color: rgba(68,166,51,0.4); }
+.conn-pill--waiting      { color: #FFE6B0; background: rgba(238,147,38,0.14); border-color: rgba(238,147,38,0.4); }
+.conn-pill--declined,
+.conn-pill--disconnected { color: #FFD3D8; background: rgba(184,3,30,0.14); border-color: rgba(184,3,30,0.4); }
+
+/* QR tile — either a real image or the decorative pixel grid */
 .qr-placeholder {
   display: flex;
   flex-direction: column;
@@ -434,16 +478,30 @@ ul, ol { list-style: none; }
   padding: 1rem;
   margin-bottom: 0.85rem;
 }
-.qr-grid {
-  width: 130px;
+.qr-box {
+  width: 156px;
   aspect-ratio: 1;
   background: #fff;
-  border-radius: var(--r-sm);
+  border-radius: var(--r-md);
   padding: 8px;
   display: grid;
   grid-template-columns: repeat(7,1fr);
   gap: 2px;
   animation: qrGlowPulse 3s ease-in-out infinite;
+  box-shadow: var(--shadow-md);
+}
+.qr-box--image {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+}
+.qr-box--image .team-qr-img {
+  width: 140px;
+  height: 140px;
+  object-fit: contain;
+  display: block;
+  border-radius: 6px;
 }
 @keyframes qrGlowPulse {
   0%,100% { box-shadow: 0 0 8px rgba(49,154,251,0.2); }
@@ -451,20 +509,106 @@ ul, ol { list-style: none; }
 }
 .qr-pixel        { border-radius: 2px; background: #111; }
 .qr-pixel--empty { background: transparent; }
-.qr-placeholder__hint { font-size: 0.72rem; color: rgba(255,255,255,0.3); }
+.qr-placeholder__hint { font-size: 0.72rem; color: rgba(255,255,255,0.3); text-align: center; }
 
-.team-code-row {
-  display: flex; align-items: center; justify-content: center; gap: 0.5rem;
-  margin-bottom: 0.5rem;
-}
-.team-code-label { font-size: 0.8rem; color: rgba(255,255,255,0.38); font-weight: 600; }
-.team-code-val   { font-family: 'Baloo 2', monospace; font-size: 1.1rem; font-weight: 800; color: var(--accent-1-400); letter-spacing: 0.08em; }
-
-.conn-status-row {
-  display: flex; align-items: center; justify-content: center; gap: 0.45rem;
-  font-size: 0.82rem; font-weight: 600; color: rgba(255,255,255,0.55);
+/* Team + game code cards */
+.conn-meta-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.7rem;
   margin-bottom: 0.85rem;
 }
+.conn-meta-item {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 0.6rem 0.75rem;
+  text-align: center;
+  min-width: 0;
+}
+.conn-meta-item__label {
+  display: block;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: rgba(255,255,255,0.32);
+  margin-bottom: 0.28rem;
+}
+.conn-meta-item__val {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+.conn-meta-item__val .team-code-val,
+.conn-meta-item__val .code-val {
+  font-family: 'Chivo Mono', monospace;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--accent-1-400);
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Inline host-code entry */
+.host-connect {
+  background: rgba(255,255,255,0.025);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 0.85rem;
+  margin-bottom: 0.85rem;
+}
+.conn-block-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255,255,255,0.4);
+  margin-bottom: 0.6rem;
+}
+.conn-block-label i { font-size: 0.75rem; color: var(--primary-400); }
+.host-connect__row { display: flex; gap: 0.55rem; }
+.host-connect__input {
+  flex: 1;
+  min-width: 0;
+  font-family: 'Chivo Mono', monospace;
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.5rem 0.75rem;
+}
+.host-connect__row .host-connect__btn {
+  flex: 0 0 auto;
+  width: auto;
+  padding: 0 1.3rem;
+}
+.host-connect__scan {
+  margin-top: 0.6rem;
+  width: 100%;
+  font-size: 0.85rem;
+}
+.conn-hint {
+  display: block;
+  margin-top: 0.55rem;
+  font-size: 0.72rem;
+  color: rgba(255,255,255,0.38);
+  text-align: center;
+  min-height: 1em;
+}
+.conn-hint--error { color: var(--accent-2-400); }
+.conn-hint--ok    { color: var(--secondary-400); }
+
+.conn-actions { margin-top: 0.25rem; }
 
 .conn-status-hint {
   margin: -0.35rem 0 0.7rem;
@@ -479,17 +623,6 @@ ul, ol { list-style: none; }
   border-radius: 10px;
   padding: 0.5rem 0.75rem;
   margin-bottom: 0.7rem;
-}
-
-.team-qr-img {
-  width: 100%;
-  max-width: 180px;
-  height: auto;
-  border-radius: 10px;
-  background: #fff;
-  padding: 8px;
-  display: block;
-  margin: 0 auto;
 }
 
 .player-btn-row {
@@ -543,6 +676,22 @@ ul, ol { list-style: none; }
   border: 1.5px solid rgba(184,3,30,0.25);
 }
 .player-btn--danger:hover { background: rgba(184,3,30,0.25); }
+
+/* Disabled / in-flight button state */
+.player-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+}
+.player-btn i.fa-spinner { font-size: 0.85em; }
+
+/* Keyboard focus rings */
+:focus-visible {
+  outline: 2px solid var(--primary-400);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
 
 /* Ripple */
 .ripple {
@@ -1380,6 +1529,19 @@ ul, ol { list-style: none; }
 
   /* Cards get more breathing room */
   .player-card { padding: 1.4rem 1.5rem; }
+
+  /* Team connection card: QR/metadata next to the host-code entry */
+  .conn-card-grid {
+    display: grid;
+    grid-template-columns: 0.9fr 1.1fr;
+    gap: 1.25rem;
+    align-items: start;
+  }
+  .conn-card-right .host-connect,
+  .conn-card-right .conn-status-hint,
+  .conn-card-right .conn-status-hint--pending {
+    margin-bottom: 0.85rem;
+  }
 
   /* Modal centers on desktop */
   .modal-overlay { align-items: center; }

@@ -136,15 +136,15 @@ function setConnectionStatus(status) {
 function connectionStateMeta(status) {
   switch (status) {
     case 'CONNECTED':
-      return { dot: 'connected', label: 'Host Connected', hint: '' };
+      return { dot: 'connected', pill: 'conn-pill--connected', label: 'Host Connected', hint: '' };
     case 'CONNECTION_REQUESTED':
-      return { dot: 'waiting', label: 'Waiting for host approval…', hint: 'Request sent. The host must approve this team.' };
+      return { dot: 'waiting', pill: 'conn-pill--waiting', label: 'Waiting for host…', hint: 'Request sent. The host must approve this team.' };
     case 'DECLINED':
-      return { dot: 'disconnected', label: 'Declined by host', hint: 'Scan the host QR or enter the host code to try again.' };
+      return { dot: 'disconnected', pill: 'conn-pill--declined', label: 'Declined by host', hint: 'Scan the host QR or enter the host code to try again.' };
     case 'DISCONNECTED':
-      return { dot: 'disconnected', label: 'Disconnected by host', hint: 'Scan the host QR or enter the host code to reconnect.' };
+      return { dot: 'disconnected', pill: 'conn-pill--disconnected', label: 'Disconnected by host', hint: 'Scan the host QR or enter the host code to reconnect.' };
     default:
-      return { dot: 'disconnected', label: 'Not Connected', hint: 'Ask the host to approve this team before playing.' };
+      return { dot: 'none', pill: 'conn-pill--none', label: 'Not Connected', hint: 'Ask the host to approve this team before playing.' };
   }
 }
 
@@ -229,6 +229,7 @@ document.addEventListener('keydown', e => {
    QR GRID RENDERER
 ============================================================ */
 function renderQrGrid(container, code) {
+  container.classList.remove('qr-box--image');
   let seed = 0;
   for (let i = 0; i < code.length; i++) seed += code.charCodeAt(i);
   const rand = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
@@ -369,23 +370,29 @@ function renderTeamsTab() {
 
   // QR
   renderTeamQrArea();
-  $('team-code-display').textContent = STATE.teamCode;
+  $('team-code-display').textContent = STATE.teamCode || '—';
+  const gameCodeEl = $('team-game-code');
+  if (gameCodeEl) gameCodeEl.textContent = STATE.gameCode || '—';
 
-  const connCount = STATE.members.filter(m => m.connected).length;
+  // Connection status: pill + hint + inline connect block.
   const connMeta = connectionStateMeta(STATE.connectionStatus);
-  $('team-conn-status-text').innerHTML = `
-    <span class="conn-dot conn-dot--${connMeta.dot}"></span> ${connMeta.label}`;
+  const pill = $('team-conn-pill');
+  const pillDot = $('team-conn-pill-dot');
+  if (pill)     pill.className = 'conn-pill ' + connMeta.pill;
+  if (pillDot)  pillDot.className = 'conn-dot conn-dot--' + connMeta.dot;
+  if ($('team-conn-pill-label')) $('team-conn-pill-label').textContent = connMeta.label;
   const hintEl = $('team-conn-status-hint');
   if (hintEl) hintEl.textContent = connMeta.hint;
 
-  const needsConnect = STATE.connectionStatus !== 'CONNECTED';
-  const cta = $('btn-connect-host');
-  if (cta) {
-    cta.hidden = !needsConnect;
-    cta.textContent = STATE.connectionStatus === 'CONNECTION_REQUESTED'
-      ? 'Waiting for host approval…'
-      : 'Connect to Host';
+  // Inline host-code entry: visible when not connected.
+  const connected = STATE.connectionStatus === 'CONNECTED';
+  const connectBlock = $('host-connect-block');
+  if (connectBlock) {
+    connectBlock.hidden = connected;
+    const btn = $('btn-connect-code');
+    if (btn) btn.disabled = false;
   }
+
   // Member feedback when the team is pending/declined.
   const pendingBox = $('team-conn-pending-box');
   if (pendingBox) {
@@ -393,6 +400,12 @@ function renderTeamsTab() {
       STATE.connectionStatus === 'CONNECTION_REQUESTED' ||
       STATE.connectionStatus === 'DECLINED'
     );
+  }
+
+  // Team QR actions are leader-only.
+  const genQr = $('btn-generate-qr');
+  if (genQr) {
+    genQr.hidden = String(API.getDeviceRole() || '').toUpperCase() !== 'TEAM_LEADER';
   }
 }
 
@@ -562,12 +575,19 @@ $('form-add-member').addEventListener('submit', async e => {
 /* Real team QR (deep-link for joining this team). Falls back to the
    decorative grid when no session/session isn't a leader yet. */
 function renderTeamQrArea() {
-  const el = $('team-qr-grid');
-  if (!el) return;
+  const box  = $('team-qr-box');
+  const hint = $('team-qr-hint');
+  if (!box) return;
   if (STATE.teamQrDataUri) {
-    el.innerHTML = `<img class="team-qr-img" src="${STATE.teamQrDataUri}" alt="Team QR code">`;
+    box.innerHTML = `<img class="team-qr-img" src="${STATE.teamQrDataUri}" alt="Team QR code">`;
+    box.classList.add('qr-box--image');
+    if (hint) hint.textContent = 'Scan to join team';
   } else {
-    renderQrGrid(el, STATE.teamCode);
+    renderQrGrid(box, STATE.teamCode);
+    box.classList.remove('qr-box--image');
+    if (hint) hint.textContent = STATE.teamCode
+      ? 'Your team QR — sign in as team leader to unlock'
+      : 'Join a game to get your team QR';
   }
 }
 
@@ -599,10 +619,17 @@ $('btn-generate-qr').addEventListener('click', () => {
 $('btn-scan-qr-teams').addEventListener('click', () => openQrScanner());
 $('btn-header-qr').addEventListener('click',    () => openQrScanner());
 
-$('btn-connect-host').addEventListener('click', () => openQrScanner());
-
 $('btn-copy-game-code').addEventListener('click', () => copyText(STATE.gameCode, 'Game Code'));
+$('btn-copy-conn-game-code').addEventListener('click', () => copyText(STATE.gameCode, 'Game Code'));
 $('btn-copy-settings-code').addEventListener('click', () => copyText(STATE.teamCode, 'Team Code'));
+
+const inputHostCode = $('input-host-code');
+$('btn-connect-code').addEventListener('click', () => submitHostCodeInput());
+if (inputHostCode) {
+  inputHostCode.addEventListener('keydown', e => {
+    if (e.key === 'Enter') submitHostCodeInput();
+  });
+}
 
 /* ============================================================
    WORDS TAB — RENDER
@@ -775,6 +802,7 @@ function renderSettingsTab() {
   $('setting-team-name').value     = STATE.teamName;
   $('settings-team-code').textContent = STATE.teamCode;
   $('setting-username').value      = STATE.username;
+  $('settings-game-code').textContent = STATE.gameCode || '—';
   $('settings-round').textContent  = STATE.currentRound || '—';
   $('settings-status').textContent = {
     waiting:  'Waiting for Host',
@@ -1044,6 +1072,53 @@ function stopCamera() {
   if (video) video.srcObject = null;
 }
 
+/* ============================================================
+   HOST-CONNECTION FLOW
+   ------------------------------------------------------------
+   All entry points funnel into connectToHostWithCode(report):
+     - handlePlayerQrScanned  (live QR scanner)
+     - form-enter-code submit (manual code modal)
+     - input-host-code        (inline card entry)
+   Steps:
+     1) resolve/normalize the scanned/typed code / join URL
+     2) verify the game exists through the public by-code endpoint
+     3) if switching games, re-join the new game (fixes stale game_id)
+     4) request host approval for the (current) game
+============================================================ */
+
+function setHostConnectFeedback(msg, kind) {
+  const el = $('host-connect-feedback');
+  if (!el) return;
+  el.textContent = msg || '';
+  el.className = 'conn-hint'
+    + (kind === 'error' ? ' conn-hint--error'
+       : kind === 'ok'   ? ' conn-hint--ok'
+       : '');
+}
+
+function setHostConnectBusy(busy) {
+  const input = $('input-host-code');
+  const btn = $('btn-connect-code');
+  if (input) input.disabled = busy;
+  if (btn) {
+    btn.disabled = busy;
+    btn.innerHTML = busy
+      ? '<i class="fa-solid fa-spinner fa-spin"></i><span>Connecting…</span>'
+      : '<i class="fa-solid fa-link"></i><span>Connect</span>';
+  }
+}
+
+function submitHostCodeInput() {
+  const input = $('input-host-code');
+  const raw = input ? input.value.trim() : '';
+  if (!raw) {
+    setHostConnectFeedback('Enter a host code to connect.', 'error');
+    if (input) input.focus();
+    return;
+  }
+  connectToHostWithCode(raw, { source: 'inline' });
+}
+
 /* A detected frame: the host QR embeds the game code. Requesting
    connection is a real backend call; the host approves it. */
 function handlePlayerQrScanned(raw) {
@@ -1052,38 +1127,190 @@ function handlePlayerQrScanned(raw) {
     showToast('That is not a Pinoy Henyo QR code.');
     return;
   }
-  API.setGameCode(parsed.gameCode);
-  STATE.gameCode = parsed.gameCode;
-  closeQrScanner();
-  sendConnectionRequest();
+  connectToHostWithCode(raw, { source: 'scanner', teamCode: parsed.teamCode });
+}
+
+/* Resolve a scanned or typed host code to its game, then connect. */
+async function connectToHostWithCode(raw, { source = 'inline', teamCode: preferTeamCode = null } = {}) {
+  if (source === 'scanner') closeQrScanner();
+  if (source === 'modal')   closeModal('modal-enter-code');
+
+  const report = source === 'inline'
+    ? setHostConnectFeedback
+    : (msg) => showToast(msg);
+  const parsed = Connect.parseJoinUrl(raw);
+  const gameCode = (parsed && parsed.gameCode)
+    ? parsed.gameCode
+    : String(raw).trim().toUpperCase().replace(/^PH/i, 'PH');
+
+  if (!gameCode) {
+    report('Enter a host code to connect.', 'error');
+    return;
+  }
+
+  setHostConnectBusy(true);
+  if (source === 'inline') setHostConnectFeedback('Checking host code…', 'ok');
+
+  try {
+    // 1) The game must exist and still accept connection requests.
+    let game;
+    try {
+      game = await GameAPI.getByCode(gameCode);
+    } catch (err) {
+      if (err && err.status === 404) {
+        report(`No active game found for code "${gameCode}".`, 'error');
+      } else {
+        report('Could not check the host code. ' + (err.message || 'Try again.'), 'error');
+      }
+      return;
+    }
+    if (!game || !game.game_id) {
+      report(`No active game found for code "${gameCode}".`, 'error');
+      return;
+    }
+    if (game.status === 'ENDED') {
+      report('That game has ended already.', 'error');
+      return;
+    }
+    if (game.status === 'FROZEN') {
+      report('That game is no longer accepting players.', 'error');
+      return;
+    }
+
+    const gameId = game.game_id;
+    const currentGameId = API.getGameId();
+    const teamId = API.getTeamId();
+
+    // 2) Same game the team is already bound to — request approval.
+    if (currentGameId && String(currentGameId) === String(gameId)) {
+      API.setGameCode(game.game_code || gameCode);
+      STATE.gameCode = game.game_code || gameCode;
+      await sendConnectionRequest(gameId, report);
+      return;
+    }
+
+    // 3) Different game: the stored team/game_id is stale (the backend scopes
+    //    sessions + connection requests to each game). Re-join the new game
+    //    exactly like the landing page, reconnect the device session, refresh
+    //    the team context, then ask the new host for approval.
+    if (!teamId || !API.getSessionToken()) {
+      report('Join a game first before connecting to a host.', 'error');
+      return;
+    }
+    await switchTeamToGame(game, report, preferTeamCode);
+  } finally {
+    setHostConnectBusy(false);
+  }
+}
+
+/* Full host-switch: move this team into `game` and reconnect the device. */
+async function switchTeamToGame(game, report, preferTeamCode) {
+  const gameId = game.game_id;
+  const username = STATE.username || API.getUsername() || 'Player';
+  const teamName = STATE.teamName || API.getTeamName() || null;
+  const teamCode = preferTeamCode || STATE.teamCode || API.getTeamCode() || null;
+
+  report('Switching this team to the new host…', 'ok');
+
+  let joined;
+  try {
+    // Re-join an existing team in the new game when the code matches,
+    // otherwise create a fresh team there (mirrors the landing page).
+    joined = await TeamAPI.joinGame(gameId, username, null, teamCode);
+  } catch (err) {
+    if (err && err.code === 'TEAM_CODE_INVALID' && teamName) {
+      try {
+        joined = await TeamAPI.joinGame(gameId, username, teamName, null);
+      } catch (err2) {
+        report((err2 && err2.message) || 'Could not join the new host.', 'error');
+        console.warn('[player] host switch create failed', err2);
+        return;
+      }
+    } else if (err && err.status === 404) {
+      report('The host has ended that game or it no longer exists.', 'error');
+      return;
+    } else if (err && err.code === 'RATE_LIMITED') {
+      const wait = (err.retryAfter > 0) ? ` in ${err.retryAfter}s` : '';
+      report(`Too many attempts. Please wait${wait} and try again.`, 'error');
+      return;
+    } else {
+      report((err && err.message) || 'Could not switch to the new host.', 'error');
+      console.warn('[player] host switch join failed', err);
+      return;
+    }
+  }
+
+  try {
+    API.setGameId(gameId);
+    API.setGameCode(game.game_code || API.getGameCode());
+    STATE.gameCode = game.game_code || API.getGameCode();
+
+    // Bind the device session to the new game/team.
+    const connectionToken = joined.connection_token
+      || (joined.leader && joined.leader.connection_token)
+      || null;
+    if (connectionToken) await DeviceAPI.connect({ connectionToken });
+
+    // Refresh the team context from the new session-backed roster.
+    const newTeamId = API.getTeamId();
+    const teamData = newTeamId ? await TeamAPI.getMyTeam(newTeamId).catch(() => null) : null;
+    if (teamData) {
+      applyTeamRoster(teamData);
+      if (teamData.team_name) API.setTeamName(teamData.team_name);
+      if (teamData.team_code) API.setTeamCode(teamData.team_code);
+      if (API.getDeviceRole() === 'TEAM_LEADER') loadTeamQr();
+    }
+  } catch (err) {
+    console.warn('[player] host switch device rebind failed', err);
+    report((err && err.message) || 'Could not finish switching hosts.', 'error');
+    return;
+  }
+
+  // Creating a new team is not approval to join the host screen — request it.
+  if (joined.leader) {
+    try {
+      await sendConnectionRequest(gameId, report);
+    } catch (err) {
+      console.warn('[player] host switch connection request failed', err);
+    }
+  }
+
+  // Reload so the realtime socket + all tabs rebind to the new game context.
+  window.location.reload();
 }
 
 /* Ask the host to approve this team. Server-authoritative state is
    applied from the response / realtime events. */
-async function sendConnectionRequest() {
-  const gameId = API.getGameId();
+async function sendConnectionRequest(gameId, report) {
+  const resolvedGameId = gameId || API.getGameId();
   const teamId = API.getTeamId();
-  if (!gameId || !teamId) {
-    showToast('Join a game first before connecting to the host.');
+  const feedback = report || setHostConnectFeedback;
+  if (!resolvedGameId || !teamId) {
+    feedback('Join a game first before connecting to the host.', 'error');
     return;
   }
   try {
     await API.withLoading('player-conn-req', () =>
-      TeamAPI.requestConnection(gameId, STATE.connectionToken || undefined)
+      TeamAPI.requestConnection(resolvedGameId, STATE.connectionToken || undefined)
     );
     setConnectionStatus('CONNECTION_REQUESTED');
+    feedback('Request sent — waiting for the host to approve this team.', 'ok');
     showToast('Request sent — waiting for host approval');
   } catch (err) {
     if (err.code === 'ALREADY_CONNECTED') {
       setConnectionStatus('CONNECTED');
+      feedback('This team is already connected to the host.', 'ok');
       showToast('Your team is already connected to the host');
     } else if (err.code === 'REQUEST_PENDING') {
       setConnectionStatus('CONNECTION_REQUESTED');
+      feedback('This team already has a pending request — the host will approve it soon.', 'ok');
       showToast('Request is already pending — the host will approve it soon');
     } else if (err.code === 'NOT_TEAM_LEADER') {
+      feedback('Only the team leader can request connection.', 'error');
       showToast('Only the team leader can request connection');
     } else {
       console.warn('[player] connection request failed', err);
+      feedback(err.message || 'Could not send the connection request.', 'error');
       showToast(err.message || 'Could not send the connection request.');
     }
   }
@@ -1121,24 +1348,13 @@ $('form-enter-code').addEventListener('submit', e => {
   codeIn.classList.remove('error');
   errEl.textContent = '';
 
-  const raw = codeIn.value.trim();
-
-  // If the input is a backend QR deep-link (see qr_service.py), extract the
-  // PUBLIC codes. Backend QR payloads are code-only URLs — never tokens.
-  const parsed = Connect.parseJoinUrl(raw);
-  const gameCode = parsed ? parsed.gameCode : raw.toUpperCase().replace(/^PH/i, 'PH');
-  const teamCode = parsed ? parsed.teamCode : null;
-
-  if (gameCode) API.setGameCode(gameCode);
-  if (teamCode) { API.setTeamCode(teamCode); STATE.teamCode = teamCode; }
-
-  STATE.gameCode = gameCode;
-
-  closeModal('modal-enter-code');
-
-  // Entering the host code is an explicit connection request. The host must
-  // approve before the team shows as connected.
-  sendConnectionRequest();
+  // The full resolve/verify/switch flow lives in connectToHostWithCode.
+  const parsed = Connect.parseJoinUrl(codeIn.value.trim());
+  connectToHostWithCode(codeIn.value.trim(), {
+    source: 'modal',
+    teamCode: parsed ? parsed.teamCode : null,
+  });
+  codeIn.value = '';
 });
 
 /* ============================================================

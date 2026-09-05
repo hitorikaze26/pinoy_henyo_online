@@ -398,6 +398,9 @@ p { line-height: 1.6; }
   transition: opacity var(--transition-base), transform var(--transition-base);
   z-index: 300;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
 }
 .copy-toast.show, .player-toast.show {
   opacity: 1; transform: translateX(-50%) translateY(0);

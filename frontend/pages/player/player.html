@@ -14,7 +14,7 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Chivo+Mono:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
 
   <!-- Global CSS (must load first) -->
@@ -135,34 +135,71 @@
 
         <!-- Team Connection Card -->
         <div class="player-card fade-in" style="--fd:0.2s">
-          <h2 class="player-card__title">
-            <i class="fa-solid fa-wifi"></i> Team Connection
-          </h2>
-          <div class="qr-placeholder" id="team-qr-placeholder" aria-label="QR Code">
-            <div class="qr-grid" id="team-qr-grid"></div>
-            <p class="qr-placeholder__hint">Scan to join team</p>
+          <div class="player-card__head">
+            <h2 class="player-card__title">
+              <i class="fa-solid fa-wifi"></i> Team Connection
+            </h2>
+            <span class="conn-pill conn-pill--none" id="team-conn-pill" role="status">
+              <span class="conn-dot conn-dot--none" id="team-conn-pill-dot"></span>
+              <span id="team-conn-pill-label">Not Connected</span>
+            </span>
           </div>
-          <div class="team-code-row">
-            <span class="team-code-label">Team Code:</span>
-            <span class="team-code-val" id="team-code-display"></span>
+
+          <div class="conn-card-grid">
+            <div class="conn-card-left">
+              <!-- Team QR (real image for leaders; decorative fallback) -->
+              <div class="qr-placeholder" id="team-qr-placeholder" aria-label="Team QR code">
+                <div class="qr-box" id="team-qr-box"></div>
+                <p class="qr-placeholder__hint" id="team-qr-hint">Scan to join team</p>
+              </div>
+
+              <div class="conn-meta-grid">
+                <div class="conn-meta-item">
+                  <span class="conn-meta-item__label">Team Code</span>
+                  <span class="conn-meta-item__val"><span class="team-code-val" id="team-code-display">—</span></span>
+                </div>
+                <div class="conn-meta-item">
+                  <span class="conn-meta-item__label">Game Code</span>
+                  <span class="conn-meta-item__val">
+                    <span class="code-val" id="team-game-code">—</span>
+                    <button class="inline-copy-btn" id="btn-copy-conn-game-code" aria-label="Copy game code">
+                      <i class="fa-regular fa-copy"></i>
+                    </button>
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div class="conn-card-right">
+              <!-- Inline host-code entry (hidden once connected) -->
+              <div class="host-connect" id="host-connect-block" hidden>
+                <p class="conn-block-label">
+                  <i class="fa-solid fa-tower-broadcast"></i> Connect to a host
+                </p>
+                <div class="host-connect__row">
+                  <input type="text" id="input-host-code" class="form-input form-input--code host-connect__input"
+                    placeholder="Host game code e.g. PH-1234" maxlength="16" autocomplete="off"
+                    spellcheck="false" aria-label="Host game code" />
+                  <button class="player-btn player-btn--primary host-connect__btn" id="btn-connect-code" type="button">
+                    <i class="fa-solid fa-link"></i><span>Connect</span>
+                  </button>
+                </div>
+                <button class="player-btn player-btn--outline host-connect__scan" id="btn-scan-qr-teams">
+                  <i class="fa-solid fa-camera"></i> Scan the host QR instead
+                </button>
+                <span class="conn-hint" id="host-connect-feedback"></span>
+              </div>
+
+              <p class="conn-status-hint" id="team-conn-status-hint"></p>
+              <p class="conn-status-hint conn-status-hint--pending" id="team-conn-pending-box" hidden>
+                Waiting for the host on the host screen. It usually takes just a few seconds.
+              </p>
+            </div>
           </div>
-          <div class="conn-status-row">
-            <span class="conn-dot conn-dot--connected"></span>
-            <span id="team-conn-status-text">Host Connected</span>
-          </div>
-          <p class="conn-status-hint" id="team-conn-status-hint"></p>
-          <p class="conn-status-hint conn-status-hint--pending" id="team-conn-pending-box" hidden>
-            Waiting for the host on the host screen. It usually takes just a few seconds.
-          </p>
-          <button class="player-btn player-btn--primary" id="btn-connect-host" hidden>
-            <i class="fa-solid fa-link"></i> Connect to Host
-          </button>
-          <div class="player-btn-row">
+
+          <div class="player-btn-row conn-actions">
             <button class="player-btn player-btn--outline" id="btn-generate-qr">
               <i class="fa-solid fa-qrcode"></i> Generate QR
-            </button>
-            <button class="player-btn player-btn--outline" id="btn-scan-qr-teams">
-              <i class="fa-solid fa-camera"></i> Scan QR
             </button>
           </div>
         </div>
@@ -282,7 +319,7 @@
           <div class="info-rows">
             <div class="info-row">
               <span class="info-row__label">Game Code</span>
-              <span class="info-row__value code-val">>
+              <span class="info-row__value code-val" id="settings-game-code">—
                 <button class="inline-copy-btn" id="btn-copy-game-code" aria-label="Copy game code">
                   <i class="fa-regular fa-copy"></i>
                 </button>
