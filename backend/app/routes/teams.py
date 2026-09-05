@@ -42,6 +42,25 @@ def _ensure_mutable(game):
     return None
 
 
+def _ensure_joinable(game):
+    """Return a player-facing 410 when the game has ended (terminal), so the
+    connection/join path never surfaces the host-facing "read-only" mechanics
+    message to players trying to connect."""
+    from ..models.game import Game
+
+    if game.status in (
+        Game.STATUS_GAME_COMPLETE,
+        Game.STATUS_CANCELLED,
+        Game.STATUS_EXPIRED,
+    ):
+        return error_response(
+            "That game has ended and is no longer accepting connections.",
+            code="GAME_ENDED",
+            status=410,
+        )
+    return None
+
+
 def _join_result_payload(result):
     if result["joined_as_member"]:
         return team_service.member_payload(result["member"])
@@ -278,9 +297,9 @@ def join_game(game_id):
     game, error = _load_game(game_id)
     if error is not None:
         return error
-    frozen = _ensure_mutable(game)
-    if frozen is not None:
-        return frozen
+    ended = _ensure_joinable(game)
+    if ended is not None:
+        return ended
     try:
         result = team_service.join_game(
             game,
@@ -375,9 +394,9 @@ def request_connection(game_id):
     game, error = _load_game(game_id)
     if error is not None:
         return error
-    frozen = _ensure_mutable(game)
-    if frozen is not None:
-        return frozen
+    ended = _ensure_joinable(game)
+    if ended is not None:
+        return ended
     if body.get("connection_token") is None and not request.headers.get(
         "X-Session-Token"
     ):

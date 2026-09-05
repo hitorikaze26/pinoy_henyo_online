@@ -843,10 +843,23 @@ window.addEventListener('scroll', () => {
 (function handleDeepLinkJoin() {
   if (!window.Connect || !overlayJoin) return;
   const parsed = Connect.parseLocation();
-  if (!parsed || !parsed.code) return;
+  if (!parsed || (!parsed.gameCode && !parsed.teamCode)) return;
   const gameCodeInput = document.getElementById('input-gamecode');
-  if (gameCodeInput) {
-    gameCodeInput.value = parsed.code.toUpperCase().replace(/^PH/i, 'PH');
+  if (gameCodeInput && parsed.gameCode) {
+    gameCodeInput.value = parsed.gameCode;
+  }
+  const teamCodeInput = document.getElementById('input-join-teamcode');
+  if (teamCodeInput && parsed.teamCode) {
+    teamCodeInput.value = parsed.teamCode;
+  }
+  // A resolver redirect with ?error=not_found warns before the submit fails.
+  const err = new URL(window.location.href).searchParams.get('error');
+  if (err === 'not_found') {
+    const codeError = document.getElementById('error-gamecode');
+    if (codeError) {
+      codeError.textContent = 'The code you scanned is no longer available.';
+      if (gameCodeInput) gameCodeInput.classList.add('error');
+    }
   }
   openModal(overlayJoin);
 })();

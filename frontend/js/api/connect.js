@@ -38,18 +38,22 @@ const Connect = (() => {
      carries the same PUBLIC codes. Supported query shapes:
        ?code=PHABCD12            (game code, e.g. host "Share Link")
        ?game=PHABCD12            (game code)
-       ?team=ABCD&?game=PHABCD12 (team code + game code) */
+       ?game=PHABCD12&team=ABCD  (game code + team code, e.g. a team QR) */
   function parseLocation() {
-    const raw = window.location.href;
-    let match = raw.match(/[?&]code=([^&]+)/);
-    if (match) {
-      return { type: 'game', code: decodeURIComponent(match[1]) };
-    }
-    match = raw.match(/[?&](game|team)=([^&]+)/);
-    if (match) {
-      return { type: match[1], code: decodeURIComponent(match[2]) };
-    }
-    return null;
+    const u = new URL(window.location.href, window.location.origin);
+    const rawGame = u.searchParams.get('code') || u.searchParams.get('game');
+    const rawTeam = u.searchParams.get('team');
+    const gameCode = rawGame
+      ? decodeURIComponent(rawGame).toUpperCase().replace(/^PH/i, 'PH')
+      : null;
+    const teamCode = rawTeam ? decodeURIComponent(rawTeam).toUpperCase() : null;
+    if (!gameCode && !teamCode) return null;
+    return {
+      type: teamCode ? 'team' : 'game',
+      code: gameCode,
+      gameCode,
+      teamCode,
+    };
   }
 
   /* ---------- Reconnect guard ----------

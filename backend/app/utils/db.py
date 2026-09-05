@@ -8,7 +8,7 @@ The helpers return plain dictionaries (``dict``) so callers never depend
 on SQLAlchemy ORM model objects.
 """
 
-from .extensions import db
+from ..extensions import db
 
 
 # ---------------------------------------------------------------------------

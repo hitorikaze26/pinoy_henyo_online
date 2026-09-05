@@ -371,8 +371,6 @@ function renderTeamsTab() {
   // QR
   renderTeamQrArea();
   $('team-code-display').textContent = STATE.teamCode || '—';
-  const gameCodeEl = $('team-game-code');
-  if (gameCodeEl) gameCodeEl.textContent = STATE.gameCode || '—';
 
   // Connection status: pill + hint + inline connect block.
   const connMeta = connectionStateMeta(STATE.connectionStatus);
@@ -619,8 +617,6 @@ $('btn-generate-qr').addEventListener('click', () => {
 $('btn-scan-qr-teams').addEventListener('click', () => openQrScanner());
 $('btn-header-qr').addEventListener('click',    () => openQrScanner());
 
-$('btn-copy-game-code').addEventListener('click', () => copyText(STATE.gameCode, 'Game Code'));
-$('btn-copy-conn-game-code').addEventListener('click', () => copyText(STATE.gameCode, 'Game Code'));
 $('btn-copy-settings-code').addEventListener('click', () => copyText(STATE.teamCode, 'Team Code'));
 
 const inputHostCode = $('input-host-code');
@@ -802,7 +798,6 @@ function renderSettingsTab() {
   $('setting-team-name').value     = STATE.teamName;
   $('settings-team-code').textContent = STATE.teamCode;
   $('setting-username').value      = STATE.username;
-  $('settings-game-code').textContent = STATE.gameCode || '—';
   $('settings-round').textContent  = STATE.currentRound || '—';
   $('settings-status').textContent = {
     waiting:  'Waiting for Host',
@@ -1168,12 +1163,13 @@ async function connectToHostWithCode(raw, { source = 'inline', teamCode: preferT
       report(`No active game found for code "${gameCode}".`, 'error');
       return;
     }
-    if (game.status === 'ENDED') {
+    // Terminal games no longer accept connection requests. (The backend also
+    // enforces this via GAME_ENDED; the pre-check keeps the error friendly.)
+    if (String(game.status).toUpperCase() === 'GAME_COMPLETE' ||
+        String(game.status).toUpperCase() === 'CANCELLED' ||
+        String(game.status).toUpperCase() === 'EXPIRED' ||
+        String(game.status).toUpperCase() === 'ENDED') {
       report('That game has ended already.', 'error');
-      return;
-    }
-    if (game.status === 'FROZEN') {
-      report('That game is no longer accepting players.', 'error');
       return;
     }
 
@@ -1222,12 +1218,19 @@ async function switchTeamToGame(game, report, preferTeamCode) {
       try {
         joined = await TeamAPI.joinGame(gameId, username, teamName, null);
       } catch (err2) {
-        report((err2 && err2.message) || 'Could not join the new host.', 'error');
+        if (err2 && err2.code === 'GAME_ENDED') {
+          report('That game has ended and is no longer accepting connections.', 'error');
+        } else {
+          report((err2 && err2.message) || 'Could not join the new host.', 'error');
+        }
         console.warn('[player] host switch create failed', err2);
         return;
       }
     } else if (err && err.status === 404) {
       report('The host has ended that game or it no longer exists.', 'error');
+      return;
+    } else if (err && err.code === 'GAME_ENDED') {
+      report('That game has ended and is no longer accepting connections.', 'error');
       return;
     } else if (err && err.code === 'RATE_LIMITED') {
       const wait = (err.retryAfter > 0) ? ` in ${err.retryAfter}s` : '';
@@ -1308,6 +1311,9 @@ async function sendConnectionRequest(gameId, report) {
     } else if (err.code === 'NOT_TEAM_LEADER') {
       feedback('Only the team leader can request connection.', 'error');
       showToast('Only the team leader can request connection');
+    } else if (err.code === 'GAME_ENDED') {
+      feedback('That game has ended and is no longer accepting connections.', 'error');
+      showToast('That game has ended and is no longer accepting connections');
     } else {
       console.warn('[player] connection request failed', err);
       feedback(err.message || 'Could not send the connection request.', 'error');
@@ -1378,11 +1384,6 @@ $('btn-back-to-team').addEventListener('click', () => {
 document.addEventListener('click', e => {
   const btn = e.target.closest('#btn-copy-team-code');
   if (btn) copyText(STATE.teamCode, 'Team Code');
-});
-
-document.addEventListener('click', e => {
-  const btn = e.target.closest('#btn-copy-game-code');
-  if (btn) copyText(STATE.gameCode, 'Game Code');
 });
 
 document.addEventListener('click', e => {

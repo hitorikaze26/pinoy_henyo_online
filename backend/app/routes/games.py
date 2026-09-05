@@ -25,6 +25,7 @@ def create_game():
 
 
 @games_bp.get("/by-code/<string:game_code>")
+@rate_limit("games_resolve", limit=60, window_seconds=60)
 def get_game_by_code(game_code):
     game = game_service.get_game_by_code(game_code.upper())
     if game is None:

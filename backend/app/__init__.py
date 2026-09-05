@@ -4,7 +4,7 @@ from flask import Flask
 
 from config import config_by_name
 
-from .extensions import cors, db, migrate, socketio
+from .extensions import cors, migrate, socketio
 from .routes.categories import categories_bp
 from .routes.devices import devices_bp
 from .routes.games import games_bp
@@ -100,6 +100,11 @@ def _warn_production_cors(app):
 
 
 def create_app(config_name=None):
+    # Imported locally so it is bound as a local (not the package attribute
+    # ``app.db``, which an ``import app.db`` of the repositories subpackage
+    # would otherwise shadow for later create_app calls).
+    from .extensions import db
+
     if config_name is None:
         config_name = os.environ.get("FLASK_CONFIG", "development")
     if config_name not in config_by_name:
