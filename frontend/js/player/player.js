@@ -155,7 +155,6 @@ function setConnectionStatus(status) {
   STATE.hostConnected = status === 'CONNECTED';
   try { renderHeader(); } catch (e) {}
   try { renderTeamsTab(); } catch (e) {}
-  try { renderWaitingScreen(); } catch (e) {}
   return prev !== status;
 }
 
@@ -197,7 +196,7 @@ function applySettings(s) {
   if (!s) return;
   STATE.settings = Object.assign({}, STATE.settings, s);
   applyDisplaySettings();
-  try { renderHeader(); renderTeamsTab(); renderWordsTab(); renderWaitingScreen(); } catch (e) {}
+  try { renderHeader(); renderTeamsTab(); renderWordsTab(); } catch (e) {}
 }
 
 function applyDisplaySettings() {
@@ -446,7 +445,6 @@ const TAB_IDS = {
   teams:    'tab-teams',
   words:    'tab-words',
   settings: 'tab-settings',
-  waiting:  'view-waiting',
 };
 
 function switchTab(tabKey) {
@@ -552,10 +550,6 @@ function renderTeamsTab() {
   renderTeamQrArea();
   $('team-code-display').textContent = STATE.teamCode || '—';
 
-  // Game code display (meta grid cell)
-  const gameCodeEl = $('game-code-display');
-  if (gameCodeEl) gameCodeEl.textContent = STATE.gameCode || '—';
-
   // Member capacity readout + Add Member gating.
   const capEl = $('member-cap');
   if (capEl) {
@@ -603,36 +597,6 @@ function renderTeamsTab() {
   if (genQr) {
     genQr.hidden = !isLeader;
   }
-
-  // Leader-only request/reconnect connection action.
-  renderConnectionAction(isLeader, connected);
-}
-
-// Server-authoritative connection action for the leader.
-// The backend only allows re-requests in NOT_CONNECTED / DECLINED /
-// DISCONNECTED states, so the button follows that same set.
-function renderConnectionAction(isLeader, alreadyConnected) {
-  const area = $('conn-request-area');
-  if (!area) return;
-  const btn   = $('btn-request-connection');
-  const label = $('btn-request-connection-label');
-  const hint  = $('conn-request-hint');
-  const show = isLeader && !alreadyConnected &&
-    ['NOT_CONNECTED', 'DECLINED', 'DISCONNECTED'].includes(STATE.connectionStatus);
-  area.hidden = !show;
-  if (!show) return;
-  const status = STATE.connectionStatus;
-  if (status === 'NOT_CONNECTED') {
-    if (label) label.textContent = 'Request Connection';
-    if (hint)  hint.textContent  = 'Send a connection request to the host to start playing.';
-  } else if (status === 'DECLINED') {
-    if (label) label.textContent = 'Request Connection Again';
-    if (hint)  hint.textContent  = 'The host declined earlier. You can try again.';
-  } else {
-    if (label) label.textContent = 'Reconnect to Host';
-    if (hint)  hint.textContent  = 'Your team was disconnected. Reconnect to keep playing.';
-  }
-  if (btn) btn.disabled = false;
 }
 
 function renderMemberList() {
@@ -695,7 +659,6 @@ async function removeMember(m) {
     STATE.members = STATE.members.filter(x => x.id !== m.id);
     renderTeamsTab();
     renderHeader();
-    renderWaitingScreen();
     showToast(`${m.name} removed`);
   } catch (err) {
     showToast((err && err.message) || 'Could not remove member', 4000);
@@ -756,7 +719,6 @@ $('btn-save-roles').addEventListener('click', async () => {
       await API.withLoading('player-save-roles', () =>
         TeamAPI.assignMyTeamRoles(teamId, roles)
       );
-      renderWaitingScreen();
       showToast('Roles saved');
     } catch (err) {
       console.error('[Player] save roles failed', err);
@@ -899,27 +861,6 @@ $('btn-header-qr').addEventListener('click',    () => openQrScanner());
 
 $('btn-copy-settings-code').addEventListener('click', () => copyText(STATE.teamCode, 'Team Code'));
 
-// Leader-only: request / re-request connection with the host.
-$('btn-request-connection').addEventListener('click', async () => {
-  const btn = $('btn-request-connection');
-  if (btn) btn.disabled = true;
-  try {
-    const res = await API.withLoading('player-request-connection', () =>
-      TeamAPI.requestConnection(API.getGameId(), STATE.connectionToken || undefined)
-    );
-    if (res && res.connection_status) setConnectionStatus(res.connection_status);
-    renderTeamsTab();
-    renderWaitingScreen();
-    renderHeader();
-    showToast('Connection requested — waiting for the host…');
-  } catch (err) {
-    console.error('[Player] connection request failed', err && err.message);
-    showToast((err && err.message) || 'Could not request connection', 4000);
-  } finally {
-    if (btn) btn.disabled = false;
-  }
-});
-
 const inputHostCode = $('input-host-code');
 $('btn-connect-code').addEventListener('click', () => submitHostCodeInput());
 if (inputHostCode) {
@@ -1054,7 +995,6 @@ async function deleteWord(w) {
     await WordAPI.deleteWord(w.id, { asHost: false });
     STATE.words = STATE.words.filter(x => x.id !== w.id);
     renderWordsTab();
-    renderWaitingScreen();
     showToast(`"${w.word}" deleted`);
   } catch (err) {
     console.error('[Player] delete word failed', err);
@@ -1229,7 +1169,7 @@ $('btn-leave-game').addEventListener('click', async () => {
     STATE.isConnected   = false;
     STATE.hostConnected = false;
     STATE.gameStatus    = 'waiting';
-    try { renderHeader(); renderTeamsTab(); renderSettingsTab(); renderWaitingScreen(); } catch (err) {}
+    try { renderHeader(); renderTeamsTab(); renderSettingsTab(); } catch (err) {}
     closeConfirm();
     showToast('Left the game');
   };
@@ -1239,99 +1179,6 @@ $('btn-leave-game').addEventListener('click', async () => {
     submit();
   }
 });
-
-/* ============================================================
-   WAITING SCREEN — RENDER
-============================================================ */
-function renderWaitingScreen() {
-  $('waiting-team-name').textContent = STATE.teamName;
-  if ($('waiting-game-code')) $('waiting-game-code').textContent = STATE.gameCode || '—';
-
-  // Member checklist (holds 2 always; done when at least 2 joined).
-  const connected = STATE.members.filter(m => m.connected).length;
-  $('waiting-connected').textContent = connected;
-  $('waiting-total').textContent     = STATE.members.length;
-  setCheckItem('waiting-members-check', STATE.members.length >= 2);
-
-  // Categories Ready (host-configured max_words_per_category limit).
-  const readyCats = readyCategories().length;
-  const cats      = categoriesTouched().length;
-  const maxWords  = settingsGet('max_words_per_category', 5);
-  const catGoal   = maxWords > 0 ? cats * maxWords : cats;
-  $('waiting-words').textContent = cats
-    ? `${readyCats} / ${cats} categories Ready`
-    : '0 / 0 Ready';
-  setCheckItem('waiting-words-check', readyCats === cats && cats > 0);
-  if ($('waiting-words-goal')) {
-    $('waiting-words-goal').textContent = cats
-      ? `${readyCats * maxWords} / ${catGoal} words`
-      : `0 / 0 words (${maxWords} per category)`;
-  }
-
-  // Roles complete: at least one Manghuhula and one Tagasagot.
-  const rolesOk = teamRolesComplete();
-  setCheckItem('waiting-roles-check', rolesOk);
-  const tagaCount = STATE.members.filter(m => m.role === 'Tagasagot').length;
-  const mangCount = STATE.members.filter(m => m.role === 'Manghuhula').length;
-  let rolesText = '';
-  if (rolesOk) {
-    rolesText = 'Roles assigned';
-  } else if (STATE.members.length === 0) {
-    rolesText = 'No members yet — add at least 2';
-  } else {
-    const need = [];
-    if (mangCount < 1) need.push('1 Manghuhula');
-    if (tagaCount < 1) need.push('1 Tagasagot');
-    rolesText = `Assign ${need.join(' and ')} (${mangCount} Manghuhula · ${tagaCount} Tagasagot now)`;
-  }
-  if ($('waiting-roles-state')) $('waiting-roles-state').textContent = rolesText;
-
-  // Host connected + game lifecycle check.
-  const hostCheck = $('waiting-host-check');
-  if (hostCheck) {
-    const hostOk = STATE.connectionStatus === 'CONNECTED';
-    setCheckItem('waiting-host-check', hostOk);
-    const hostDot = $('waiting-host-dot');
-    if (hostDot) hostDot.className = 'conn-dot conn-dot--' + (hostOk ? 'connected' : 'disconnected');
-  }
-
-  // Game state line.
-  if ($('waiting-game-state')) {
-    $('waiting-game-state').textContent = {
-      waiting:   'Waiting for the host to start',
-      ready:     'Game is ready to start',
-      round1:    'Round 1 is live',
-      round2:    'Round 2 is live',
-      complete:  'Game is complete — ask the host to play again',
-    }[STATE.gameStatus] || 'Preparing…';
-  }
-
-  // Spinner caption.
-  const readyForGame =
-    connected === STATE.members.length && STATE.members.length > 0 &&
-    rolesOk && readyCats === cats && cats > 0 &&
-    STATE.gameStatus !== 'complete';
-  if ($('waiting-spinner-text')) {
-    $('waiting-spinner-text').textContent = readyForGame
-      ? 'Ready when the host starts the round'
-      : 'Your team is getting ready';
-  }
-}
-
-function setCheckItem(id, ok) {
-  const el = $(id);
-  if (!el) return;
-  el.classList.toggle('waiting-check--ready', ok);
-  el.classList.toggle('waiting-check--pending', !ok);
-  el.dataset.must = ok ? '' : 'true';
-}
-
-// Roles are ready when at least one Manghuhula and one Tagasagot exist.
-function teamRolesComplete() {
-  const mang = STATE.members.filter(m => m.role === 'Manghuhula').length;
-  const taga = STATE.members.filter(m => m.role === 'Tagasagot').length;
-  return mang >= 1 && taga >= 1;
-}
 
 /* ============================================================
    GAME TIMER (Tagasagot view)
@@ -1841,11 +1688,6 @@ document.addEventListener('click', e => {
   if (btn) copyText(STATE.teamCode, 'Team Code');
 });
 
-document.addEventListener('click', e => {
-  const btn = e.target.closest('#btn-copy-game-code');
-  if (btn) copyText(STATE.gameCode, 'Game Code');
-});
-
 /* ============================================================
    SERVER SYNC — single refresh point
    ------------------------------------------------------------
@@ -1924,7 +1766,7 @@ async function hydrateCategories(gameId) {
   } catch (e) { console.warn('[player] categories offline', e && e.message); }
 }
 
-const REFRESH_TABS = ['renderHeader', 'renderTeamsTab', 'renderWordsTab', 'renderSettingsTab', 'renderWaitingScreen'];
+const REFRESH_TABS = ['renderHeader', 'renderTeamsTab', 'renderWordsTab', 'renderSettingsTab'];
 
 function renderAll() {
   REFRESH_TABS.forEach(fn => { try { window[fn] && window[fn](); } catch (e) {} });
@@ -2000,19 +1842,21 @@ window.addEventListener('pageshow', e => {
 window.addEventListener('pagehide', () => stopHeartbeat());
 
 /* ============================================================
-   PULL-TO-REFRESH (touch) — triggers a full server re-sync.
+   PULL-TO-REFRESH (touch) — system-style full-screen sync.
    ============================================================ */
 (function initPullToRefresh() {
   const scroller = $('app-content');
   const indicator = $('pull-refresh');
   if (!scroller || !indicator || !('ontouchstart' in window)) return;
+  const pill = indicator.querySelector('.pull-refresh__pill');
   const textEl = $('pull-refresh-text');
   const THRESHOLD = 64;
+  const MAX_PULL = 120;
   let startY = null, pulling = false, currentY = 0;
 
   function resetPull() {
-    indicator.style.transform = '';
-    indicator.classList.remove('pull-refresh--armed', 'pull-refresh--refreshing');
+    if (pill) pill.style.transform = '';
+    indicator.classList.remove('pull-refresh--visible', 'pull-refresh--armed', 'pull-refresh--refreshing');
     if (textEl) textEl.textContent = 'Pull to refresh';
     pulling = false;
     currentY = 0;
@@ -2034,18 +1878,20 @@ window.addEventListener('pagehide', () => stopHeartbeat());
     if (dy <= 0) { resetPull(); startY = null; return; }
     e.preventDefault();
     pulling = true;
-    currentY = Math.min(dy, 110);
-    indicator.style.transform = `translateY(${currentY}px)`;
+    currentY = Math.min(dy, MAX_PULL);
     const armed = currentY >= THRESHOLD;
+    indicator.classList.add('pull-refresh--visible');
     indicator.classList.toggle('pull-refresh--armed', armed);
+    if (pill) pill.style.transform = `translateY(${currentY * 0.45}px)`;
     if (textEl) textEl.textContent = armed ? 'Release to refresh' : 'Pull to refresh';
   }, { passive: false });
 
   scroller.addEventListener('touchend', () => {
     if (startY === null) return;
     if (pulling && currentY >= THRESHOLD) {
+      indicator.classList.remove('pull-refresh--visible', 'pull-refresh--armed');
       indicator.classList.add('pull-refresh--refreshing');
-      indicator.classList.remove('pull-refresh--armed');
+      if (pill) pill.style.transform = '';
       if (textEl) textEl.textContent = 'Syncing…';
       refreshAllData({ silent: true }).finally(() => {
         resetPull();
@@ -2065,7 +1911,6 @@ function init() {
   renderTeamsTab();
   renderWordsTab();
   renderSettingsTab();
-  renderWaitingScreen();
 
   // Set initial tab
   switchTab('teams');
@@ -2162,7 +2007,7 @@ init();
   // heartbeat the backend sweeps the device session after 60s idle,
   // which would silently break the player's session-backed calls.
   if (gameId && API.getSessionToken()) startHeartbeat();
-  try { renderHeader(); renderTeamsTab(); renderWordsTab(); renderSettingsTab(); renderWaitingScreen(); } catch (e) {}
+  try { renderHeader(); renderTeamsTab(); renderWordsTab(); renderSettingsTab(); } catch (e) {}
 })();
 
 /* ============================================================
@@ -2250,7 +2095,7 @@ init();
     if (typeof p.correct_words === 'number') STATE.wordsGuessed = p.correct_words;
     if (p.turn_id != null) knownTurnId = p.turn_id;
     applyTimer(p);
-    try { renderWaitingScreen(); renderTagasagotView(); } catch (e) {}
+    try { renderTagasagotView(); } catch (e) {}
     // Secret (Manghuhula room) payload: current_word_text is only present there.
     if (p.current_word_text && API.getGameplayRole() === 'MANGHUHULA') {
       STATE.currentSecretWord = p.current_word_text;
@@ -2305,13 +2150,13 @@ init();
   rt.on('round_completed', (p) => {
     if (!gameIdMatches(p)) return;
     STATE.gameStatus = 'ready';
-    try { renderHeader(); renderWaitingScreen(); } catch (e) {}
+    try { renderHeader(); } catch (e) {}
     showToast('Round complete!');
   });
   rt.on('game_completed', (p) => {
     if (!gameIdMatches(p)) return;
     STATE.gameStatus = 'complete';
-    try { renderHeader(); renderWaitingScreen(); } catch (e) {}
+    try { renderHeader(); } catch (e) {}
     showToast('Game complete!');
   });
   rt.on('round_started', (p) => {
@@ -2319,7 +2164,7 @@ init();
     const roundNo = p.round_number || STATE.currentRound;
     STATE.currentRound = Number(roundNo) || 1;
     STATE.gameStatus = roundLabel(roundNo);
-    try { renderHeader(); renderWaitingScreen(); } catch (e) {}
+    try { renderHeader(); } catch (e) {}
   });
 
   // Settings change (word cap / display toggles) → apply live.
@@ -2329,10 +2174,10 @@ init();
   });
 
   // Presence within our team.
-  rt.on('member_joined', (p) => { if (forMyTeam(p) && p.member) { upsertMember(p.member); try { renderTeamsTab(); renderWaitingScreen(); } catch (e) {} } });
-  rt.on('member_left', (p) => { if (forMyTeam(p)) { const m = STATE.members.find(x => memberId(x) === p.member_id); if (m) m.connected = false; try { renderTeamsTab(); renderWaitingScreen(); } catch (e) {} } });
-  rt.on('team_connected', (p) => { if (forMyTeam(p) && p.member) { const m = upsertMember(p.member); if (m) m.connected = true; try { renderTeamsTab(); renderHeader(); renderWaitingScreen(); } catch (e) {} } });
-  rt.on('team_disconnected', (p) => { if (forMyTeam(p)) { const m = STATE.members.find(x => memberId(x) === p.member_id); if (m) m.connected = false; try { renderTeamsTab(); renderHeader(); renderWaitingScreen(); } catch (e) {} } });
+  rt.on('member_joined', (p) => { if (forMyTeam(p) && p.member) { upsertMember(p.member); try { renderTeamsTab(); } catch (e) {} } });
+  rt.on('member_left', (p) => { if (forMyTeam(p)) { const m = STATE.members.find(x => memberId(x) === p.member_id); if (m) m.connected = false; try { renderTeamsTab(); } catch (e) {} } });
+  rt.on('team_connected', (p) => { if (forMyTeam(p) && p.member) { const m = upsertMember(p.member); if (m) m.connected = true; try { renderTeamsTab(); renderHeader(); } catch (e) {} } });
+  rt.on('team_disconnected', (p) => { if (forMyTeam(p)) { const m = STATE.members.find(x => memberId(x) === p.member_id); if (m) m.connected = false; try { renderTeamsTab(); renderHeader(); } catch (e) {} } });
   rt.on('role_updated', (p) => { if (forMyTeam(p)) { const m = STATE.members.find(x => memberId(x) === p.member_id); if (m) m.role = roleName(p.gameplay_role); try { renderTeamsTab(); renderRoles(); } catch (e) {} } });
   rt.on('member_updated', (p) => { if (forMyTeam(p) && p.username) { const m = STATE.members.find(x => memberId(x) === p.member_id); if (m) m.name = p.username; if (p.member_id === API.getMemberId()) STATE.username = p.username; try { renderTeamsTab(); renderHeader(); renderSettingsTab(); } catch (e) {} } });
   rt.on('team_updated', (p) => { if (forMyTeam(p) && p.team_name) { STATE.teamName = p.team_name; try { renderHeader(); renderTeamsTab(); renderSettingsTab(); } catch (e) {} } });
@@ -2352,13 +2197,13 @@ init();
     STATE.isConnected = true;
     if (knownTurnId) rt.joinTurn(knownTurnId);
     refreshConnectionStatus();
-    try { renderHeader(); renderWaitingScreen(); } catch (e) {}
+    try { renderHeader(); } catch (e) {}
   });
   rt.onReconnect(() => {
     STATE.isConnected = true;
     if (knownTurnId) rt.joinTurn(knownTurnId);
     refreshConnectionStatus();
-    try { renderHeader(); renderWaitingScreen(); } catch (e) {}
+    try { renderHeader(); } catch (e) {}
     showToast('Reconnected');
   });
   rt.onDisconnect(() => {

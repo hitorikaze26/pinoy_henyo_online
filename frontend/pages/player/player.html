@@ -47,10 +47,12 @@
       </button>
     </header>
 
-    <!-- Pull-to-refresh indicator -->
+    <!-- Pull-to-refresh overlay -->
     <div class="pull-refresh" id="pull-refresh" role="status" aria-live="polite">
-      <div class="pull-refresh__spinner"><i class="fa-solid fa-rotate"></i></div>
-      <span class="pull-refresh__text" id="pull-refresh-text">Pull to refresh</span>
+      <div class="pull-refresh__pill">
+        <div class="pull-refresh__spinner"><i class="fa-solid fa-arrow-down"></i></div>
+        <span class="pull-refresh__text" id="pull-refresh-text">Pull to refresh</span>
+      </div>
     </div>
 
     <!-- ========================================================
@@ -173,15 +175,6 @@
                     </button>
                   </span>
                 </div>
-                <div class="conn-meta-item">
-                  <span class="conn-meta-item__label">Game Code</span>
-                  <span class="conn-meta-item__val">
-                    <span class="team-code-val" id="game-code-display">—</span>
-                    <button type="button" class="inline-copy-btn conn-meta-copy" id="btn-copy-game-code" aria-label="Copy game code">
-                      <i class="fa-regular fa-copy"></i>
-                    </button>
-                  </span>
-                </div>
               </div>
             </div>
 
@@ -210,15 +203,6 @@
                 Waiting for the host on the host screen. It usually takes just a few seconds.
               </p>
             </div>
-          </div>
-
-          <!-- State-driven connection action (leader-only) -->
-          <div class="conn-request-area" id="conn-request-area" hidden>
-            <button class="player-btn player-btn--primary" id="btn-request-connection" type="button">
-              <i class="fa-solid fa-tower-broadcast"></i>
-              <span id="btn-request-connection-label">Request Connection</span>
-            </button>
-            <p class="conn-hint" id="conn-request-hint"></p>
           </div>
 
           <div class="player-btn-row conn-actions">
@@ -368,51 +352,6 @@
 
       </div><!-- /#tab-settings -->
 
-      <!-- ====================================================
-           VIEW: WAITING SCREEN
-      ==================================================== -->
-      <div class="tab-view tab-view--hidden" id="view-waiting" role="region" aria-label="Waiting screen">
-
-        <div class="waiting-card player-card fade-in">
-          <div class="waiting-card__icon">
-            <i class="fa-solid fa-hourglass-half"></i>
-          </div>
-          <h2 class="waiting-card__title">Get Ready!</h2>
-          <p class="waiting-card__team" id="waiting-team-name"></p>
-          <p class="waiting-card__game" id="waiting-game-code"></p>
-
-          <div class="waiting-checklist">
-            <div class="waiting-check" id="waiting-host-check">
-              <span class="conn-dot conn-dot--connected" id="waiting-host-dot"></span>
-              <span>Connected to Host</span>
-            </div>
-            <div class="waiting-check" id="waiting-members-check">
-              <i class="fa-solid fa-users" style="color:var(--primary-400)"></i>
-              <span><strong id="waiting-connected">0</strong> / <strong id="waiting-total">0</strong> Members Connected</span>
-            </div>
-            <div class="waiting-check" id="waiting-words-check">
-              <i class="fa-solid fa-list-ul" style="color:var(--primary-400)"></i>
-              <span>Words: <strong id="waiting-words">0 / 0</strong> Categories Ready</span>
-              <span class="waiting-check__sub" id="waiting-words-goal"></span>
-            </div>
-            <div class="waiting-check" id="waiting-roles-check">
-              <i class="fa-solid fa-masks-theater" style="color:var(--primary-400)"></i>
-              <span>Roles: <strong id="waiting-roles-state">Pending</strong></span>
-            </div>
-            <div class="waiting-check" id="waiting-game-check">
-              <i class="fa-solid fa-flag-checkered" style="color:var(--primary-400)"></i>
-              <span>Game: <strong id="waiting-game-state">Waiting for Host</strong></span>
-            </div>
-          </div>
-
-          <div class="waiting-spinner">
-            <div class="spinner-ring"></div>
-            <p class="waiting-spinner__text" id="waiting-spinner-text">Waiting for the host to start…</p>
-          </div>
-        </div>
-
-      </div><!-- /#view-waiting -->
-
     </main>
 
     <!-- ========================================================
@@ -426,10 +365,6 @@
       <button class="bottom-nav__item" data-tab="words" id="nav-words" aria-label="Words" aria-selected="false">
         <i class="fa-solid fa-list-ul"></i>
         <span>Words</span>
-      </button>
-      <button class="bottom-nav__item" data-tab="waiting" id="nav-waiting" aria-label="Waiting" aria-selected="false">
-        <i class="fa-solid fa-hourglass-half"></i>
-        <span>Waiting</span>
       </button>
       <button class="bottom-nav__item" data-tab="settings" id="nav-settings" aria-label="Settings" aria-selected="false">
         <i class="fa-solid fa-gear"></i>
