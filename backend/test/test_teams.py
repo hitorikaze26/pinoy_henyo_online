@@ -68,9 +68,18 @@ def test_create_team_returns_expected_fields(client):
 
 
 def test_team_codes_unique_within_game(client):
-    game_id = _create_game(client)
-    codes = {_create_team(client, game_id)["team_code"] for _ in range(20)}
-    assert len(codes) == 20
+    response = client.post("/api/games")
+    assert response.status_code == 201
+    data = response.get_json()["data"]
+    game_id = data["game_id"]
+    response = client.put(
+        "/api/games/{}/settings".format(game_id),
+        json={"max_teams": 10},
+        headers={"X-Host-Token": data["host_session_token"]},
+    )
+    assert response.status_code == 200, response.get_json()
+    codes = {_create_team(client, game_id)["team_code"] for _ in range(10)}
+    assert len(codes) == 10
 
 
 def test_team_creation_makes_leader(client, app):

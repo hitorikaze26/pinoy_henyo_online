@@ -98,6 +98,12 @@ class Game(db.Model):
     events = db.relationship(
         "GameEvent", back_populates="game", cascade="all, delete-orphan"
     )
+    settings = db.relationship(
+        "GameSettings",
+        back_populates="game",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
 
     def __repr__(self):
         return "<Game code={} status={}>".format(self.game_code, self.status)

@@ -2,28 +2,25 @@
 /* ============================================================
    HOST SETTINGS PAGE
    ------------------------------------------------------------
-   Preferences are stored device-locally in `pinoy_henyo_settings`
-   and saved immediately on every control change (no giant SAVE
-   button). Controls that only feel server traffic stay honest:
+   Game rules, teams & connections, and player display settings
+   are SERVER-BACKED (per-game, table `game_settings`) and saved
+   immediately on every change via PUT /api/games/<id>/settings.
+   The server response is the source of truth: a failed update
+   reverts the control and shows an error. Audio preferences stay
+   device-local (`pinoy_henyo_settings.audio.*`).
 
-     A – wired live       : Pause/Resume, End, Leave, QR, Copy,
-                            Audio (real GameAudio playback)
-     B – local state      : Lock Game (mirrors the Teams page)
-     C – UI-only future   : Player Display prefs, Auto-Approve,
-                            Max teams/members, turn metrics
-     D – needs backend    : none introduced here
-
-   Turn-critical preferences (Game + Timer cards) are locked once
-   the game leaves LOBBY/SETUP ("available when not running").
+   Lock behavior: max_words_per_category / max_teams / max_members
+   freeze once the game leaves LOBBY/SETUP (status NOT IN
+   LOBBY/SETUP). penalty_seconds, allow_new_teams,
+   auto_approve_connections and the display flags stay live.
    ============================================================ */
 (async function () {
   'use strict';
 
   /* ============================================================
-     CONSTANTS / STORAGE
+     CONSTANTS / STORAGE (audio stays device-local)
      ============================================================ */
   const STORAGE_KEY = 'pinoy_henyo_settings';
-  const MAX_TURN_SECONDS = 300; // 5:00
   const TERMINAL_STATUSES = ['GAME_COMPLETE', 'CANCELLED', 'EXPIRED'];
   const RUNNING_STATUSES = ['READY', 'ROUND_1', 'ROUND_2', 'TIE_BREAKER', 'PAUSED'];
   const LOBBY_STATUSES = ['LOBBY', 'SETUP'];
@@ -32,14 +29,26 @@
   // Add future bundled tracks here; the folder is scanned for variants only.
   const MUSIC_TRACKS = ['game music.mp3'];
 
+  // Legacy device-local defaults (audio is the only live section kept here).
   const DEFAULT_SETTINGS = {
-    game: { maxWordsPerTeam: 5, penaltySeconds: 3 },
-    timer: { turnSeconds: 95, timerMode: 'countdown', warnSeconds: 10 },
     audio: { musicOn: true, musicVolume: 0.4, musicTrack: 'game music.mp3', sfxOn: true, sfxVolume: 0.6 },
-    teams: { allowNewTeams: true, autoApprove: false, maxTeams: 8, maxMembers: 6 },
-    display: { showPlayerNames: true, showRoleLabels: true, showScores: true, showQrCode: true, showRoundCategory: true },
-    host: { lockGame: false },
   };
+
+  // Control id -> server-backed settings key (snake_case payload).
+  const CONTROL_KEYS = {
+    'set-game-maxwords': 'max_words_per_category',
+    'set-game-penalty': 'penalty_seconds',
+    'set-teams-allow-new': 'allow_new_teams',
+    'set-teams-autoapprove': 'auto_approve_connections',
+    'set-teams-maxteams': 'max_teams',
+    'set-teams-maxmembers': 'max_members',
+    'set-display-names': 'show_player_names',
+    'set-display-roles': 'show_role_labels',
+    'set-display-scores': 'show_scores',
+    'set-display-qr': 'show_qr_code',
+    'set-display-round': 'show_round_category',
+  };
+  const LOCKED_KEYS = ['max_words_per_category', 'max_teams', 'max_members'];
 
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => Array.from(document.querySelectorAll(sel));
@@ -73,19 +82,6 @@
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(pref)); } catch (e) { /* storage disabled */ }
   }
 
-  function getPref(path) {
-    return path.reduce((o, k) => (o == null ? undefined : o[k]), pref);
-  }
-  function setPref(path, value) {
-    let o = pref;
-    for (let i = 0; i < path.length - 1; i++) o = o[path[i]];
-    o[path[path.length - 1]] = value;
-  }
-  function coerce(v) {
-    const n = Number(v);
-    return Number.isInteger(n) ? n : v;
-  }
-
   /* ============================================================
      STATE
      ============================================================ */
@@ -93,6 +89,8 @@
     gameId: null,
     gameCode: null,
     status: null,       // raw backend status string ("" until fetched)
+    settings: null,     // latest server-backed settings payload
+    settingsLoaded: false,
   };
 
   function isRunning(status) { return RUNNING_STATUSES.indexOf(status || '') !== -1; }
@@ -109,12 +107,6 @@
     t.classList.add('show');
     clearTimeout(t._t);
     t._t = setTimeout(() => t.classList.remove('show'), duration || 2200);
-  }
-
-  let toastTimer = null;
-  function noteSaved(msg) {
-    if (toastTimer) clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => showToast(msg), 60);
   }
 
   /* ============================================================
@@ -173,8 +165,6 @@
     document.body.style.overflow = '';
   }
 
-  // Every settings modal shares the host chrome. Close/cancel buttons always
-  // close their own overlay; confirm buttons run their own action handlers.
   function wireModalClosers() {
     $$('.dash-modal__close, .dash-modal__cancel').forEach((btn) => {
       btn.addEventListener('click', () => closeModal(btn.closest('.dash-modal-overlay')));
@@ -182,9 +172,9 @@
   }
 
   /* ============================================================
-     NO-SESSION STATE
+     NO-SESSION STATE (audio stays visible)
      ============================================================ */
-  const SESSION_ONLY_CARD_IDS = ['card-game', 'card-timer', 'card-teams', 'card-host', 'card-danger'];
+  const SESSION_ONLY_CARD_IDS = ['card-game', 'card-teams', 'card-display', 'card-danger'];
 
   function setNoSessionState() {
     SESSION_ONLY_CARD_IDS.forEach((id) => {
@@ -194,68 +184,147 @@
     const banner = $('#settings-nosession');
     if (banner) banner.hidden = false;
     setCodeDisplays('------');
-    const pause = $('#btn-pause-resume');
-    const end = $('#btn-end-game');
-    if (pause) pause.disabled = true;
-    if (end) end.disabled = true;
   }
 
   function setCodeDisplays(code) {
-    ['game-code-display', 'settings-game-code', 'settings-qr-code-text', 'delete-game-hint'].forEach((id) => {
+    ['game-code-display', 'delete-game-hint'].forEach((id) => {
       const el = document.getElementById(id);
       if (el) el.textContent = code;
     });
   }
 
   /* ============================================================
-     LIVE LOCK (game + timer cards)
+     SERVER-BACKED CONTROL RENDERING
      ============================================================ */
-  function updateLiveLock() {
-    const locked = isLocked(STATE.status);
-    const running = isRunning(STATE.status);
+  function controlOf(id) { return CONTROL_KEYS[id]; }
 
-    ['game', 'timer'].forEach((key) => {
-      const card = document.getElementById('card-' + key);
-      const badge = document.getElementById(key + '-lock-badge');
-      if (card) card.classList.toggle('is-locked', locked);
-      if (badge) badge.hidden = !locked;
+  function paintControl(el) {
+    const key = controlOf(el && el.id);
+    if (!key || !STATE.settings) return;
+    if (el.type === 'checkbox') {
+      el.checked = !!STATE.settings[key];
+    } else {
+      el.value = String(STATE.settings[key]);
+    }
+  }
+
+  function paintAllControls() {
+    Object.keys(CONTROL_KEYS).forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) paintControl(el);
+    });
+  }
+
+  function applySettings(payload) {
+    if (!payload || typeof payload !== 'object') return;
+    STATE.settings = payload;
+    STATE.settingsLoaded = true;
+    paintAllControls();
+  }
+
+  function setRowStatus(el, state, text) {
+    const row = el.closest ? el.closest('.setting-row') : null;
+    const status = row && row.querySelector('.setting-row__status');
+    if (!status) return;
+    status.className = 'setting-row__status' + (state ? ' setting-row__status--' + state : '');
+    status.textContent = text || '';
+  }
+
+  function currentValueOf(el) {
+    return el.type === 'checkbox' ? el.checked : Number(el.value);
+  }
+
+  async function saveControl(el) {
+    const key = controlOf(el && el.id);
+    if (!key || !STATE.gameId) return;
+    const value = currentValueOf(el);
+    setRowStatus(el, 'busy', 'Saving…');
+    try {
+      const res = await GameAPI.updateSettings(STATE.gameId, { [key]: value });
+      applySettings(res);
+      setRowStatus(el, 'done', 'Saved');
+    } catch (e) {
+      console.warn('[settings] save failed', e && e.message);
+      const code = e && e.data && e.data.error && e.data.error.code;
+      if (code === 'SETTINGS_LOCKED') {
+        setRowStatus(el, 'error', 'Locked while playing');
+        showToast('This setting locks once the game starts.');
+      } else {
+        setRowStatus(el, 'error', 'Not saved');
+        showToast('Could not save that setting. Check the connection.');
+      }
+      // Server is the source of truth: revert the control to last known value.
+      paintControl(el);
+    }
+  }
+
+  function wireSelects() {
+    const selects = $$('select');
+    selects.forEach((el) => {
+      if (!controlOf(el.id)) return;
+      el.addEventListener('change', () => {
+        const key = controlOf(el.id);
+        if (LOCKED_KEYS.indexOf(key) !== -1 && isLocked(STATE.status)) return;
+        saveControl(el);
+      });
+    });
+  }
+
+  function wireToggles() {
+    $$('input[type="checkbox"]').forEach((el) => {
+      if (!controlOf(el.id)) return;
+      el.addEventListener('change', () => {
+        if (el.id === 'set-teams-autoapprove' && el.checked && !STATE.settings.auto_approve_connections) {
+          openModal($('#modal-confirm-autoapprove'));
+          return;
+        }
+        saveControl(el);
+      });
     });
 
-    $$('.setting-row.is-live-config').forEach((row) => {
-      row.querySelectorAll('input, select, button, .seg__btn').forEach((el) => { el.disabled = running; });
-    });
+    // Auto-approve confirm: apply the pending (already flipped) checkbox value.
+    const confirmBtn = $('#confirm-autoapprove-btn');
+    if (confirmBtn) {
+      confirmBtn.addEventListener('click', () => {
+        closeModal($('#modal-confirm-autoapprove'));
+        saveControl($('#set-teams-autoapprove'));
+      });
+    }
+    // Cancel: revert the checkbox to the server value before anything saves.
+    const cancelBtn = $('#cancel-confirm-autoapprove');
+    if (cancelBtn) {
+      cancelBtn.addEventListener('click', () => {
+        paintControl($('#set-teams-autoapprove'));
+      });
+    }
+    const closeBtn = $('#close-confirm-autoapprove');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => {
+        paintControl($('#set-teams-autoapprove'));
+      });
+    }
   }
 
   /* ============================================================
-     HOST CONTROLS
+     LIVE LOCK (cap fields freeze once the game leaves LOBBY/SETUP)
      ============================================================ */
-  function setBtnBusy(btn, busy) {
-    if (!btn) return;
-    btn.classList.toggle('is-busy', busy);
-    btn.disabled = busy;
-  }
+  function updateLiveLock() {
+    const locked = isLocked(STATE.status);
 
-  function setPauseUI(paused) {
-    const btn = $('#btn-pause-resume');
-    if (!btn) return;
-    const icon = $('#btn-pause-resume-icon');
-    const label = $('#btn-pause-resume-label');
-    if (icon) icon.className = paused ? 'fa-solid fa-play' : 'fa-solid fa-pause';
-    if (label) label.textContent = paused ? 'Resume Game' : 'Pause Game';
-  }
+    const gameCard = $('#card-game');
+    const teamsCard = $('#card-teams');
+    if (gameCard) gameCard.classList.toggle('is-locked', locked);
+    if (teamsCard) teamsCard.classList.toggle('is-locked', locked);
 
-  function updateHostControls() {
-    const status = STATE.status;
-    const running = isRunning(status);
-    const terminal = isTerminal(status);
+    const gameLock = $('#game-maxwords-lock');
+    if (gameLock) gameLock.hidden = !locked;
+    const teamsLock = $('#teams-lock-badge');
+    if (teamsLock) teamsLock.hidden = !locked;
 
-    const pause = $('#btn-pause-resume');
-    const end = $('#btn-end-game');
-
-    if (pause) pause.disabled = !running || terminal;
-    if (end) end.disabled = !running || terminal;
-
-    setPauseUI(status === 'PAUSED' && running);
+    ['set-game-maxwords', 'set-teams-maxteams', 'set-teams-maxmembers'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.disabled = locked;
+    });
   }
 
   /* ============================================================
@@ -288,7 +357,6 @@
       }
       setRound(STATE.status, data && data.current_round);
       updateLiveLock();
-      updateHostControls();
     } catch (e) {
       console.warn('[settings] status refresh failed', e && e.message);
       if (window.Connect && Connect.showReconnectBanner) {
@@ -301,55 +369,25 @@
     }
   }
 
-  /* ============================================================
-     HOST ACTION FLOWS
-     ============================================================ */
-  async function runHostAction(fn, successMsg, busyBtn) {
-    if (busyBtn) setBtnBusy(busyBtn, true);
+  async function loadSettings() {
+    if (!STATE.gameId) return;
     try {
-      await fn();
-      if (successMsg) showToast(successMsg);
-      await refreshStatus();
+      const res = await GameAPI.getSettings(STATE.gameId);
+      applySettings(res);
     } catch (e) {
-      console.warn('[settings] host action failed', e && e.message);
-      showToast('Could not complete that action right now. Check the connection.');
-    } finally {
-      if (busyBtn) setBtnBusy(busyBtn, false);
+      console.warn('[settings] settings load failed', e && e.message);
     }
   }
 
-  function onPauseResume() {
-    if (!STATE.gameId || !isRunning(STATE.status)) return;
-    if (STATE.status === 'PAUSED') {
-      runHostAction(() => GameAPI.resume(STATE.gameId), 'Game resumed', $('#btn-pause-resume'));
-      return;
-    }
-    openModal($('#modal-confirm-pause'));
+  /* ============================================================
+     DANGER ZONE FLOWS
+     ============================================================ */
+  function setBtnBusy(btn, busy) {
+    if (!btn) return;
+    btn.classList.toggle('is-busy', busy);
+    btn.disabled = busy;
   }
-  function onConfirmPause() {
-    closeModal($('#modal-confirm-pause'));
-    const btn = $('#confirm-pause-btn');
-    setBtnBusy(btn, true);
-    runHostAction(
-      () => GameAPI.pause(STATE.gameId),
-      'Game paused. Everyone sees the frozen state until you resume.',
-      btn
-    );
-  }
-  function onEndGame() {
-    if (!STATE.gameId || !isRunning(STATE.status)) return;
-    openModal($('#modal-confirm-end'));
-  }
-  function onConfirmEnd() {
-    closeModal($('#modal-confirm-end'));
-    const btn = $('#confirm-end-btn');
-    setBtnBusy(btn, true);
-    runHostAction(
-      () => GameAPI.end(STATE.gameId),
-      'Game ended — final standings are ready on the Dashboard.',
-      btn
-    );
-  }
+
   function onLeaveGame() {
     if (!STATE.gameId) return;
     openModal($('#modal-confirm-leave'));
@@ -403,58 +441,6 @@
   }
 
   /* ============================================================
-     QR
-     ============================================================ */
-  function renderQrPlaceholder(container, code) {
-    if (!container) return;
-    let seed = 0;
-    for (let i = 0; i < (code || '').length; i++) seed += code.charCodeAt(i);
-    const rand = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
-
-    container.style.cssText = 'display:grid;grid-template-columns:repeat(7,1fr);gap:2px;width:min(170px,70%);aspect-ratio:1;';
-    const SIZE = 7, total = SIZE * SIZE;
-    const corners = new Set([
-      0, 1, 2, 7, 8, 9, 14, 15, 16,       // top-left
-      4, 5, 6, 11, 12, 13, 18, 19, 20,     // top-right
-      28, 29, 30, 35, 36, 37, 42, 43, 44,  // bottom-left
-    ]);
-    for (let i = 0; i < total; i++) {
-      const filled = corners.has(i) || rand() > 0.42;
-      const cell = document.createElement('div');
-      cell.style.cssText = 'border-radius:2px;background:' + (filled ? '#0b1220' : '#eef2f7');
-      container.appendChild(cell);
-    }
-  }
-
-  function renderRealQr(container, dataUri) {
-    if (!container) return;
-    container.innerHTML = '';
-    if (!dataUri) { renderQrPlaceholder(container, STATE.gameCode); return; }
-    container.style.cssText = 'background:#fff;padding:6px;border-radius:8px;display:flex;align-items:center;justify-content:center;';
-    const img = document.createElement('img');
-    img.src = dataUri;
-    img.alt = 'Join QR';
-    img.style.cssText = 'width:100%;height:100%;object-fit:contain;display:block;';
-    container.appendChild(img);
-  }
-
-  async function openQrModal() {
-    const overlay = $('#modal-settings-qr');
-    if (!overlay) return;
-    const grid = $('#settings-qr-grid');
-    if (STATE.gameCode) $('#settings-qr-code-text').textContent = STATE.gameCode;
-    renderQrPlaceholder(grid, STATE.gameCode);
-    openModal(overlay);
-    if (STATE.gameId) {
-      try {
-        const qr = await GameAPI.gameQr(STATE.gameId);
-        const dataUri = (qr && qr.qr_image) || null;
-        renderRealQr(grid, dataUri);
-      } catch (e) { /* stay on placeholder */ }
-    }
-  }
-
-  /* ============================================================
      AUDIO
      ============================================================ */
   function trackLabel(fileName) {
@@ -489,7 +475,6 @@
     const audio = window.GameAudio;
     if (!audio) return;
 
-    // Track select: only bundled local files.
     const trackSel = $('#set-audio-track');
     if (trackSel) {
       MUSIC_TRACKS.forEach((t) => {
@@ -503,7 +488,6 @@
         a.musicTrack = trackSel.value;
         save();
         audio.setMusicTrack(a.musicTrack);
-        noteSaved('Music track updated');
       });
     }
 
@@ -514,7 +498,6 @@
         a.musicOn = e.target.checked;
         save();
         audio.setMusicEnabled(a.musicOn);
-        noteSaved(a.musicOn ? 'Music on' : 'Music muted');
       });
     }
 
@@ -525,7 +508,6 @@
         a.sfxOn = e.target.checked;
         save();
         audio.setEffectsEnabled(a.sfxOn);
-        noteSaved(a.sfxOn ? 'Sound effects on' : 'Sound effects muted');
       });
     }
 
@@ -540,7 +522,6 @@
         a.musicVolume = Math.round(pct) / 100;
         save();
         audio.setVolume('music', a.musicVolume);
-        noteSaved('Music volume updated');
       });
     }
     const sVol = $('#set-audio-sfx-vol');
@@ -552,7 +533,6 @@
         a.sfxVolume = Math.round(pct) / 100;
         save();
         audio.setVolume('effects', a.sfxVolume);
-        noteSaved('Effects volume updated');
       });
     }
 
@@ -580,129 +560,10 @@
   }
 
   /* ============================================================
-     TIMER
-     ============================================================ */
-  function fmtSeconds(s) {
-    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
-  }
-
-  function wireTimer() {
-    const minEl = $('#set-timer-min');
-    const secEl = $('#set-timer-sec');
-    if (!minEl || !secEl) return;
-
-    const paint = (total) => {
-      minEl.value = String(Math.floor(total / 60));
-      secEl.value = String(total % 60);
-    };
-    paint(pref.timer.turnSeconds);
-
-    const readTotal = () => {
-      let m = parseInt(minEl.value, 10);
-      if (isNaN(m)) m = 0;
-      let s = parseInt(secEl.value, 10);
-      if (isNaN(s)) s = 0;
-      m = Math.max(0, Math.min(5, m));
-      s = Math.max(0, Math.min(59, s));
-      return m * 60 + s;
-    };
-
-    const commit = () => {
-      const total = readTotal();
-      if (total < 1 || total > MAX_TURN_SECONDS) {
-        showToast('Turn length must be between 1 second and 5:00.');
-        paint(pref.timer.turnSeconds);
-        return;
-      }
-      pref.timer.turnSeconds = total;
-      save();
-      noteSaved(`Turn length set to ${fmtSeconds(total)}`);
-    };
-
-    minEl.addEventListener('change', commit);
-    secEl.addEventListener('change', commit);
-
-    const setMode = (mode) => {
-      pref.timer.timerMode = mode;
-      save();
-      ['countdown', 'countup'].forEach((m) => {
-        const el = $('#set-timer-mode-' + m);
-        if (el) {
-          const on = m === mode;
-          el.classList.toggle('seg__btn--active', on);
-          el.setAttribute('aria-pressed', String(on));
-        }
-      });
-      noteSaved('Timer direction: ' + (mode === 'countdown' ? 'Countdown' : 'Count up'));
-    };
-
-    $('#set-timer-mode-countdown').addEventListener('click', () => setMode('countdown'));
-    $('#set-timer-mode-countup').addEventListener('click', () => setMode('countup'));
-
-    $$('.timer-presets .preset-btn').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const total = Number(btn.dataset.seconds);
-        paint(total);
-        pref.timer.turnSeconds = total;
-        save();
-        noteSaved(`Turn length set to ${fmtSeconds(total)}`);
-      });
-    });
-  }
-
-  /* ============================================================
-     PREF CONTROLS (selects + toggles)
-     ============================================================ */
-  function wireSelects() {
-    const bindings = [
-      { sel: '#set-game-maxwords', path: ['game', 'maxWordsPerTeam'], msg: 'Game preference saved' },
-      { sel: '#set-game-penalty', path: ['game', 'penaltySeconds'], msg: 'Game preference saved' },
-      { sel: '#set-timer-warn', path: ['timer', 'warnSeconds'], msg: 'Timer preference saved' },
-      { sel: '#set-teams-maxteams', path: ['teams', 'maxTeams'], msg: 'Team preference saved' },
-      { sel: '#set-teams-maxmembers', path: ['teams', 'maxMembers'], msg: 'Team preference saved' },
-    ];
-    bindings.forEach((b) => {
-      const el = $(b.sel);
-      if (!el) return;
-      el.value = String(getPref(b.path));
-      el.addEventListener('change', () => {
-        setPref(b.path, coerce(el.value));
-        save();
-        noteSaved(b.msg);
-      });
-    });
-  }
-
-  function wireToggles() {
-    const bindings = [
-      { id: 'set-teams-allow-new', path: ['teams', 'allowNewTeams'], msg: 'Team preference saved' },
-      { id: 'set-teams-autoapprove', path: ['teams', 'autoApprove'], msg: 'Team preference saved' },
-      { id: 'set-display-names', path: ['display', 'showPlayerNames'], msg: 'Display preference saved' },
-      { id: 'set-display-roles', path: ['display', 'showRoleLabels'], msg: 'Display preference saved' },
-      { id: 'set-display-scores', path: ['display', 'showScores'], msg: 'Display preference saved' },
-      { id: 'set-display-qr', path: ['display', 'showQrCode'], msg: 'Display preference saved' },
-      { id: 'set-display-round', path: ['display', 'showRoundCategory'], msg: 'Display preference saved' },
-      { id: 'set-host-lock', path: ['host', 'lockGame'], msg: 'Lock updated' },
-    ];
-    bindings.forEach((b) => {
-      const el = document.getElementById(b.id);
-      if (!el) return;
-      el.checked = !!getPref(b.path);
-      el.addEventListener('change', () => {
-        setPref(b.path, el.checked);
-        save();
-        noteSaved(b.msg);
-      });
-    });
-  }
-
-  /* ============================================================
      ROUND-NAV / REVEAL
      ============================================================ */
   function wireNavSkeleton() {
     bindCopy($('#btn-copy-code'), () => STATE.gameCode);
-    bindCopy($('#btn-settings-copy'), () => STATE.gameCode);
-    bindCopy($('#btn-settings-qr-copy'), () => STATE.gameCode);
   }
 
   function initReveal() {
@@ -724,13 +585,17 @@
   }
 
   /* ============================================================
-     REALTIME (keep status honest while open)
+     REALTIME (keep settings + status honest while open)
      ============================================================ */
   function initRealtime(gameId) {
     const rt = (typeof window !== 'undefined') ? window.Realtime : null;
     if (!rt || !rt.on || !gameId) return;
     ['game_started', 'game_paused', 'game_resumed', 'game_completed', 'match_started'].forEach((evt) => {
       rt.on(evt, () => refreshStatus());
+    });
+    rt.on('settings_updated', (payload) => {
+      applySettings(payload);
+      refreshStatus();
     });
     if (!rt.getSocket || !rt.getSocket()) {
       rt.connect({ mode: 'host' });
@@ -780,6 +645,7 @@
     }
 
     refreshStatus();
+    await loadSettings();
     initRealtime(gameId);
   }
 
@@ -787,7 +653,6 @@
      MOUNT: wire UI then bootstrap the session
      ------------------------------------------------------------ */
   wireAudio();
-  wireTimer();
   wireSelects();
   wireToggles();
   wireNavSkeleton();
@@ -799,12 +664,6 @@
   window.addEventListener('focus', refreshStatus);
 
   $('#btn-nosession-goto').addEventListener('click', () => { window.location.href = 'host_dashboard.html'; });
-  $('#btn-settings-qr').addEventListener('click', openQrModal);
-
-  $('#btn-pause-resume').addEventListener('click', onPauseResume);
-  $('#confirm-pause-btn').addEventListener('click', onConfirmPause);
-  $('#btn-end-game').addEventListener('click', onEndGame);
-  $('#confirm-end-btn').addEventListener('click', onConfirmEnd);
   $('#btn-leave-game').addEventListener('click', onLeaveGame);
   $('#confirm-leave-btn').addEventListener('click', onConfirmLeave);
   $('#btn-delete-saved').addEventListener('click', onDeleteSaved);

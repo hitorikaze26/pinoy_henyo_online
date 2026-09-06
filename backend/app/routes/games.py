@@ -1,7 +1,11 @@
 from flask import Blueprint, request
 
 from ..extensions import db
-from ..services import game_service, realtime, report_service
+from ..services import game_service, game_settings_service, realtime, report_service
+from ..services.game_settings_service import (
+    SettingsInvalidError,
+    SettingsLockedError,
+)
 from ..utils.auth import host_authorized, host_token_from_request, require_host
 from ..utils.rate_limit import rate_limit
 from ..utils.response import error_response, success_response
@@ -78,6 +82,43 @@ def _execute(action, game, emitter=None):
     if emitter is not None:
         emitter(game)
     return success_response(data=data)
+
+
+@games_bp.get("/<int:game_id>/settings")
+def get_game_settings(game_id):
+    """Public settings payload (no secrets), consumed by host + player UIs."""
+    game = game_service.get_game(game_id)
+    if game is None:
+        return error_response(
+            "Game not found.", code="GAME_NOT_FOUND", status=404
+        )
+    payload = game_settings_service.get_payload(game)
+    # Persist the settings row when it was lazily created for a legacy game.
+    db.session.commit()
+    return success_response(data=payload)
+
+
+@games_bp.put("/<int:game_id>/settings")
+@require_host
+def update_game_settings(game):
+    """Partial server-backed settings update (host-only).
+
+    When auto-approve is switched ON, every team currently waiting on host
+    approval (REQUESTED) is approved atomically in the same transaction.
+    """
+    body = request.get_json(silent=True) or {}
+    try:
+        settings = game_settings_service.update_settings(game, body)
+        approved = []
+        if settings.auto_approve_connections:
+            approved = game_settings_service.approve_pending_requests(game)
+    except (SettingsInvalidError, SettingsLockedError) as exc:
+        return error_response(str(exc), code=exc.code, status=exc.status)
+    db.session.commit()
+    for team in approved:
+        realtime.emit_connection_approved(team)
+    realtime.emit_settings_updated(game)
+    return success_response(data=game_settings_service.get_payload(game))
 
 
 @games_bp.post("/<int:game_id>/start")

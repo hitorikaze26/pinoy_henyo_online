@@ -184,6 +184,18 @@
   margin: 0.6rem 0 0.2rem;
 }
 
+/* Per-row save state indicator for server-backed controls */
+.setting-row__status {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: rgba(255,255,255,0.4);
+  min-height: 1em;
+}
+.setting-row__status--busy { color: #9fc6ff; }
+.setting-row__status--done { color: #4ade80; }
+.setting-row__status--error { color: #f87171; }
+
 .settings-card__foot {
   font-size: 0.78rem; color: rgba(255,255,255,0.35);
   margin-top: 0.9rem; padding-top: 0.8rem;

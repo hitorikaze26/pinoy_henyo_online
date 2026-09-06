@@ -415,7 +415,10 @@ def request_connection(game_id):
         db.session.rollback()
         return _handle(exc)
     team = member.team
-    realtime.emit_connection_requested(team, member=member)
+    if changed and team.connection_status == Team.CONNECTION_CONNECTED:
+        realtime.emit_connection_approved(team)
+    else:
+        realtime.emit_connection_requested(team, member=member)
     return success_response(
         data={
             "team_id": team.id,

@@ -1004,19 +1004,23 @@ function renderRealQr(container, dataUri) {
   let timerBase = { at: 0, remaining: 0, elapsed: 0 };
   let tickId = null;
   let pollId = null;
+  let gameSettings = null;  // server-backed /api/games/<id>/settings payload
 
   const $ = (id) => document.getElementById(id);
 
   /* ---------- data loading ---------- */
   async function loadData() {
-    const [scoreRes, matchRes, roundRes] = await Promise.all([
+    const [scoreRes, matchRes, roundRes, settingsRes] = await Promise.all([
       GameAPI.scores(gameId).catch(() => ({ scores: [] })),
       MatchAPI.listMatches(gameId).catch(() => ({ matches: [] })),
       RoundAPI.listRounds(gameId).catch(() => ({ rounds: [] })),
+      GameAPI.getSettings(gameId).catch(() => null),
     ]);
     scores = (scoreRes && scoreRes.scores) || [];
     matches = (matchRes && matchRes.matches) || [];
     roundsCache = (roundRes && roundRes.rounds) || [];
+    if (settingsRes) gameSettings = settingsRes;
+    renderPenaltyControls();
     (scores || []).forEach((s) => {
       if (s.team_id && s.team_name) teamNameOf.register(s.team_id, s.team_name);
     });
@@ -1518,9 +1522,32 @@ function renderRealQr(container, dataUri) {
     }
   }
 
+  /* ---------- penalty step (server-backed, live) ---------- */
+  function penaltySeconds() {
+    return gameSettings && gameSettings.penalty_seconds != null
+      ? Number(gameSettings.penalty_seconds)
+      : 3;
+  }
+
+  function renderPenaltyControls() {
+    const p = penaltySeconds();
+    const btnPenalty = $('btn-penalty'); // rebind() clones these buttons; re-query live nodes
+    const btnBonus = $('btn-bonus');
+    [btnPenalty, btnBonus].forEach((btn) => {
+      if (!btn) return;
+      const label = btn.querySelector('span');
+      const isPenalty = btn === btnPenalty;
+      if (label) label.textContent = (isPenalty ? '-' : '+') + p + 's';
+      btn.setAttribute('aria-label', (isPenalty ? 'Subtract ' : 'Add ') + p + ' seconds');
+      btn.setAttribute('title', (isPenalty ? '-' : '+') + p + ' seconds');
+      btn.disabled = p === 0;
+    });
+  }
+
   async function handlePenalty(delta, e) {
     if (e) addRipple(e.currentTarget, e);
     if (!turn || !activeTurnId() || !isTurnRunning(turn)) { toast('Start a turn first.'); return; }
+    if (!penaltySeconds()) { toast('Time penalty is set to 0s.'); return; }
     busyAll(true);
     try {
       const payload = delta < 0
@@ -1731,9 +1758,9 @@ function renderRealQr(container, dataUri) {
   rebind('btn-correct', (e) => handleAction('correct', e));
   rebind('btn-pass', (e) => handleAction('pass', e));
   rebind('btn-stop', (e) => handleAction('timeout', e));
-  rebind('btn-penalty', (e) => handlePenalty(-3, e));
-  rebind('btn-bonus', (e) => handlePenalty(+3, e));
+rebind('btn-penalty', (e) => handlePenalty(-penaltySeconds(), e));
 
+  rebind('btn-bonus', (e) => handlePenalty(penaltySeconds(), e));
   // Current Turn team-select — pick a pending match to control in the console.
   const teamSelectEl = $('team-select');
   if (teamSelectEl) {
@@ -2010,6 +2037,12 @@ function renderRealQr(container, dataUri) {
         if (!rtForThisGame(payload)) return;
         rtReload();
       });
+    });
+    // Settings change (penalty step etc.) → apply live without a reload.
+    rt.on('settings_updated', (payload) => {
+      if (!rtForThisGame(payload)) return;
+      gameSettings = payload;
+      renderPenaltyControls();
     });
     // Presence of teams is useful context on the host dashboard.
     const refreshPresence = () => {

@@ -2,6 +2,7 @@ from .category import Category
 from .device_session import DeviceSession
 from .game import Game
 from .game_event import GameEvent
+from .game_settings import GameSettings
 from .match import Match
 from .penalty import Penalty
 from .round import Round
@@ -16,6 +17,7 @@ __all__ = [
     "DeviceSession",
     "Game",
     "GameEvent",
+    "GameSettings",
     "Match",
     "Penalty",
     "Round",

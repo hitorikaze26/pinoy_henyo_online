@@ -96,6 +96,20 @@ const GameAPI = (() => {
     });
   }
 
+  // GET /api/games/<id>/settings (public, no secrets) -> server-backed settings
+  function getSettings(gameId) {
+    return API.request(`/games/${gameId}/settings`);
+  }
+
+  // PUT /api/games/<id>/settings (host only) -> persists + broadcasts settings
+  function updateSettings(gameId, payload) {
+    return API.request(`/games/${gameId}/settings`, {
+      method: 'PUT',
+      host: true,
+      body: payload,
+    });
+  }
+
   return {
     create,
     get,
@@ -116,6 +130,8 @@ const GameAPI = (() => {
     state,
     leave,
     deleteGame,
+    getSettings,
+    updateSettings,
   };
 })();
 

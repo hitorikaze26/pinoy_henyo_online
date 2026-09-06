@@ -27,6 +27,21 @@ let STATE = {
   nextMemberId:  1,
   nextWordId:    1,
 
+  // Server-backed /api/games/<id>/settings (host-controlled).
+  settings: {
+    max_words_per_category: 5,
+    penalty_seconds: 3,
+    allow_new_teams: true,
+    auto_approve_connections: false,
+    max_teams: 8,
+    max_members: 6,
+    show_player_names: true,
+    show_role_labels: true,
+    show_scores: true,
+    show_qr_code: true,
+    show_round_category: true,
+  },
+
   members: [],
 
   words: [],
@@ -154,6 +169,59 @@ function applyMyWords(words) {
   (words || []).forEach(w => {
     if (w.word_id >= STATE.nextWordId) STATE.nextWordId = w.word_id + 1;
   });
+}
+
+/* ============================================================
+   SERVER SETTINGS — display toggles + per-category word cap
+   ============================================================ */
+function settingsGet(key, fallback) {
+  return STATE.settings && STATE.settings[key] != null ? STATE.settings[key] : fallback;
+}
+
+function maxWordsPerCategory() {
+  return Math.max(1, Math.abs(Number(settingsGet('max_words_per_category', 5))) || 5);
+}
+
+function applySettings(s) {
+  if (!s) return;
+  STATE.settings = Object.assign({}, STATE.settings, s);
+  applyDisplaySettings();
+  try { renderHeader(); renderTeamsTab(); renderWordsTab(); renderWaitingScreen(); } catch (e) {}
+}
+
+function applyDisplaySettings() {
+  const set = (attr, val) => document.body.setAttribute(attr, val ? '1' : '0');
+  set('data-show-names',        settingsGet('show_player_names', true) !== false);
+  set('data-show-role-labels',  settingsGet('show_role_labels', true) !== false);
+  set('data-show-scores',       settingsGet('show_scores', true) !== false);
+  set('data-show-qr',           settingsGet('show_qr_code', true) !== false);
+  set('data-show-round-category', settingsGet('show_round_category', true) !== false);
+}
+
+function countForCategory(cat) {
+  return STATE.words.filter(w => w.submitted && w.category === cat).length;
+}
+
+function categoriesTouched() {
+  return [...new Set(STATE.words.filter(w => w.submitted).map(w => w.category))];
+}
+
+function categoryReady(cat) {
+  return countForCategory(cat) >= maxWordsPerCategory();
+}
+
+function readyCategories() {
+  return categoriesTouched().filter(categoryReady);
+}
+
+function allCategoriesReady() {
+  const cats = categoriesTouched();
+  return cats.length > 0 && cats.every(categoryReady);
+}
+
+function totalCategoryCap() {
+  const cats = categoriesTouched();
+  return cats.length ? cats.length * maxWordsPerCategory() : maxWordsPerCategory();
 }
 
 
@@ -632,12 +700,37 @@ if (inputHostCode) {
 ============================================================ */
 function renderWordsTab() {
   const submitted = STATE.words.filter(w => w.submitted).length;
-  const total     = STATE.maxWords;
-  const pct       = total > 0 ? Math.round((submitted / total) * 100) : 0;
+  const cats      = categoriesTouched();
+  const cap       = maxWordsPerCategory();
 
-  // Progress bar
-  $('words-progress-bar').style.width = `${pct}%`;
-  $('words-submitted-label').textContent = `${submitted} / ${total} Words Submitted`;
+  // Overall progress: submitted words vs total cap across touched categories.
+  const capTotal  = totalCategoryCap();
+  const pct       = capTotal > 0 ? Math.round((submitted / capTotal) * 100) : 0;
+  $('words-progress-bar').style.width = `${Math.min(100, pct)}%`;
+
+  const readyCats = readyCategories().length;
+  $('words-submitted-label').textContent = cats.length
+    ? `${readyCats} / ${cats.length} categories Ready (${submitted} words)`
+    : `${submitted} word${submitted === 1 ? '' : 's'} added`;
+
+  // Per-category summary — "Ready" once a category reaches the configured cap.
+  const summary = $('word-category-summary');
+  if (summary) {
+    summary.innerHTML = cats.length
+      ? cats.map(cat => {
+          const count = countForCategory(cat);
+          const ready = count >= cap;
+          const pctW  = Math.min(100, Math.round((count / cap) * 100));
+          return `
+            <div class="word-cat-row${ready ? ' word-cat-row--ready' : ''}" data-cat="${esc(cat)}">
+              <span class="word-cat-row__name">${esc(cat)}</span>
+              <span class="word-cat-row__bar"><span class="word-cat-row__fill" style="width:${pctW}%"></span></span>
+              <span class="word-cat-row__count">${count} / ${cap}</span>
+              <span class="word-cat-row__check">${ready ? '<i class="fa-solid fa-check"></i> Ready' : ''}</span>
+            </div>`;
+        }).join('')
+      : `<p class="word-cat-row__empty">No words added yet. Add words to mark a category Ready.</p>`;
+  }
 
   // Category badge — show most common category
   const catCounts = {};
@@ -648,7 +741,7 @@ function renderWordsTab() {
   // Ready badge
   const badge    = $('words-ready-badge');
   const locked   = STATE.wordsLocked;
-  const complete = submitted >= total;
+  const allReady = allCategoriesReady();
   const addBtn   = $('btn-add-word');
 
   if (locked) {
@@ -656,15 +749,15 @@ function renderWordsTab() {
     badge.innerHTML = '<i class="fa-solid fa-lock"></i> Locked';
     addBtn.disabled = true;
     $('words-locked-overlay').hidden = false;
-  } else if (complete) {
+  } else if (allReady) {
     badge.className = 'words-ready-badge words-ready-badge--ready';
     badge.innerHTML = '<i class="fa-solid fa-check"></i> Ready';
     addBtn.disabled = false;
     $('words-locked-overlay').hidden = true;
   } else {
     badge.className = 'words-ready-badge words-ready-badge--incomplete';
-    const needed = total - submitted;
-    badge.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> ${needed} more needed`;
+    const needed = Math.max(1, cats.length - readyCats);
+    badge.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> ${needed} more category${needed === 1 ? '' : 'ies'} needed`;
     addBtn.disabled = false;
     $('words-locked-overlay').hidden = true;
   }
@@ -745,16 +838,16 @@ $('form-add-word').addEventListener('submit', async e => {
     valid = false;
   } else { catIn.classList.remove('error'); $('err-add-word-cat').textContent = ''; }
 
-  if (STATE.words.length >= STATE.maxWords) {
-    wordIn.classList.add('error');
-    $('err-add-word').textContent = `Maximum of ${STATE.maxWords} words reached.`;
-    return;
-  }
-
   if (!valid) return;
 
   const word     = wordIn.value.trim();
   const category = catIn.value;
+
+  if (countForCategory(category) >= maxWordsPerCategory()) {
+    wordIn.classList.add('error');
+    $('err-add-word').textContent = `Maximum of ${maxWordsPerCategory()} words in "${category}" reached.`;
+    return;
+  }
 
   // Real backend integration when a player game context + session exists.
   if (window.WordAPI && API.getGameId() && API.getSessionToken()) {
@@ -884,8 +977,11 @@ function renderWaitingScreen() {
   $('waiting-connected').textContent = connected;
   $('waiting-total').textContent     = STATE.members.length;
 
-  const submitted = STATE.words.filter(w => w.submitted).length;
-  $('waiting-words').textContent = `${submitted} / ${STATE.maxWords}`;
+  const readyCats = readyCategories().length;
+  const cats      = categoriesTouched().length;
+  $('waiting-words').textContent = cats
+    ? `${readyCats} / ${cats} categories Ready`
+    : '0 / 0 Ready';
 }
 
 /* ============================================================
@@ -1464,6 +1560,13 @@ init();
         return; // stop further bootstrap work — no valid game context
       }
     }
+    // Server-backed settings: display toggles + per-category word cap.
+    try {
+      const settingsRes = await GameAPI.getSettings(gameId);
+      if (settingsRes) applySettings(settingsRes);
+    } catch (e) {
+      console.warn('[player] settings offline', e && e.message);
+    }
   }
 
   // Load real categories for the word-submission dropdown.
@@ -1659,6 +1762,12 @@ init();
     STATE.currentRound = Number(roundNo) || 1;
     STATE.gameStatus = roundLabel(roundNo);
     try { renderHeader(); renderWaitingScreen(); } catch (e) {}
+  });
+
+  // Settings change (word cap / display toggles) → apply live.
+  rt.on('settings_updated', (p) => {
+    if (!gameIdMatches(p)) return;
+    applySettings(p);
   });
 
   // Presence within our team.

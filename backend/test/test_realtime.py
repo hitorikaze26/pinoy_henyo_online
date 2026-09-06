@@ -695,3 +695,40 @@ def test_score_and_penalty_reach_team_socket(app, client):
     host_sio.disconnect()
     tagasagot_sio.disconnect()
 
+
+# ---------------------------------------------------------------------------
+# 11. settings_updated broadcasts to host and teams (game_room)
+# ---------------------------------------------------------------------------
+
+
+def test_settings_updated_reaches_host_and_teams(app, client):
+    game_id, host = _create_game(client)
+    host_sio = _socket(app, host)
+    team = _create_team(client, game_id, "Team A")
+    team_sio = _socket(
+        app, _connect(client, team["leader"], device_id="dev-team")["session_token"]
+    )
+    for sio in (host_sio, team_sio):
+        sio.get_received()
+
+    response = client.put(
+        "/api/games/{}/settings".format(game_id),
+        json={"penalty_seconds": 10},
+        headers={HOST_TOKEN_HEADER: host},
+    )
+    assert response.status_code == 200
+
+    host_events = _named(host_sio.get_received(), "settings_updated")
+    assert len(host_events) == 1
+    payload = host_events[0]["args"][0]
+    assert payload["penalty_seconds"] == 10
+    assert payload["game_id"] == game_id
+    assert "host_session_token" not in payload
+
+    team_events = _named(team_sio.get_received(), "settings_updated")
+    assert len(team_events) >= 1
+    assert team_events[0]["args"][0]["penalty_seconds"] == 10
+
+    host_sio.disconnect()
+    team_sio.disconnect()
+

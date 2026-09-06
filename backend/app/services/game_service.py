@@ -93,6 +93,9 @@ def create_game():
         except IntegrityError:
             db.session.rollback()
             continue
+        from .game_settings_service import create_defaults_for
+
+        create_defaults_for(game)
         _record_event(game, "GAME_CREATED")
         db.session.commit()
         return game

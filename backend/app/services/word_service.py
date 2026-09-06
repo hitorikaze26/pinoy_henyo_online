@@ -397,10 +397,16 @@ def submit_word(game, team, category_id, word_text, host=False, assigned_round=N
         count = _count_active_words(
             game_id=game.id, category_id=category.id, team_id=team.id
         )
-        if count >= MAX_WORDS_PER_TEAM_CATEGORY:
+        settings = game.settings
+        max_words = (
+            settings.max_words_per_category
+            if settings is not None
+            else MAX_WORDS_PER_TEAM_CATEGORY
+        )
+        if count >= max_words:
             raise WordLimitExceededError(
                 "A team can submit at most {} words per category.".format(
-                    MAX_WORDS_PER_TEAM_CATEGORY
+                    max_words
                 )
             )
 

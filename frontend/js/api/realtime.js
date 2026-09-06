@@ -22,6 +22,9 @@
      time_added / time_removed / penalty_applied
      team_connected / team_disconnected
      member_joined / member_left / role_updated / team_updated
+     connection_requested / connection_approved
+     connection_declined / connection_disconnected
+     settings_updated
      error
 
    SECURITY: the backend broadcasts a PUBLIC payload for a turn
@@ -104,6 +107,7 @@ const Realtime = (() => {
       'member_joined', 'member_left', 'role_updated', 'team_updated',
       'connection_requested', 'connection_approved',
       'connection_declined', 'connection_disconnected',
+      'settings_updated',
       'error',
     ]);
     KNOWN.forEach((name) => {
@@ -189,6 +193,7 @@ const Realtime = (() => {
       'member_joined', 'member_left', 'role_updated', 'team_updated',
       'connection_requested', 'connection_approved',
       'connection_declined', 'connection_disconnected',
+      'settings_updated',
     ];
     return KNOWN.filter((name) => !(handlers.has(name) && handlers.get(name).size));
   }

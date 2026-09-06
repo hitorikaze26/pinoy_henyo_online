@@ -422,6 +422,13 @@ def emit_connection_requested(team, member=None):
     _emit(game_room(team.game_id), "connection_requested", data)
 
 
+def emit_settings_updated(game):
+    from ..services.game_settings_service import get_payload
+
+    data = get_payload(game)
+    _emit(game_room(game.id), "settings_updated", data)
+
+
 def emit_connection_approved(team):
     data = _connection_event_data(team)
     _emit(team_room(team.id), "connection_approved", data)

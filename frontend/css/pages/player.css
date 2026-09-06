@@ -1559,3 +1559,80 @@ ul, ol { list-style: none; }
 @media (min-width: 768px) and (max-width: 1023px) {
   .game-answer-btns .game-ans-btn { min-height: 64px; font-size: 1.1rem; }
 }
+
+/* ============================================================
+   PLAYER DISPLAY TOGGLES (server-backed Host Settings)
+   body[data-show-*="0"] hides the corresponding player UI area.
+   ============================================================ */
+body[data-show-names="0"] .member-row__name,
+body[data-show-names="0"] .tagasagot-row { display: none; }
+body[data-show-role-labels="0"] .member-row__role { display: none; }
+body[data-show-scores="0"] .game-topbar__score { display: none; }
+body[data-show-qr="0"] .qr-placeholder,
+body[data-show-qr="0"] #btn-generate-qr,
+body[data-show-qr="0"] #btn-header-qr { display: none; }
+body[data-show-round-category="0"] #words-category-badge { display: none; }
+
+/* ============================================================
+   PER-CATEGORY WORDS TAB (Ready per category, host-configured cap)
+   ============================================================ */
+.word-category-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.9rem;
+}
+.word-cat-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    "name check"
+    "bar count";
+  gap: 0.2rem 0.6rem;
+  align-items: center;
+  padding: 0.5rem 0.65rem;
+  border-radius: 0.6rem;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.word-cat-row--ready {
+  background: rgba(74,222,128,0.08);
+  border-color: rgba(74,222,128,0.25);
+}
+.word-cat-row__name {
+  grid-area: name;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: rgba(255,255,255,0.85);
+}
+.word-cat-row__count {
+  grid-area: count;
+  font-size: 0.72rem;
+  color: rgba(255,255,255,0.5);
+}
+.word-cat-row__check {
+  grid-area: check;
+  justify-self: end;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #4ade80;
+}
+.word-cat-row__bar {
+  grid-area: bar;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.1);
+  overflow: hidden;
+}
+.word-cat-row__fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--primary-400, #818cf8), var(--accent-1-400, #22d3ee));
+  transition: width 0.3s ease;
+}
+.word-cat-row__empty {
+  font-size: 0.8rem;
+  color: rgba(255,255,255,0.4);
+  margin: 0;
+}

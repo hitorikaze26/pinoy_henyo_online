@@ -108,6 +108,21 @@ class TeamDeleteBlockedMatchError(TeamServiceError):
     code = "TEAM_DELETE_BLOCKED_MATCH_REFERENCE"
 
 
+class AllowNewTeamsDisabledError(TeamServiceError):
+    status = 403
+    code = "ALLOW_NEW_TEAMS_DISABLED"
+
+
+class TeamLimitExceededError(TeamServiceError):
+    status = 409
+    code = "TEAM_LIMIT_EXCEEDED"
+
+
+class MemberLimitExceededError(TeamServiceError):
+    status = 409
+    code = "MEMBER_LIMIT_EXCEEDED"
+
+
 def _record_event(game, event_type, data=None):
     db.session.add(
         GameEvent(game_id=game.id, event_type=event_type, event_data=data)
@@ -158,6 +173,23 @@ def create_team(game, team_name, username, connection_status=None):
         connection_status = Team.CONNECTION_NOT_CONNECTED
     elif connection_status not in Team.CONNECTION_STATUSES:
         raise TeamServiceError("Invalid connection status.")
+    settings = game.settings
+    if settings is not None:
+        if not settings.allow_new_teams:
+            raise AllowNewTeamsDisabledError(
+                "The host has disabled new team creation for this game."
+            )
+        active_count = (
+            Team.query.filter_by(
+                game_id=game.id, status=Team.STATUS_ACTIVE
+            ).count()
+        )
+        if active_count >= settings.max_teams:
+            raise TeamLimitExceededError(
+                "This game already has the maximum of {} teams.".format(
+                    settings.max_teams
+                )
+            )
     for _ in range(MAX_TEAM_CODE_ATTEMPTS):
         team = Team(
             game_id=game.id,
@@ -232,6 +264,13 @@ def update_member_username(member, username):
 
 def add_member(team, username):
     username = _validate_username(username)
+    settings = team.game.settings
+    if settings is not None and len(team.members) >= settings.max_members:
+        raise MemberLimitExceededError(
+            "This team already has the maximum of {} members.".format(
+                settings.max_members
+            )
+        )
     member = TeamMember(
         team_id=team.id,
         username=username,
@@ -359,8 +398,11 @@ def resolve_leader_by_connection_token(connection_token):
 def request_connection(member):
     """Transition a team to CONNECTION_REQUESTED (idempotent-request).
 
-    Returns True if the state actually changed to REQUESTED; False if the
-    request was already pending (no duplicate state machine rotation).
+    When the game has auto-approve enabled, the team goes straight to
+    CONNECTED without host involvement.
+
+    Returns True if the state actually changed (REQUESTED or, with
+    auto-approve, CONNECTED); False if the request was already pending.
     """
     team = member.team
     if team.game is None:
@@ -376,6 +418,20 @@ def request_connection(member):
         Team.CONNECTION_DECLINED,
         Team.CONNECTION_DISCONNECTED,
     ):
+        settings = team.game.settings
+        if settings is not None and settings.auto_approve_connections:
+            team.connection_status = Team.CONNECTION_CONNECTED
+            _record_event(
+                team.game,
+                "CONNECTION_APPROVED",
+                {
+                    "team_id": team.id,
+                    "member_id": member.id,
+                    "username": member.username,
+                    "auto_approved": True,
+                },
+            )
+            return True
         team.connection_status = Team.CONNECTION_REQUESTED
         _record_event(
             team.game,
