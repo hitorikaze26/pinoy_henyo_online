@@ -471,6 +471,22 @@ def update_word(word, game, new_text, actor, category_id=None):
         raise DuplicateWordError(
             "Another word with the same name already exists in this category."
         )
+    if category.id != word.category_id and actor.team is not None:
+        count = _count_active_words(
+            game_id=game.id, category_id=category.id, team_id=actor.team.id
+        )
+        settings = game.settings
+        max_words = (
+            settings.max_words_per_category
+            if settings is not None
+            else MAX_WORDS_PER_TEAM_CATEGORY
+        )
+        if count >= max_words:
+            raise WordLimitExceededError(
+                "A team can submit at most {} words per category.".format(
+                    max_words
+                )
+            )
     word.word_text = text
     word.normalized_word = normalized
     if category_id is not None:

@@ -19,6 +19,8 @@
 
   <!-- Global CSS (must load first) -->
   <link rel="stylesheet" href="../../css/global.css" />
+  <!-- Toast Manager -->
+  <link rel="stylesheet" href="../../css/components/toast.css" />
   <link rel="stylesheet" href="../../css/pages/player.css" />
 </head>
 <body>
@@ -231,21 +233,21 @@
           <!-- Progress -->
           <div class="words-progress" id="words-progress-wrap">
             <div class="words-progress__bar-wrap">
-              <div class="words-progress__bar" id="words-progress-bar" style="width:100%"></div>
+              <div class="words-progress__bar" id="words-progress-bar" style="width:0"></div>
             </div>
             <div class="words-progress__meta">
-              <span id="words-submitted-label">5 / 5 Words Submitted</span>
-              <span class="words-ready-badge words-ready-badge--ready" id="words-ready-badge">
-                <i class="fa-solid fa-check"></i> Ready
+              <span id="words-submitted-label" aria-live="polite">0 words added</span>
+              <span class="words-ready-badge words-ready-badge--incomplete" id="words-ready-badge">
+                <i class="fa-solid fa-triangle-exclamation"></i> Add words to begin
               </span>
             </div>
           </div>
 
           <!-- Per-category readiness summary -->
-          <div class="word-category-summary" id="word-category-summary" aria-label="Words per category"></div>
+          <div class="word-category-summary" id="word-category-summary" aria-label="Words per category" aria-live="polite"></div>
 
           <!-- Word list -->
-          <div class="word-chips" id="word-chips">
+          <div class="word-chips" id="word-chips" aria-live="polite">
             <!-- Populated by JS -->
           </div>
 
@@ -559,7 +561,7 @@
         <div class="modal__icon modal__icon--blue"><i class="fa-solid fa-plus"></i></div>
         <div>
           <h2 class="modal__title" id="add-word-title">Add Word</h2>
-          <p class="modal__subtitle">Submit a word for the game.</p>
+          <p class="modal__subtitle" id="add-word-subtitle">Submit a word for the game.</p>
         </div>
       </div>
       <form class="modal__form" id="form-add-word" novalidate>
@@ -583,11 +585,12 @@
             <option value="Lugar / Place">Lugar / Place</option>
           </select>
           <span class="form-error" id="err-add-word-cat"></span>
+          <span class="form-hint" id="add-word-cap-hint" aria-live="polite"></span>
         </div>
         <div class="modal__actions">
           <button type="button" class="btn-cancel" id="cancel-add-word">Cancel</button>
           <button type="submit" class="btn-confirm">
-            <i class="fa-solid fa-check"></i> Add Word
+            <i class="fa-solid fa-check"></i> <span class="btn-confirm__label" id="add-word-submit-label">Add Word</span>
           </button>
         </div>
       </form>
@@ -643,13 +646,13 @@
     </div>
   </div>
 
-  <!-- Toast -->
-  <div class="player-toast" id="player-toast" aria-live="polite"></div>
+  <!-- Toast Manager handles its own container -->
 
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
   <script src="../../js/core/runtime-config.js"></script>
   <script src="../../js/core/config.js"></script>
+  <script src="../../js/core/toast.js"></script>
   <script src="../../js/api/api.js"></script>
   <script src="../../js/api/game-api.js"></script>
   <script src="../../js/api/team-api.js"></script>

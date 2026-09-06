@@ -608,21 +608,5 @@ ol, ul { list-style: none; }
 }
 
 /* ============================================================
-   TOAST
+   TOAST — handled by css/components/toast.css
 ============================================================ */
-.copy-toast {
-  position: fixed;
-  bottom: 2rem; left: 50%;
-  transform: translateX(-50%) translateY(20px);
-  background: var(--dash-surface-3);
-  border: 1px solid rgba(255,255,255,0.12);
-  color: rgba(255,255,255,0.9);
-  padding: 0.7rem 1.3rem;
-  border-radius: var(--r-full);
-  font-size: 0.875rem; font-weight: 600;
-  box-shadow: var(--shadow-lg);
-  opacity: 0; pointer-events: none;
-  transition: opacity 0.3s ease, transform 0.3s ease;
-  z-index: 300;
-}
-.copy-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }

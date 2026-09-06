@@ -384,28 +384,10 @@ p { line-height: 1.6; }
 .modal__subtitle, .dash-modal__subtitle { font-size: 0.85rem; color: var(--text-muted); }
 
 /* ============================================================
-   TOAST / NOTIFICATION (shared)
+   TOAST / NOTIFICATION
+   Styles live in css/components/toast.css (ph-toast system).
+   Legacy .copy-toast / .player-toast classes are no longer used.
    ============================================================ */
-.copy-toast, .player-toast {
-  position: fixed; left: 50%; bottom: 1.25rem;
-  transform: translateX(-50%) translateY(12px);
-  padding: 0.6rem 1rem;
-  border-radius: var(--radius-full);
-  background: var(--gray-900); color: var(--text-inverse);
-  font-size: 0.85rem; font-weight: 600;
-  box-shadow: var(--shadow-lg);
-  opacity: 0; pointer-events: none;
-  transition: opacity var(--transition-base), transform var(--transition-base);
-  z-index: 300;
-  white-space: nowrap;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-}
-.copy-toast.show, .player-toast.show {
-  opacity: 1; transform: translateX(-50%) translateY(0);
-  pointer-events: auto;
-}
 
 /* ============================================================
    UTILITIES

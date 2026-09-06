@@ -20,6 +20,8 @@
 
   <!-- Global CSS (must load first) -->
   <link rel="stylesheet" href="../../css/global.css" />
+  <!-- Toast Manager -->
+  <link rel="stylesheet" href="../../css/components/toast.css" />
   <!-- Host chrome: top nav, sidebar, modals (shared with the dashboard) -->
   <link rel="stylesheet" href="../../css/pages/host_dashboard.css" />
   <!-- Settings Stylesheet -->
@@ -592,13 +594,13 @@
     </div>
   </div>
 
-  <!-- Toast -->
-  <div class="copy-toast" id="copy-toast" aria-live="polite"></div>
+  <!-- Toast Manager handles its own container -->
 
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
   <script src="../../js/core/runtime-config.js"></script>
   <script src="../../js/core/config.js"></script>
   <script src="../../js/core/audio.js"></script>
+  <script src="../../js/core/toast.js"></script>
   <script src="../../js/api/api.js"></script>
   <script src="../../js/api/game-api.js"></script>
   <script src="../../js/api/connect.js"></script>

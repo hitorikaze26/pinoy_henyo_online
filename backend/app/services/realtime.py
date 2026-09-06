@@ -402,6 +402,14 @@ def emit_team_updated(team):
     )
 
 
+def emit_word_pool_updated(game, team=None):
+    """Signal that a team's word pool changed; clients refetch via REST."""
+    data = {"game_id": game.id, "team_id": team.id if team is not None else None}
+    if team is not None:
+        _emit(team_room(team.id), "word_pool_updated", data)
+    _emit(game_room(game.id), "word_pool_updated", data)
+
+
 def _connection_event_data(team):
     from ..services import team_service
 

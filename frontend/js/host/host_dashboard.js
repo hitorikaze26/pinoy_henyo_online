@@ -199,18 +199,9 @@ function setTimerState(state, label) {
   if (pill) pill.textContent = label || fallback[state] || '';
 }
 
-/** Show a brief toast message (HTML-aware so FA icons render) */
-function showToast(msg) {
-  let toast = document.querySelector('.copy-toast');
-  if (!toast) {
-    toast = document.createElement('div');
-    toast.className = 'copy-toast';
-    document.body.appendChild(toast);
-  }
-  toast.innerHTML = msg;
-  toast.classList.add('show');
-  clearTimeout(toast._timer);
-  toast._timer = setTimeout(() => toast.classList.remove('show'), 2000);
+/** Show a brief toast message — delegates to the global Toast Manager */
+function showToast(msg, duration) {
+  if (window.Toast) window.Toast.showToast(msg, duration);
 }
 
 /** Animate a numeric element (count-up) */
@@ -1428,14 +1419,8 @@ function renderRealQr(container, dataUri) {
   }
 
   function toast(msg) {
-    const t = document.querySelector('.copy-toast');
-    if (t) { t.innerHTML = msg; showToastSafe(t); }
+    if (window.Toast) window.Toast.showToast(msg);
     else if (typeof showToast === 'function') showToast(msg);
-  }
-  function showToastSafe(t) {
-    t.classList.add('show');
-    clearTimeout(t._timer);
-    t._timer = setTimeout(() => t.classList.remove('show'), 2500);
   }
 
   /* ---------- action handlers (backend) ---------- */

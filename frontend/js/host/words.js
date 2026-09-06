@@ -49,14 +49,10 @@ const $  = id  => document.getElementById(id);
 const $$ = sel => document.querySelectorAll(sel);
 
 /* ============================================================
-   TOAST
+   TOAST — delegates to the global Toast Manager
 ============================================================ */
 function showToast(msg) {
-  const t = $('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  clearTimeout(t._t);
-  t._t = setTimeout(() => t.classList.remove('show'), 2400);
+  if (window.Toast) window.Toast.showToast(msg);
 }
 
 /* ============================================================

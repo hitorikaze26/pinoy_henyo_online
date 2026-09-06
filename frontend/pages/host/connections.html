@@ -16,6 +16,8 @@
 
   <!-- Global CSS (must load first) -->
   <link rel="stylesheet" href="../../css/global.css" />
+  <!-- Toast Manager -->
+  <link rel="stylesheet" href="../../css/components/toast.css" />
   <link rel="stylesheet" href="../../css/pages/connections.css" />
 </head>
 <body>
@@ -184,12 +186,12 @@
     </main>
   </div>
 
-  <!-- Copy toast -->
-  <div class="copy-toast" id="copy-toast" aria-live="polite"></div>
+  <!-- Toast Manager handles its own container -->
 
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
   <script src="../../js/core/runtime-config.js"></script>
   <script src="../../js/core/config.js"></script>
+  <script src="../../js/core/toast.js"></script>
   <script src="../../js/api/api.js"></script>
   <script src="../../js/api/game-api.js"></script>
   <script src="../../js/api/team-api.js"></script>

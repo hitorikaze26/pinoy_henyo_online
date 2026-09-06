@@ -1789,31 +1789,8 @@ ol, ul { list-style: none; }
 }
 
 /* ============================================================
-   UTILITY — copied code feedback
+   UTILITY — toast feedback handled by css/components/toast.css
 ============================================================ */
-.copy-toast {
-  position: fixed;
-  bottom: calc(var(--conn-bar-h) + 12px);
-  left: 50%;
-  transform: translateX(-50%) translateY(8px);
-  background: var(--secondary-700);
-  color: #fff;
-  padding: 0.45rem 1rem;
-  border-radius: var(--r-full);
-  font-family: 'Baloo 2', sans-serif;
-  font-size: 0.85rem;
-  font-weight: 700;
-  box-shadow: var(--shadow-md);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.25s ease, transform 0.25s ease;
-  z-index: 400;
-  white-space: nowrap;
-}
-.copy-toast.show {
-  opacity: 1;
-  transform: translateX(-50%) translateY(0);
-}
 
 /* ============================================================
    NEXT ROUND BUTTON

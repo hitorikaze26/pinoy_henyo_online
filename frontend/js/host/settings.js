@@ -98,15 +98,10 @@
   function isTerminal(status) { return TERMINAL_STATUSES.indexOf(status || '') !== -1; }
 
   /* ============================================================
-     TOAST
+     TOAST — delegates to the global Toast Manager
      ============================================================ */
   function showToast(msg, duration) {
-    const t = $('#copy-toast');
-    if (!t) { return; }
-    t.textContent = msg;
-    t.classList.add('show');
-    clearTimeout(t._t);
-    t._t = setTimeout(() => t.classList.remove('show'), duration || 2200);
+    if (window.Toast) window.Toast.showToast(msg, duration);
   }
 
   /* ============================================================

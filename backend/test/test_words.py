@@ -763,6 +763,214 @@ def test_delete_word_owner(client, app):
     assert gone.status_code == 404
 
 
+def test_delete_word_locked_after_start(client, app):
+    game_id, host_token = _create_game(client)
+    team_id, sess = _create_team(app, game_id, "A1")
+    category_id = _create_category(client, game_id, host_token, "Food")
+    word_id = _submit(
+        client, game_id, category_id, (team_id, sess), "Adobo"
+    ).get_json()["data"]["word_id"]
+    _start(client, game_id, host_token)
+
+    denied = client.delete(
+        "/api/words/{}".format(word_id),
+        json={"team_id": team_id},
+        headers={SESSION_TOKEN_HEADER: sess},
+    )
+    assert denied.status_code == 409
+    assert denied.get_json()["error"]["code"] == "WORD_LOCKED"
+
+
+def test_edit_same_word_is_not_a_duplicate(client, app):
+    game_id, host_token = _create_game(client)
+    team_id, sess = _create_team(app, game_id, "A1")
+    category_id = _create_category(client, game_id, host_token, "Food")
+    word_id = _submit(
+        client, game_id, category_id, (team_id, sess), "Apple"
+    ).get_json()["data"]["word_id"]
+
+    # Editing Apple -> Apple must not trigger duplicate validation.
+    response = client.patch(
+        "/api/words/{}".format(word_id),
+        json={"team_id": team_id, "word_text": "Apple"},
+        headers={SESSION_TOKEN_HEADER: sess},
+    )
+    assert response.status_code == 200
+
+
+def test_edit_moves_word_respects_target_capacity(client, app):
+    game_id, host_token = _create_game(client)
+    team_id, sess = _create_team(app, game_id, "A1")
+    food = _create_category(client, game_id, host_token, "Food")
+    animals = _create_category(client, game_id, host_token, "Animals")
+
+    food_ids = [
+        _submit(client, game_id, food, (team_id, sess), w).get_json()["data"]["word_id"]
+        for w in ["One", "Two", "Three", "Four", "Five"]
+    ]
+    for w in ["Cat", "Dog", "Bird", "Fish"]:
+        _submit(client, game_id, animals, (team_id, sess), w)
+    # Move a Food word into Animals (4/5 -> 5/5): allowed.
+    moved = client.patch(
+        "/api/words/{}".format(food_ids[0]),
+        json={"team_id": team_id, "word_text": "One", "category_id": animals},
+        headers={SESSION_TOKEN_HEADER: sess},
+    )
+    assert moved.status_code == 200
+    assert moved.get_json()["data"]["category_id"] == animals
+
+    # Animals is now full (5/5); moving another Food word there is rejected.
+    denied = client.patch(
+        "/api/words/{}".format(food_ids[1]),
+        json={"team_id": team_id, "word_text": "Two", "category_id": animals},
+        headers={SESSION_TOKEN_HEADER: sess},
+    )
+    assert denied.status_code == 409
+    assert denied.get_json()["error"]["code"] == "WORD_LIMIT_EXCEEDED"
+
+
+# ---------------------------------------------------------------------------
+# Realtime word_pool_updated signals
+# ---------------------------------------------------------------------------
+
+
+class _FakeSocketIO:
+    def __init__(self):
+        self.calls = []
+
+    def emit(self, event, data, room=None, skip_sid=None):
+        self.calls.append({"event": event, "data": data, "room": room})
+
+
+def _word_updates(fake):
+    return [
+        call
+        for call in fake.calls
+        if call["event"] == "word_pool_updated"
+    ]
+
+
+def test_create_word_emits_word_pool_updated(client, app, monkeypatch):
+    from app.services import realtime
+
+    fake = _FakeSocketIO()
+    monkeypatch.setattr(realtime, "socketio", fake)
+
+    game_id, host_token = _create_game(client)
+    team_id, sess = _create_team(app, game_id, "A1")
+    category_id = _create_category(client, game_id, host_token, "Food")
+
+    assert _submit(client, game_id, category_id, (team_id, sess), "Adobo").status_code == 201
+
+    updates = _word_updates(fake)
+    assert len(updates) >= 1
+    team_rooms = [c["room"] for c in updates if c["room"] == realtime.team_room(team_id)]
+    game_rooms = [c["room"] for c in updates if c["room"] == realtime.game_room(game_id)]
+    assert team_rooms, "team room must receive the signal"
+    assert game_rooms, "game room must receive the signal"
+    assert updates[0]["data"]["game_id"] == game_id
+    assert updates[0]["data"]["team_id"] == team_id
+
+
+def test_host_create_word_emits_game_room_only(client, app, monkeypatch):
+    from app.services import realtime
+
+    fake = _FakeSocketIO()
+    monkeypatch.setattr(realtime, "socketio", fake)
+
+    game_id, host_token = _create_game(client)
+    category_id = _create_category(client, game_id, host_token, "Food")
+
+    response = client.post(
+        "/api/games/{}/words".format(game_id),
+        json={"category_id": category_id, "word_text": "Sisig"},
+        headers={HOST_TOKEN_HEADER: host_token},
+    )
+    assert response.status_code == 201
+
+    updates = _word_updates(fake)
+    assert len(updates) == 1  # game room only (no team room for host words)
+    assert all(c["room"] == realtime.game_room(game_id) for c in updates)
+    assert updates[0]["data"]["team_id"] is None
+
+
+def test_update_word_emits_word_pool_updated(client, app, monkeypatch):
+    from app.services import realtime
+
+    fake = _FakeSocketIO()
+    monkeypatch.setattr(realtime, "socketio", fake)
+
+    game_id, host_token = _create_game(client)
+    team_id, sess = _create_team(app, game_id, "A1")
+    category_id = _create_category(client, game_id, host_token, "Food")
+    word_id = _submit(
+        client, game_id, category_id, (team_id, sess), "Adobo"
+    ).get_json()["data"]["word_id"]
+
+    response = client.patch(
+        "/api/words/{}".format(word_id),
+        json={"team_id": team_id, "word_text": "Sinigang"},
+        headers={SESSION_TOKEN_HEADER: sess},
+    )
+    assert response.status_code == 200
+
+    updates = _word_updates(fake)
+    assert len(updates) >= 1
+    assert updates[0]["data"]["game_id"] == game_id
+    assert updates[0]["data"]["team_id"] == team_id
+
+
+def test_delete_word_emits_word_pool_updated(client, app, monkeypatch):
+    from app.services import realtime
+
+    fake = _FakeSocketIO()
+    monkeypatch.setattr(realtime, "socketio", fake)
+
+    game_id, host_token = _create_game(client)
+    team_id, sess = _create_team(app, game_id, "A1")
+    category_id = _create_category(client, game_id, host_token, "Food")
+    word_id = _submit(
+        client, game_id, category_id, (team_id, sess), "Adobo"
+    ).get_json()["data"]["word_id"]
+
+    response = client.delete(
+        "/api/words/{}".format(word_id),
+        json={"team_id": team_id},
+        headers={SESSION_TOKEN_HEADER: sess},
+    )
+    assert response.status_code == 200
+
+    updates = _word_updates(fake)
+    assert len(updates) >= 1
+    assert updates[0]["data"]["game_id"] == game_id
+    assert updates[0]["data"]["team_id"] == team_id
+
+
+def test_disable_word_emits_word_pool_updated(client, app, monkeypatch):
+    from app.services import realtime
+
+    fake = _FakeSocketIO()
+    monkeypatch.setattr(realtime, "socketio", fake)
+
+    game_id, host_token = _create_game(client)
+    team_id, sess = _create_team(app, game_id, "A1")
+    category_id = _create_category(client, game_id, host_token, "Food")
+    word_id = _submit(
+        client, game_id, category_id, (team_id, sess), "Adobo"
+    ).get_json()["data"]["word_id"]
+
+    response = client.post(
+        "/api/words/{}/disable".format(word_id),
+        headers={HOST_TOKEN_HEADER: host_token},
+    )
+    assert response.status_code == 200
+
+    updates = _word_updates(fake)
+    assert len(updates) >= 1
+    assert updates[0]["data"]["game_id"] == game_id
+    assert updates[0]["data"]["team_id"] == team_id
+
+
 def test_word_not_found(client):
     assert (
         client.patch(

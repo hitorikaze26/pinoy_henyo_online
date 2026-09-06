@@ -25,6 +25,7 @@
      connection_requested / connection_approved
      connection_declined / connection_disconnected
      settings_updated
+     word_pool_updated
      error
 
    SECURITY: the backend broadcasts a PUBLIC payload for a turn
@@ -108,6 +109,7 @@ const Realtime = (() => {
       'connection_requested', 'connection_approved',
       'connection_declined', 'connection_disconnected',
       'settings_updated',
+      'word_pool_updated',
       'error',
     ]);
     KNOWN.forEach((name) => {
@@ -194,6 +196,7 @@ const Realtime = (() => {
       'connection_requested', 'connection_approved',
       'connection_declined', 'connection_disconnected',
       'settings_updated',
+      'word_pool_updated',
     ];
     return KNOWN.filter((name) => !(handlers.has(name) && handlers.get(name).size));
   }

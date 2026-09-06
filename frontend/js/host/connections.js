@@ -46,15 +46,10 @@ document.addEventListener('click', e => {
 });
 
 /* ============================================================
-   TOAST
+   TOAST — delegates to the global Toast Manager
 ============================================================ */
 function showToast(msg) {
-  const t = $('copy-toast');
-  if (!t) return;
-  t.textContent = msg;
-  t.classList.add('show');
-  clearTimeout(t._t);
-  t._t = setTimeout(() => t.classList.remove('show'), 2200);
+  if (window.Toast) window.Toast.showToast(msg);
 }
 
 /* ============================================================

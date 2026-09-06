@@ -4,6 +4,7 @@ from ..extensions import db
 from ..models import Word
 from ..services import word_service
 from ..services.game_service import get_game
+from ..services.realtime import emit_word_pool_updated
 from ..utils.auth import host_authorized, host_token_from_request
 from ..utils.response import error_response, success_response
 
@@ -86,13 +87,17 @@ def create_word(game_id):
             team = word_service.resolve_team_for_host(
                 game, body.get("team_id")
             )
-            return _handle_submit(game, body, team, host_mode)
+            result = _handle_submit(game, body, team, host_mode)
+            emit_word_pool_updated(game, team)
+            return result
         team = word_service.resolve_submitting_team(
             game,
             session_token=request.headers.get(SESSION_TOKEN_HEADER),
             team_id=body.get("team_id"),
         )
-        return _handle_submit(game, body, team, host_mode)
+        result = _handle_submit(game, body, team, host_mode)
+        emit_word_pool_updated(game, team)
+        return result
     except word_service.WordServiceError as exc:
         db.session.rollback()
         return _handle(exc)
@@ -157,6 +162,7 @@ def update_word(word_id):
     if error is not None:
         return error
     try:
+        owner_team = word.submitting_team
         word = word_service.update_word(
             word,
             word.game,
@@ -165,6 +171,7 @@ def update_word(word_id):
             category_id=body.get("category_id"),
         )
         db.session.commit()
+        emit_word_pool_updated(word.game, owner_team)
     except word_service.WordServiceError as exc:
         db.session.rollback()
         return _handle(exc)
@@ -184,8 +191,10 @@ def delete_word(word_id):
     if error is not None:
         return error
     try:
+        owner_team = word.submitting_team
         word_service.delete_word(word, word.game, actor)
         db.session.commit()
+        emit_word_pool_updated(word.game, owner_team)
     except word_service.WordServiceError as exc:
         db.session.rollback()
         return _handle(exc)
@@ -205,8 +214,10 @@ def disable_word(word_id):
     if error is not None:
         return error
     try:
+        owner_team = word.submitting_team
         word = word_service.disable_word(word, word.game, actor)
         db.session.commit()
+        emit_word_pool_updated(word.game, owner_team)
     except word_service.WordServiceError as exc:
         db.session.rollback()
         return _handle(exc)

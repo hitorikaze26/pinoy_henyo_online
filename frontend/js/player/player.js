@@ -18,7 +18,6 @@ let STATE = {
   currentRound:  1,
   username:      '',
   wordsLocked:   false,
-  maxWords:      5,
   score:         0,
   wordsGuessed:  0,
   totalWords:    0,
@@ -26,6 +25,7 @@ let STATE = {
   role:          'Tagasagot', // 'Manghuhula' | 'Tagasagot'
   nextMemberId:  1,
   nextWordId:    1,
+  editingWord:   null,        // word currently being edited via the Add/Edit modal
 
   // Server-backed /api/games/<id>/settings (host-controlled).
   settings: {
@@ -175,10 +175,21 @@ function connectionStateMeta(status) {
 
 // Populate STATE.words from the player's team words payload.
 function applyMyWords(words) {
-  STATE.words = (words || []).map(wordFromPayload);
-  (words || []).forEach(w => {
+  const active = (words || []).filter(w => String(w.status || 'AVAILABLE') !== 'DISABLED');
+  STATE.words = active.map(wordFromPayload);
+  active.forEach(w => {
     if (w.word_id >= STATE.nextWordId) STATE.nextWordId = w.word_id + 1;
   });
+}
+
+// Server-authoritative word refetch — used after mutations and on realtime signals.
+async function refreshWordsFromServer() {
+  const gameId = API.getGameId();
+  if (!gameId || !API.getSessionToken()) return false;
+  const d = await WordAPI.listMyWords(gameId);
+  if (d && d.words) applyMyWords(d.words);
+  try { renderWordsTab(); } catch (e) {}
+  return true;
 }
 
 /* ============================================================
@@ -236,14 +247,10 @@ function totalCategoryCap() {
 
 
 /* ============================================================
-   TOAST
+   TOAST — delegates to the global Toast Manager
 ============================================================ */
-function showToast(msg, duration = 2400) {
-  const t = $('player-toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  clearTimeout(t._t);
-  t._t = setTimeout(() => t.classList.remove('show'), duration);
+function showToast(msg, duration) {
+  if (window.Toast) window.Toast.showToast(msg, duration);
 }
 
 /* ============================================================
@@ -909,8 +916,8 @@ function renderWordsTab() {
   // Category badge — show most common category
   const catCounts = {};
   STATE.words.forEach(w => { catCounts[w.category] = (catCounts[w.category] || 0) + 1; });
-  const topCat = Object.entries(catCounts).sort((a,b) => b[1]-a[1])[0]?.[0] || '—';
-  $('words-category-badge').textContent = topCat;
+  const topCat = Object.entries(catCounts).sort((a,b) => b[1]-a[1])[0]?.[0] || null;
+  $('words-category-badge').textContent = 'Top: ' + (topCat || '—');
 
   // Ready badge
   const badge    = $('words-ready-badge');
@@ -922,31 +929,50 @@ function renderWordsTab() {
     badge.className = 'words-ready-badge words-ready-badge--locked';
     badge.innerHTML = '<i class="fa-solid fa-lock"></i> Locked';
     addBtn.disabled = true;
+    addBtn.innerHTML = '<i class="fa-solid fa-lock"></i> Words Locked';
     $('words-locked-overlay').hidden = false;
   } else if (allReady) {
     badge.className = 'words-ready-badge words-ready-badge--ready';
     badge.innerHTML = '<i class="fa-solid fa-check"></i> Ready';
     addBtn.disabled = false;
+    addBtn.innerHTML = '<i class="fa-solid fa-plus"></i> Add Word';
     $('words-locked-overlay').hidden = true;
   } else {
     badge.className = 'words-ready-badge words-ready-badge--incomplete';
     const needed = Math.max(1, cats.length - readyCats);
     badge.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> ${needed} more category${needed === 1 ? '' : 'ies'} needed`;
     addBtn.disabled = false;
+    addBtn.innerHTML = '<i class="fa-solid fa-plus"></i> Add Word';
     $('words-locked-overlay').hidden = true;
   }
 
-  // Word chips
+  // Word chips (read-only when locked: edit/delete actions are hidden)
   const chips = $('word-chips');
-  chips.innerHTML = STATE.words.map(w => `
-    <div class="word-chip" data-id="${w.id}">
-      <i class="fa-solid fa-check"></i>
-      <span>${esc(w.word)}</span>
-      <span style="font-size:0.72rem;color:rgba(255,255,255,0.3);margin-left:0.25rem">${esc(w.category)}</span>
-      ${!locked ? `<button class="word-chip__delete" data-id="${w.id}" aria-label="Delete ${esc(w.word)}">
-        <i class="fa-solid fa-xmark"></i>
-      </button>` : ''}
-    </div>`).join('');
+  chips.innerHTML = STATE.words.length
+    ? STATE.words.map(w => `
+      <div class="word-chip" data-id="${w.id}">
+        <i class="fa-solid fa-check" aria-hidden="true"></i>
+        <span class="word-chip__word">${esc(w.word)}</span>
+        <span class="word-chip__cat">${esc(w.category)}</span>
+        ${!locked ? `<button class="word-chip__edit" data-id="${w.id}" aria-label="Edit ${esc(w.word)}" title="Edit ${esc(w.word)}">
+          <i class="fa-solid fa-pen" aria-hidden="true"></i>
+        </button>` : ''}
+        ${!locked ? `<button class="word-chip__delete" data-id="${w.id}" aria-label="Delete ${esc(w.word)}" title="Delete ${esc(w.word)}">
+          <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+        </button>` : ''}
+      </div>`).join('')
+    : `<p class="word-chips__empty">No words yet — add your first word.</p>`;
+
+  // Edit word buttons
+  chips.querySelectorAll('.word-chip__edit').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      e.preventDefault();
+      const id = +btn.dataset.id;
+      const w  = STATE.words.find(x => x.id === id);
+      if (w) openEditWord(w);
+    });
+  });
 
   // Delete word buttons
   chips.querySelectorAll('.word-chip__delete').forEach(btn => {
@@ -968,14 +994,14 @@ function renderWordsTab() {
         <i class="fa-solid fa-lock" style="color:var(--primary-400)"></i>
         <strong>Words Locked</strong>
       </div>
-      <p class="word-status-desc">Words are locked for the game. Contact the host to unlock.</p>`;
+      <p class="word-status-desc">Word editing is locked once the game begins.</p>`;
   } else {
     statusInfo.innerHTML = `
       <div class="word-status-row">
         <i class="fa-solid fa-lock-open" style="color:var(--secondary-400)"></i>
         <strong>Words Unlocked</strong>
       </div>
-      <p class="word-status-desc">You can add, edit, or delete words until the host locks them.</p>`;
+      <p class="word-status-desc">Add, edit, or remove your team's words before the game starts.</p>`;
   }
 }
 
@@ -985,16 +1011,15 @@ async function deleteWord(w) {
   if (!w) return;
   const confirmed = await openConfirm({
     title: 'Delete word?',
-    subtitle: `"${w.word}"`,
+    subtitle: `"${w.word}" · ${w.category}`,
     body: 'This word will be removed from your team pool for all future rounds. This cannot be undone.',
-    confirmLabel: 'Delete',
+    confirmLabel: 'Delete Word',
   });
   if (!confirmed) return;
   setConfirmBusy(true, 'Deleting…');
   try {
     await WordAPI.deleteWord(w.id, { asHost: false });
-    STATE.words = STATE.words.filter(x => x.id !== w.id);
-    renderWordsTab();
+    await refreshWordsFromServer();
     showToast(`"${w.word}" deleted`);
   } catch (err) {
     console.error('[Player] delete word failed', err);
@@ -1005,23 +1030,88 @@ async function deleteWord(w) {
 }
 
 /* ============================================================
-   ADD WORD MODAL
+   ADD / EDIT WORD MODAL
 ============================================================ */
-$('btn-add-word').addEventListener('click', () => {
-  if (STATE.wordsLocked) { showToast('Words are locked by the host.'); return; }
+function openAddWord() {
+  STATE.editingWord = null;
   $('form-add-word').reset();
-  $('err-add-word').textContent    = '';
+  $('err-add-word').textContent     = '';
   $('err-add-word-cat').textContent = '';
+  $('add-word-input').classList.remove('error');
+  $('add-word-category').classList.remove('error');
+  $('add-word-title').textContent    = 'Add Word';
+  $('add-word-subtitle').textContent = 'Submit a word for the game.';
+  $('add-word-submit-label').textContent = 'Add Word';
+  updateCapHint();
   openModal('modal-add-word');
-});
-$('close-add-word').addEventListener('click',  () => closeModal('modal-add-word'));
-$('cancel-add-word').addEventListener('click', () => closeModal('modal-add-word'));
+  $('add-word-input').focus();
+}
+
+function openEditWord(w) {
+  if (STATE.wordsLocked || !w) return;
+  STATE.editingWord = w;
+  $('add-word-input').value    = w.word;
+  $('add-word-category').value = w.category;
+  $('err-add-word').textContent     = '';
+  $('err-add-word-cat').textContent = '';
+  $('add-word-input').classList.remove('error');
+  $('add-word-category').classList.remove('error');
+  $('add-word-title').textContent    = 'Edit Word';
+  $('add-word-subtitle').textContent = 'Update the word or move it to another category.';
+  $('add-word-submit-label').textContent = 'Save';
+  updateCapHint();
+  openModal('modal-add-word');
+  $('add-word-input').focus();
+}
+
+function resetAddWordModal() {
+  STATE.editingWord = null;
+}
+
+// n / cap helper under the category select; disables submit when the
+// selected category is full (ignoring the word currently being edited).
+function updateCapHint() {
+  const catIn     = $('add-word-category');
+  const hint      = $('add-word-cap-hint');
+  const submitBtn = $('form-add-word').querySelector('button[type="submit"]');
+  const cap       = maxWordsPerCategory();
+  if (!catIn.value) {
+    hint.textContent = '';
+    hint.classList.remove('form-hint--full');
+    submitBtn.disabled = false;
+    return;
+  }
+  const editing = STATE.editingWord;
+  let count = countForCategory(catIn.value);
+  if (editing && editing.category === catIn.value) count -= 1; // keep its own slot
+  const left = cap - count;
+  if (left <= 0) {
+    hint.textContent = `${count} / ${cap} words — this category is full.`;
+    hint.classList.add('form-hint--full');
+    submitBtn.disabled = true;
+  } else {
+    hint.textContent = `${count} / ${cap} words filled (${left} left)`;
+    hint.classList.remove('form-hint--full');
+    submitBtn.disabled = false;
+  }
+}
+
+function normalizeForCompare(s) {
+  return String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+$('btn-add-word').addEventListener('click', openAddWord);
+$('add-word-category').addEventListener('change', updateCapHint);
+$('close-add-word').addEventListener('click',  () => { resetAddWordModal(); closeModal('modal-add-word'); });
+$('cancel-add-word').addEventListener('click', () => { resetAddWordModal(); closeModal('modal-add-word'); });
 
 $('form-add-word').addEventListener('submit', async e => {
   e.preventDefault();
-  const wordIn = $('add-word-input');
-  const catIn  = $('add-word-category');
-  let valid    = true;
+  const editing   = STATE.editingWord;
+  const wordIn    = $('add-word-input');
+  const catIn     = $('add-word-category');
+  const submitBtn = $('form-add-word').querySelector('button[type="submit"]');
+  let valid = true;
 
   if (!wordIn.value.trim()) {
     wordIn.classList.add('error');
@@ -1039,46 +1129,73 @@ $('form-add-word').addEventListener('submit', async e => {
 
   const word     = wordIn.value.trim();
   const category = catIn.value;
+  const cap      = maxWordsPerCategory();
 
-  if (countForCategory(category) >= maxWordsPerCategory()) {
+  // Duplicate (case-insensitive, same category only, ignoring the edited word itself).
+  const dup = STATE.words.find(x =>
+    x.id !== (editing && editing.id) &&
+    x.category === category &&
+    normalizeForCompare(x.word) === normalizeForCompare(word)
+  );
+  if (dup) {
     wordIn.classList.add('error');
-    $('err-add-word').textContent = `Maximum of ${maxWordsPerCategory()} words in "${category}" reached.`;
+    $('err-add-word').textContent = `${esc(dup.word)} is already in ${esc(category)}.`;
     return;
   }
 
-  // Real backend integration when a player game context + session exists.
-  if (window.WordAPI && API.getGameId() && API.getSessionToken()) {
-    const btn = $('form-add-word').querySelector('button[type="submit"]');
-    const original = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = 'Submitting…';
-    try {
-      const categoryId = window.PLAYER_CATEGORY_TO_ID ? window.PLAYER_CATEGORY_TO_ID[category] : null;
-      const created = await API.withLoading('player-add-word', () =>
-        WordAPI.createWord(API.getGameId(), { categoryId, wordText: word, asHost: false })
-      );
-      if (!created.word_id) throw new Error('No word_id returned.');
-      if (!STATE.words.some(w => w.id === created.word_id)) {
-        STATE.words.push({ id: created.word_id, word: created.word_text, category: created.category_name || category, submitted: true });
+  // Capacity — editing in the same category keeps the word's own slot.
+  if (editing && editing.category !== category && countForCategory(category) >= cap) {
+    catIn.classList.add('error');
+    $('err-add-word-cat').textContent = `Maximum of ${cap} words in "${category}" reached.`;
+    return;
+  }
+  if (!editing && countForCategory(category) >= cap) {
+    wordIn.classList.add('error');
+    $('err-add-word').textContent = `Maximum of ${cap} words in "${category}" reached.`;
+    return;
+  }
+
+  const hasBackend = Boolean(window.WordAPI && API.getGameId() && API.getSessionToken());
+  const categoryId = window.PLAYER_CATEGORY_TO_ID ? window.PLAYER_CATEGORY_TO_ID[category] : null;
+  const label      = $('add-word-submit-label');
+  submitBtn.disabled = true;
+  label.textContent = 'Submitting…';
+  try {
+    if (editing) {
+      if (hasBackend) {
+        await API.withLoading('player-update-word', () =>
+          WordAPI.updateWord(editing.id, word, { categoryId, asHost: false })
+        );
+      } else {
+        const idx = STATE.words.findIndex(x => x.id === editing.id);
+        if (idx >= 0) { STATE.words[idx].word = word; STATE.words[idx].category = category; }
       }
       closeModal('modal-add-word');
-      renderWordsTab();
+      resetAddWordModal();
+      if (hasBackend) { await refreshWordsFromServer(); } else { renderWordsTab(); }
+      showToast(`"${word}" updated`);
+    } else {
+      if (hasBackend) {
+        await API.withLoading('player-add-word', () =>
+          WordAPI.createWord(API.getGameId(), { categoryId, wordText: word, asHost: false })
+        );
+      } else {
+        STATE.words.push({ id: STATE.nextWordId++, word, category, submitted: true });
+      }
+      closeModal('modal-add-word');
+      resetAddWordModal();
+      if (hasBackend) { await refreshWordsFromServer(); } else { renderWordsTab(); }
       showToast(`"${word}" added`);
-    } catch (err) {
-      console.error('[Player] add word failed', err);
-      wordIn.classList.add('error');
-      $('err-add-word').textContent = err.message || 'Could not add the word.';
-    } finally {
-      btn.disabled = false;
-      btn.textContent = original;
     }
-    return;
+  } catch (err) {
+    console.error('[Player] save word failed', err);
+    wordIn.classList.add('error');
+    $('err-add-word').textContent = (err && err.message) || 'Could not save the word.';
+  } finally {
+    submitBtn.disabled = false;
+    label.textContent = editing ? 'Save' : 'Add Word';
+    updateCapHint();
   }
-
-  STATE.words.push({ id: STATE.nextWordId++, word, category, submitted: true });
-  closeModal('modal-add-word');
-  renderWordsTab();
-  showToast(`"${word}" added`);
 });
 
 /* ============================================================
@@ -2171,6 +2288,23 @@ init();
   rt.on('settings_updated', (p) => {
     if (!gameIdMatches(p)) return;
     applySettings(p);
+  });
+
+  // Game started -> word pool locks; lock the Words tab immediately.
+  rt.on('game_started', (p) => {
+    if (!gameIdMatches(p)) return;
+    if (!STATE.wordsLocked) {
+      STATE.wordsLocked = true;
+      try { renderWordsTab(); } catch (e) {}
+    }
+  });
+
+  // A team word changed somewhere -> refetch (server is source of truth).
+  rt.on('word_pool_updated', (p) => {
+    if (!forMyTeam(p)) return;
+    refreshWordsFromServer().catch(err =>
+      console.warn('[player] words refetch failed', err && err.message)
+    );
   });
 
   // Presence within our team.
