@@ -47,6 +47,12 @@
       </button>
     </header>
 
+    <!-- Pull-to-refresh indicator -->
+    <div class="pull-refresh" id="pull-refresh" role="status" aria-live="polite">
+      <div class="pull-refresh__spinner"><i class="fa-solid fa-rotate"></i></div>
+      <span class="pull-refresh__text" id="pull-refresh-text">Pull to refresh</span>
+    </div>
+
     <!-- ========================================================
          MAIN CONTENT (tab views)
     ======================================================== -->
@@ -73,7 +79,7 @@
             </div>
             <div class="info-row">
               <span class="info-row__label">Team Code</span>
-              <span class="info-row__value code-val" id="team-info-code">>
+              <span class="info-row__value code-val" id="team-info-code">
                 <button class="inline-copy-btn" id="btn-copy-team-code" aria-label="Copy team code">
                   <i class="fa-regular fa-copy"></i>
                 </button>
@@ -105,6 +111,7 @@
           <button class="player-btn player-btn--outline" id="btn-add-member" style="margin-top:0.75rem">
             <i class="fa-solid fa-plus"></i> Add Member
           </button>
+          <p class="member-cap" id="member-cap"></p>
         </div>
 
         <!-- Player Roles Card -->
@@ -128,6 +135,9 @@
               <!-- Populated by JS -->
             </div>
           </div>
+          <p class="roles-readonly-note" id="roles-readonly-note" hidden>
+            <i class="fa-solid fa-lock"></i> Only the team leader can change roles.
+          </p>
           <button class="player-btn player-btn--primary" id="btn-save-roles" style="margin-top:1rem">
             <i class="fa-solid fa-floppy-disk"></i> Save Roles
           </button>
@@ -156,7 +166,21 @@
               <div class="conn-meta-grid">
                 <div class="conn-meta-item">
                   <span class="conn-meta-item__label">Team Code</span>
-                  <span class="conn-meta-item__val"><span class="team-code-val" id="team-code-display">—</span></span>
+                  <span class="conn-meta-item__val">
+                    <span class="team-code-val" id="team-code-display">—</span>
+                    <button type="button" class="inline-copy-btn conn-meta-copy" id="btn-copy-team-code-meta" aria-label="Copy team code">
+                      <i class="fa-regular fa-copy"></i>
+                    </button>
+                  </span>
+                </div>
+                <div class="conn-meta-item">
+                  <span class="conn-meta-item__label">Game Code</span>
+                  <span class="conn-meta-item__val">
+                    <span class="team-code-val" id="game-code-display">—</span>
+                    <button type="button" class="inline-copy-btn conn-meta-copy" id="btn-copy-game-code" aria-label="Copy game code">
+                      <i class="fa-regular fa-copy"></i>
+                    </button>
+                  </span>
                 </div>
               </div>
             </div>
@@ -186,6 +210,15 @@
                 Waiting for the host on the host screen. It usually takes just a few seconds.
               </p>
             </div>
+          </div>
+
+          <!-- State-driven connection action (leader-only) -->
+          <div class="conn-request-area" id="conn-request-area" hidden>
+            <button class="player-btn player-btn--primary" id="btn-request-connection" type="button">
+              <i class="fa-solid fa-tower-broadcast"></i>
+              <span id="btn-request-connection-label">Request Connection</span>
+            </button>
+            <p class="conn-hint" id="conn-request-hint"></p>
           </div>
 
           <div class="player-btn-row conn-actions">
@@ -283,7 +316,7 @@
                 </button>
               </div>
             </div>
-            <button type="submit" class="player-btn player-btn--primary">
+            <button type="submit" class="player-btn player-btn--primary" id="btn-save-team-settings">
               <i class="fa-solid fa-floppy-disk"></i> Save Changes
             </button>
           </form>
@@ -346,10 +379,11 @@
           </div>
           <h2 class="waiting-card__title">Get Ready!</h2>
           <p class="waiting-card__team" id="waiting-team-name"></p>
+          <p class="waiting-card__game" id="waiting-game-code"></p>
 
           <div class="waiting-checklist">
-            <div class="waiting-check">
-              <span class="conn-dot conn-dot--connected"></span>
+            <div class="waiting-check" id="waiting-host-check">
+              <span class="conn-dot conn-dot--connected" id="waiting-host-dot"></span>
               <span>Connected to Host</span>
             </div>
             <div class="waiting-check" id="waiting-members-check">
@@ -358,17 +392,22 @@
             </div>
             <div class="waiting-check" id="waiting-words-check">
               <i class="fa-solid fa-list-ul" style="color:var(--primary-400)"></i>
-              <span>Words: <strong id="waiting-words">5 / 5</strong> Submitted</span>
+              <span>Words: <strong id="waiting-words">0 / 0</strong> Categories Ready</span>
+              <span class="waiting-check__sub" id="waiting-words-goal"></span>
             </div>
             <div class="waiting-check" id="waiting-roles-check">
               <i class="fa-solid fa-masks-theater" style="color:var(--primary-400)"></i>
-              <span>Roles: <strong>Assigned</strong></span>
+              <span>Roles: <strong id="waiting-roles-state">Pending</strong></span>
+            </div>
+            <div class="waiting-check" id="waiting-game-check">
+              <i class="fa-solid fa-flag-checkered" style="color:var(--primary-400)"></i>
+              <span>Game: <strong id="waiting-game-state">Waiting for Host</strong></span>
             </div>
           </div>
 
           <div class="waiting-spinner">
             <div class="spinner-ring"></div>
-            <p class="waiting-spinner__text">Waiting for the host to start…</p>
+            <p class="waiting-spinner__text" id="waiting-spinner-text">Waiting for the host to start…</p>
           </div>
         </div>
 
@@ -387,6 +426,10 @@
       <button class="bottom-nav__item" data-tab="words" id="nav-words" aria-label="Words" aria-selected="false">
         <i class="fa-solid fa-list-ul"></i>
         <span>Words</span>
+      </button>
+      <button class="bottom-nav__item" data-tab="waiting" id="nav-waiting" aria-label="Waiting" aria-selected="false">
+        <i class="fa-solid fa-hourglass-half"></i>
+        <span>Waiting</span>
       </button>
       <button class="bottom-nav__item" data-tab="settings" id="nav-settings" aria-label="Settings" aria-selected="false">
         <i class="fa-solid fa-gear"></i>
@@ -643,6 +686,25 @@
           </button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Confirm destructive action (delete word / remove member / leave game) -->
+  <div class="modal-overlay" id="modal-confirm" aria-hidden="true" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-body">
+    <div class="modal slide-up">
+      <button class="modal__close" id="close-confirm"><i class="fa-solid fa-xmark"></i></button>
+      <div class="modal__header">
+        <div class="modal__icon modal__icon--red"><i class="fa-solid fa-triangle-exclamation"></i></div>
+        <div>
+          <h2 class="modal__title" id="confirm-title">Are you sure?</h2>
+          <p class="modal__subtitle" id="confirm-subtitle"></p>
+        </div>
+      </div>
+      <div class="modal__body-text" id="confirm-body"></div>
+      <div class="modal__actions">
+        <button type="button" class="btn-cancel" id="cancel-confirm">Cancel</button>
+        <button type="button" class="btn-confirm btn-confirm--danger" id="btn-confirm-action"></button>
+      </div>
     </div>
   </div>
 

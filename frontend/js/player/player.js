@@ -67,6 +67,11 @@ let STATE = {
   pendingWordDeleteId:   null,
 };
 
+// Server-sync bookkeeping (single refreshAllData() sync point).
+let refreshInProgress = false;
+let lastAutoSyncAt   = 0;
+let heartbeatTimer   = null;
+
 /* ============================================================
    DOM HELPERS
 ============================================================ */
@@ -89,13 +94,19 @@ function roleDisplayName(role) {
   return String(role || '').toUpperCase() === 'MANGHUHULA' ? 'Manghuhula' : 'Tagasagot';
 }
 
+// Whether the current device holds the team leader role.
+function isTeamLeader() {
+  return String(API.getDeviceRole() || '').toUpperCase() === 'TEAM_LEADER';
+}
+
 // Backend member_payload -> local member row.
 function memberFromPayload(m) {
   return {
-    id:        m.member_id,
-    name:      m.username || '',
-    role:      roleDisplayName(m.gameplay_role),
-    connected: !!m.is_connected,
+    id:          m.member_id,
+    name:        m.username || '',
+    role:        roleDisplayName(m.gameplay_role),
+    device_role: m.device_role || '',
+    connected:   !!m.is_connected,
   };
 }
 
@@ -282,16 +293,119 @@ function closeModal(id) {
 
 // Close on backdrop click
 $$('.modal-overlay').forEach(o => {
-  o.addEventListener('click', e => { if (e.target === o) closeModal(o.id); });
+  o.addEventListener('click', e => { if (e.target === o && o.id !== 'modal-confirm') closeModal(o.id); });
 });
 
 // Escape key closes modals
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
+  if ($('modal-confirm') && $('modal-confirm').classList.contains('open')) {
+    if (!confirmBusy) resolveConfirm(false);
+    return;
+  }
   $$('.modal-overlay.open').forEach(o => closeModal(o.id));
   // Also close fullscreen views
   if (STATE.fullscreenView === 'qr-scanner') closeQrScanner();
 });
+
+/* ============================================================
+   CONFIRM MODAL (promise-based replacement for confirm())
+   Resolves true on the action button (modal stays open for the
+   caller to run its async work), false on cancel/close/Escape.
+============================================================ */
+let confirmResolve  = null;   // currently awaiting openConfirm()
+let confirmBusy     = false;  // locked while an action is processing
+let confirmLastFocus = null;
+let confirmLabelPending = ''; // action label restored after a busy action
+
+function openConfirm({ title, subtitle = '', body = '', confirmLabel = 'Confirm' }) {
+  return new Promise(resolve => {
+    const overlay = $('modal-confirm');
+    $('confirm-title').textContent    = title;
+    $('confirm-subtitle').textContent = subtitle;
+    $('confirm-body').textContent     = body;
+    const action = $('btn-confirm-action');
+    action.disabled     = false;
+    action.textContent  = confirmLabel;
+    const cancel  = $('cancel-confirm');
+    const closeX  = $('close-confirm');
+    cancel.disabled = false;
+    closeX.disabled = false;
+    overlay.classList.remove('modal-overlay--busy');
+    confirmBusy      = false;
+    confirmLastFocus = document.activeElement;
+    confirmResolve   = resolve;
+    openModal('modal-confirm');
+  });
+}
+
+// Called when the user picks an action.
+// Returns true if the modal accepted the choice, false if swallows
+// (e.g. already resolved, or locked by a running action).
+function resolveConfirm(val) {
+  if (confirmBusy) return false;
+  const resolver = confirmResolve;
+  if (!resolver) return false;
+  confirmResolve = null;
+  const action = $('btn-confirm-action');
+  if (action) action.disabled = true;
+  if (val === false) closeConfirm();        // cancel path closes now
+  confirmLastFocus = null;
+  resolver(val);
+  return true;
+}
+
+// Close the confirm modal and restore focus (use in finally).
+function closeConfirm() {
+  const overlay = $('modal-confirm');
+  overlay.classList.remove('modal-overlay--busy');
+  confirmBusy = false;
+  const action = $('btn-confirm-action');
+  if (action) { action.disabled = false; action.textContent = 'Confirm'; }
+  const cancel = $('cancel-confirm');
+  const closeX = $('close-confirm');
+  if (cancel) cancel.disabled = false;
+  if (closeX) closeX.disabled = false;
+  closeModal('modal-confirm');
+  if (confirmLastFocus) { const f = confirmLastFocus; confirmLastFocus = null; setTimeout(() => f.focus(), 30); }
+}
+
+// Lock the modal while an async action runs and show progress.
+function setConfirmBusy(busy, label) {
+  confirmBusy = busy;
+  const overlay = $('modal-confirm');
+  const action  = $('btn-confirm-action');
+  const cancel  = $('cancel-confirm');
+  const closeX  = $('close-confirm');
+  if (busy) {
+    overlay.classList.add('modal-overlay--busy');
+    action.disabled = true;
+    if (label) action.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${esc(label)}`;
+    if (cancel) cancel.disabled = true;
+    if (closeX) closeX.disabled = true;
+  } else {
+    overlay.classList.remove('modal-overlay--busy');
+    action.disabled = false;
+    action.textContent = confirmLabelPending || action.dataset.label || action.textContent;
+    if (cancel) cancel.disabled = false;
+    if (closeX) closeX.disabled = false;
+  }
+}
+
+// Wire the shared confirm modal once at init.
+(function initConfirmModal() {
+  const overlay = $('modal-confirm');
+  $('btn-confirm-action').addEventListener('click', () => {
+    if (!confirmResolve) return;
+    confirmLabelPending = $('btn-confirm-action').textContent;
+    resolveConfirm(true);
+  });
+  $('cancel-confirm').addEventListener('click', () => resolveConfirm(false));
+  $('close-confirm').addEventListener('click',  () => resolveConfirm(false));
+  overlay.addEventListener('click', e => {
+    if (e.target === overlay && !confirmBusy) resolveConfirm(false);
+  });
+})();
 
 /* ============================================================
    QR GRID RENDERER
@@ -403,6 +517,8 @@ function renderHeader() {
    TEAMS TAB — RENDER
 ============================================================ */
 function renderTeamsTab() {
+  const isLeader = isTeamLeader();
+
   // Info card
   $('team-info-name').textContent  = STATE.teamName;
   $('team-info-count').textContent = STATE.members.length;
@@ -413,7 +529,7 @@ function renderTeamsTab() {
 
   const meta = connectionStateMeta(STATE.connectionStatus);
   $('team-info-host').innerHTML = `
-    <span class="conn-dot conn-dot--${meta.dot}"></span> ${meta.label}</span>`;
+    <span class="conn-dot conn-dot--${meta.dot}"></span> ${meta.label}`;
 
   const statusHtml = {
     waiting:  `<i class="fa-regular fa-clock" style="color:var(--accent-1-400)"></i> Waiting for Host`,
@@ -424,11 +540,7 @@ function renderTeamsTab() {
   };
   $('team-info-status').innerHTML = statusHtml[STATE.gameStatus] || statusHtml.waiting;
 
-  // Re-wire copy button
-  const copyTeamCode = $('btn-copy-team-code');
-  if (copyTeamCode) {
-    copyTeamCode.addEventListener('click', () => copyText(STATE.teamCode, 'Team Code'));
-  }
+  // Copy button handled centrally by delegation in the COPY BUTTONS section.
 
   // Member list
   renderMemberList();
@@ -439,6 +551,24 @@ function renderTeamsTab() {
   // QR
   renderTeamQrArea();
   $('team-code-display').textContent = STATE.teamCode || '—';
+
+  // Game code display (meta grid cell)
+  const gameCodeEl = $('game-code-display');
+  if (gameCodeEl) gameCodeEl.textContent = STATE.gameCode || '—';
+
+  // Member capacity readout + Add Member gating.
+  const capEl = $('member-cap');
+  if (capEl) {
+    const max = settingsGet('max_members', 6);
+    const n   = STATE.members.length;
+    capEl.textContent = `${n} / ${max} members`;
+    capEl.classList.toggle('member-cap--full', n >= max);
+  }
+  const addBtn = $('btn-add-member');
+  if (addBtn) {
+    addBtn.hidden   = !isLeader;
+    addBtn.disabled = !isLeader || STATE.members.length >= settingsGet('max_members', 6);
+  }
 
   // Connection status: pill + hint + inline connect block.
   const connMeta = connectionStateMeta(STATE.connectionStatus);
@@ -471,60 +601,119 @@ function renderTeamsTab() {
   // Team QR actions are leader-only.
   const genQr = $('btn-generate-qr');
   if (genQr) {
-    genQr.hidden = String(API.getDeviceRole() || '').toUpperCase() !== 'TEAM_LEADER';
+    genQr.hidden = !isLeader;
   }
+
+  // Leader-only request/reconnect connection action.
+  renderConnectionAction(isLeader, connected);
+}
+
+// Server-authoritative connection action for the leader.
+// The backend only allows re-requests in NOT_CONNECTED / DECLINED /
+// DISCONNECTED states, so the button follows that same set.
+function renderConnectionAction(isLeader, alreadyConnected) {
+  const area = $('conn-request-area');
+  if (!area) return;
+  const btn   = $('btn-request-connection');
+  const label = $('btn-request-connection-label');
+  const hint  = $('conn-request-hint');
+  const show = isLeader && !alreadyConnected &&
+    ['NOT_CONNECTED', 'DECLINED', 'DISCONNECTED'].includes(STATE.connectionStatus);
+  area.hidden = !show;
+  if (!show) return;
+  const status = STATE.connectionStatus;
+  if (status === 'NOT_CONNECTED') {
+    if (label) label.textContent = 'Request Connection';
+    if (hint)  hint.textContent  = 'Send a connection request to the host to start playing.';
+  } else if (status === 'DECLINED') {
+    if (label) label.textContent = 'Request Connection Again';
+    if (hint)  hint.textContent  = 'The host declined earlier. You can try again.';
+  } else {
+    if (label) label.textContent = 'Reconnect to Host';
+    if (hint)  hint.textContent  = 'Your team was disconnected. Reconnect to keep playing.';
+  }
+  if (btn) btn.disabled = false;
 }
 
 function renderMemberList() {
+  const isLeader = isTeamLeader();
+  const myId     = API.getMemberId();
+  const namesHidden = settingsGet('show_player_names', true) === false;
   const list = $('member-list');
-  list.innerHTML = STATE.members.map(m => {
-    const initials = m.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0,2);
+  list.innerHTML = STATE.members.map((m, idx) => {
+    const displayName = namesHidden ? `Player ${idx + 1}` : m.name;
+    const initials = (namesHidden ? displayName : m.name).split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
     const dotClass = m.connected ? 'connected' : 'disconnected';
     const roleClass = m.role === 'Manghuhula' ? 'member-row__role--manghuhula' : 'member-row__role--tagasagot';
+    const isLeaderRow = String(m.device_role || '').toUpperCase() === 'TEAM_LEADER';
+    const isSelf = m.id === myId;
+    const removable = isLeader && !isSelf && !isLeaderRow;
     return `
       <div class="member-row" data-id="${m.id}">
         <div class="member-row__avatar">${esc(initials)}</div>
         <div class="member-row__info">
-          <p class="member-row__name">${esc(m.name)}</p>
+          <p class="member-row__name">${esc(displayName)}</p>
           <p class="member-row__role ${roleClass}">${esc(m.role)}</p>
         </div>
         <span class="member-row__status">
+          <span class="member-row__status-label${m.connected ? ' member-row__status-label--connected' : ''}">${m.connected ? 'Connected' : 'Not Connected'}</span>
           <span class="conn-dot conn-dot--${dotClass}"></span>
         </span>
-        <button class="member-row__remove" data-id="${m.id}" aria-label="Remove ${esc(m.name)}">
-          <i class="fa-solid fa-xmark"></i>
-        </button>
+        ${removable
+          ? `<button class="member-row__remove" data-id="${m.id}" aria-label="Remove ${esc(m.name)}">
+              <i class="fa-solid fa-xmark"></i>
+            </button>`
+          : ''}
       </div>`;
   }).join('');
 
   // Remove member buttons
   list.querySelectorAll('.member-row__remove').forEach(btn => {
-    btn.addEventListener('click', async e => {
+    btn.addEventListener('click', e => {
       e.stopPropagation();
       const id = +btn.dataset.id;
       const m  = STATE.members.find(x => x.id === id);
       if (!m) return;
-      if (!confirm(`Remove "${m.name}" from the team?`)) return;
-      try {
-        await TeamAPI.removeMember(id);
-        STATE.members = STATE.members.filter(x => x.id !== id);
-        renderTeamsTab();
-        renderHeader();
-        showToast(`${m.name} removed`);
-      } catch (err) {
-        showToast((err && err.message) || 'Could not remove member', 4000);
-      }
+      e.preventDefault();
+      removeMember(m);
     });
   });
 }
 
+async function removeMember(m) {
+  if (!m) return;
+  const confirmed = await openConfirm({
+    title: 'Remove member?',
+    subtitle: `"${m.name}"`,
+    body: 'They will be disconnected from the host and removed from your team. You can add them back at any time.',
+    confirmLabel: 'Remove',
+  });
+  if (!confirmed) return;
+  setConfirmBusy(true, 'Removing member…');
+  try {
+    await TeamAPI.removeMember(m.id);
+    STATE.members = STATE.members.filter(x => x.id !== m.id);
+    renderTeamsTab();
+    renderHeader();
+    renderWaitingScreen();
+    showToast(`${m.name} removed`);
+  } catch (err) {
+    showToast((err && err.message) || 'Could not remove member', 4000);
+  } finally {
+    closeConfirm();
+  }
+}
+
 function renderRoles() {
+  const isLeader = isTeamLeader();
+
   // Manghuhula select
   const sel = $('select-manghuhula');
   const currentMang = STATE.members.find(m => m.role === 'Manghuhula');
   sel.innerHTML = STATE.members.map(m =>
     `<option value="${m.id}"${m.id === currentMang?.id ? ' selected' : ''}>${esc(m.name)}</option>`
   ).join('');
+  sel.disabled = !isLeader;
 
   // Tagasagot list
   const tagList = $('tagasagot-list');
@@ -536,10 +725,17 @@ function renderRoles() {
           ${esc(m.name)}
         </div>`).join('')
     : `<p style="font-size:0.82rem;color:rgba(255,255,255,0.3)">No Tagasagot assigned yet.</p>`;
+
+  // Roles are read-only for regular team members.
+  const note = $('roles-readonly-note');
+  if (note) note.hidden = isLeader;
+  const saveRoles = $('btn-save-roles');
+  if (saveRoles) saveRoles.hidden = !isLeader;
 }
 
 /* Save Roles */
 $('btn-save-roles').addEventListener('click', async () => {
+  const saveBtn = $('btn-save-roles');
   const mangId = +$('select-manghuhula').value;
   STATE.members.forEach(m => {
     m.role = m.id === mangId ? 'Manghuhula' : 'Tagasagot';
@@ -553,14 +749,21 @@ $('btn-save-roles').addEventListener('click', async () => {
       member_id: m.id,
       gameplay_role: m.role === 'Manghuhula' ? 'MANGHUHULA' : 'TAGASAGOT',
     }));
+    const original = saveBtn.textContent;
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving…';
     try {
       await API.withLoading('player-save-roles', () =>
         TeamAPI.assignMyTeamRoles(teamId, roles)
       );
+      renderWaitingScreen();
       showToast('Roles saved');
     } catch (err) {
       console.error('[Player] save roles failed', err);
       showToast(err.message || 'Could not save roles');
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.textContent = original;
     }
     return;
   }
@@ -578,6 +781,15 @@ $('form-add-member').addEventListener('submit', async e => {
   e.preventDefault();
   const nameIn = $('add-member-name');
   const errEl  = $('err-add-member');
+
+  const capEl = $('member-cap');
+  const maxMembers = settingsGet('max_members', 6);
+  if (STATE.members.length >= maxMembers) {
+    if (capEl) capEl.classList.add('member-cap--full');
+    errEl.textContent = `Maximum of ${maxMembers} members reached.`;
+    return;
+  }
+  if (capEl) capEl.classList.remove('member-cap--full');
 
   if (!nameIn.value.trim()) {
     nameIn.classList.add('error');
@@ -687,6 +899,27 @@ $('btn-header-qr').addEventListener('click',    () => openQrScanner());
 
 $('btn-copy-settings-code').addEventListener('click', () => copyText(STATE.teamCode, 'Team Code'));
 
+// Leader-only: request / re-request connection with the host.
+$('btn-request-connection').addEventListener('click', async () => {
+  const btn = $('btn-request-connection');
+  if (btn) btn.disabled = true;
+  try {
+    const res = await API.withLoading('player-request-connection', () =>
+      TeamAPI.requestConnection(API.getGameId(), STATE.connectionToken || undefined)
+    );
+    if (res && res.connection_status) setConnectionStatus(res.connection_status);
+    renderTeamsTab();
+    renderWaitingScreen();
+    renderHeader();
+    showToast('Connection requested — waiting for the host…');
+  } catch (err) {
+    console.error('[Player] connection request failed', err && err.message);
+    showToast((err && err.message) || 'Could not request connection', 4000);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+});
+
 const inputHostCode = $('input-host-code');
 $('btn-connect-code').addEventListener('click', () => submitHostCodeInput());
 if (inputHostCode) {
@@ -781,10 +1014,8 @@ function renderWordsTab() {
       const id = +btn.dataset.id;
       const w  = STATE.words.find(x => x.id === id);
       if (!w) return;
-      if (!confirm(`Delete "${w.word}"?`)) return;
-      STATE.words = STATE.words.filter(x => x.id !== id);
-      renderWordsTab();
-      showToast(`"${w.word}" deleted`);
+      e.preventDefault();
+      deleteWord(w);
     });
   });
 
@@ -804,6 +1035,32 @@ function renderWordsTab() {
         <strong>Words Unlocked</strong>
       </div>
       <p class="word-status-desc">You can add, edit, or delete words until the host locks them.</p>`;
+  }
+}
+
+// Delete a word server-side (as a team, not host) and only update the
+// local state on success — the backend is the source of truth.
+async function deleteWord(w) {
+  if (!w) return;
+  const confirmed = await openConfirm({
+    title: 'Delete word?',
+    subtitle: `"${w.word}"`,
+    body: 'This word will be removed from your team pool for all future rounds. This cannot be undone.',
+    confirmLabel: 'Delete',
+  });
+  if (!confirmed) return;
+  setConfirmBusy(true, 'Deleting…');
+  try {
+    await WordAPI.deleteWord(w.id, { asHost: false });
+    STATE.words = STATE.words.filter(x => x.id !== w.id);
+    renderWordsTab();
+    renderWaitingScreen();
+    showToast(`"${w.word}" deleted`);
+  } catch (err) {
+    console.error('[Player] delete word failed', err);
+    showToast((err && err.message) || 'Could not delete the word', 4000);
+  } finally {
+    closeConfirm();
   }
 }
 
@@ -888,6 +1145,7 @@ $('form-add-word').addEventListener('submit', async e => {
    SETTINGS TAB — RENDER & SAVE
 ============================================================ */
 function renderSettingsTab() {
+  const isLeader = isTeamLeader();
   $('setting-team-name').value     = STATE.teamName;
   $('settings-team-code').textContent = STATE.teamCode;
   $('setting-username').value      = STATE.username;
@@ -899,6 +1157,12 @@ function renderSettingsTab() {
     round2:   'Round 2 in Progress',
     complete: 'Game Complete',
   }[STATE.gameStatus] || 'Waiting for Host';
+
+  // Team name is leader-only; members can still edit their username.
+  const nameInput = $('setting-team-name');
+  const saveBtn   = $('btn-save-team-settings');
+  if (nameInput) nameInput.disabled = !isLeader;
+  if (saveBtn)   saveBtn.hidden     = !isLeader;
 }
 
 $('form-team-settings').addEventListener('submit', async e => {
@@ -951,13 +1215,22 @@ $('form-player-settings').addEventListener('submit', async e => {
   showToast('Username updated');
 });
 
-$('btn-leave-game').addEventListener('click', () => {
-  if (!confirm('Leave the game? You will be disconnected from the host.')) return;
+$('btn-leave-game').addEventListener('click', async () => {
+  const confirmed = await openConfirm({
+    title: 'Leave the game?',
+    subtitle: '',
+    body: 'You will be disconnected from the host. You can rejoin anytime with your team code or the host’s QR.',
+    confirmLabel: 'Leave Game',
+  });
+  if (!confirmed) return;
+  setConfirmBusy(true, 'Leaving game…');
   const submit = () => {
+    stopHeartbeat();
     STATE.isConnected   = false;
     STATE.hostConnected = false;
     STATE.gameStatus    = 'waiting';
-    try { renderHeader(); renderTeamsTab(); renderSettingsTab(); } catch (err) {}
+    try { renderHeader(); renderTeamsTab(); renderSettingsTab(); renderWaitingScreen(); } catch (err) {}
+    closeConfirm();
     showToast('Left the game');
   };
   if (window.DeviceAPI && API.getSessionToken()) {
@@ -972,16 +1245,92 @@ $('btn-leave-game').addEventListener('click', () => {
 ============================================================ */
 function renderWaitingScreen() {
   $('waiting-team-name').textContent = STATE.teamName;
+  if ($('waiting-game-code')) $('waiting-game-code').textContent = STATE.gameCode || '—';
 
+  // Member checklist (holds 2 always; done when at least 2 joined).
   const connected = STATE.members.filter(m => m.connected).length;
   $('waiting-connected').textContent = connected;
   $('waiting-total').textContent     = STATE.members.length;
+  setCheckItem('waiting-members-check', STATE.members.length >= 2);
 
+  // Categories Ready (host-configured max_words_per_category limit).
   const readyCats = readyCategories().length;
   const cats      = categoriesTouched().length;
+  const maxWords  = settingsGet('max_words_per_category', 5);
+  const catGoal   = maxWords > 0 ? cats * maxWords : cats;
   $('waiting-words').textContent = cats
     ? `${readyCats} / ${cats} categories Ready`
     : '0 / 0 Ready';
+  setCheckItem('waiting-words-check', readyCats === cats && cats > 0);
+  if ($('waiting-words-goal')) {
+    $('waiting-words-goal').textContent = cats
+      ? `${readyCats * maxWords} / ${catGoal} words`
+      : `0 / 0 words (${maxWords} per category)`;
+  }
+
+  // Roles complete: at least one Manghuhula and one Tagasagot.
+  const rolesOk = teamRolesComplete();
+  setCheckItem('waiting-roles-check', rolesOk);
+  const tagaCount = STATE.members.filter(m => m.role === 'Tagasagot').length;
+  const mangCount = STATE.members.filter(m => m.role === 'Manghuhula').length;
+  let rolesText = '';
+  if (rolesOk) {
+    rolesText = 'Roles assigned';
+  } else if (STATE.members.length === 0) {
+    rolesText = 'No members yet — add at least 2';
+  } else {
+    const need = [];
+    if (mangCount < 1) need.push('1 Manghuhula');
+    if (tagaCount < 1) need.push('1 Tagasagot');
+    rolesText = `Assign ${need.join(' and ')} (${mangCount} Manghuhula · ${tagaCount} Tagasagot now)`;
+  }
+  if ($('waiting-roles-state')) $('waiting-roles-state').textContent = rolesText;
+
+  // Host connected + game lifecycle check.
+  const hostCheck = $('waiting-host-check');
+  if (hostCheck) {
+    const hostOk = STATE.connectionStatus === 'CONNECTED';
+    setCheckItem('waiting-host-check', hostOk);
+    const hostDot = $('waiting-host-dot');
+    if (hostDot) hostDot.className = 'conn-dot conn-dot--' + (hostOk ? 'connected' : 'disconnected');
+  }
+
+  // Game state line.
+  if ($('waiting-game-state')) {
+    $('waiting-game-state').textContent = {
+      waiting:   'Waiting for the host to start',
+      ready:     'Game is ready to start',
+      round1:    'Round 1 is live',
+      round2:    'Round 2 is live',
+      complete:  'Game is complete — ask the host to play again',
+    }[STATE.gameStatus] || 'Preparing…';
+  }
+
+  // Spinner caption.
+  const readyForGame =
+    connected === STATE.members.length && STATE.members.length > 0 &&
+    rolesOk && readyCats === cats && cats > 0 &&
+    STATE.gameStatus !== 'complete';
+  if ($('waiting-spinner-text')) {
+    $('waiting-spinner-text').textContent = readyForGame
+      ? 'Ready when the host starts the round'
+      : 'Your team is getting ready';
+  }
+}
+
+function setCheckItem(id, ok) {
+  const el = $(id);
+  if (!el) return;
+  el.classList.toggle('waiting-check--ready', ok);
+  el.classList.toggle('waiting-check--pending', !ok);
+  el.dataset.must = ok ? '' : 'true';
+}
+
+// Roles are ready when at least one Manghuhula and one Tagasagot exist.
+function teamRolesComplete() {
+  const mang = STATE.members.filter(m => m.role === 'Manghuhula').length;
+  const taga = STATE.members.filter(m => m.role === 'Tagasagot').length;
+  return mang >= 1 && taga >= 1;
 }
 
 /* ============================================================
@@ -1487,6 +1836,227 @@ document.addEventListener('click', e => {
   if (btn) copyText(STATE.teamCode, 'Team Code');
 });
 
+document.addEventListener('click', e => {
+  const btn = e.target.closest('#btn-copy-team-code-meta');
+  if (btn) copyText(STATE.teamCode, 'Team Code');
+});
+
+document.addEventListener('click', e => {
+  const btn = e.target.closest('#btn-copy-game-code');
+  if (btn) copyText(STATE.gameCode, 'Game Code');
+});
+
+/* ============================================================
+   SERVER SYNC — single refresh point
+   ------------------------------------------------------------
+   The player page is a representation of server state. Every
+   manual refresh, heartbeat, or focus/visibility sync flows
+   through refreshAllData() so the UI can never drift from what
+   the backend actually holds.
+   ============================================================ */
+async function safeHeartbeat() {
+  if (!API.getSessionToken()) return null;
+  try {
+    return await DeviceAPI.heartbeat();
+  } catch (err) {
+    if (err && (err.status === 401 || err.status === 403)) onSessionExpired();
+    return null;
+  }
+}
+
+function startHeartbeat() {
+  stopHeartbeat();
+  if (!API.getSessionToken() || !API.getGameId()) return;
+  const beat = async () => {
+    if (!API.getSessionToken() || !API.getGameId()) { stopHeartbeat(); return; }
+    if (STATE.gameStatus === 'complete') { stopHeartbeat(); return; }
+    if (STATE.fullscreenView === 'tagasagot') return; // gameplay: keep socket-driven state
+    await safeHeartbeat();
+  };
+  beat();
+  heartbeatTimer = setInterval(beat, 25000);
+}
+
+function stopHeartbeat() {
+  if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
+}
+
+// Device session no longer valid server-side: clear it and prompt rejoin.
+function onSessionExpired() {
+  stopHeartbeat();
+  API.clearTokens();
+  setConnectionStatus('NOT_CONNECTED');
+  Connect.showReconnectBanner({
+    title: 'Session expired',
+    message: 'Your connection could not be restored. Please rejoin with the QR or game code.',
+  });
+  document.body.setAttribute('data-reconnect-target', '../../index.html');
+}
+
+// The game is gone: stop everything and prompt a fresh join.
+function onGameGone() {
+  stopHeartbeat();
+  API.clearTokens();
+  Connect.showReconnectBanner({
+    title: 'Game not found',
+    message: 'This game has ended or no longer exists. Return to the lobby to join a new one.',
+  });
+  document.body.setAttribute('data-reconnect-target', '../../index.html');
+}
+
+// Server categories -> submission dropdown (shared by bootstrap + refresh).
+async function hydrateCategories(gameId) {
+  if (!gameId) return;
+  try {
+    const catData = await WordAPI.listCategories(gameId);
+    const cats = (catData.categories || []).map(c => ({ id: c.category_id, name: c.name })).filter(c => c.name);
+    window.PLAYER_CATEGORY_TO_ID = {};
+    cats.forEach(c => { window.PLAYER_CATEGORY_TO_ID[c.name] = c.id; });
+    if (cats.length) {
+      CATEGORIES.length = 0;
+      cats.forEach(c => CATEGORIES.push(c.name));
+      const sel = $('add-word-category');
+      if (sel) {
+        sel.innerHTML = '<option value="">Select Category</option>';
+        CATEGORIES.forEach(c => { sel.innerHTML += `<option value="${esc(c)}">${esc(c)}</option>`; });
+      }
+    }
+  } catch (e) { console.warn('[player] categories offline', e && e.message); }
+}
+
+const REFRESH_TABS = ['renderHeader', 'renderTeamsTab', 'renderWordsTab', 'renderSettingsTab', 'renderWaitingScreen'];
+
+function renderAll() {
+  REFRESH_TABS.forEach(fn => { try { window[fn] && window[fn](); } catch (e) {} });
+}
+
+// Heartbeat once, then re-read status/settings/categories/roster/words
+// from the server and re-render every tab.
+async function refreshAllData({ silent = false } = {}) {
+  if (refreshInProgress) return;
+  refreshInProgress = true;
+  try {
+    if (API.getSessionToken()) await safeHeartbeat();
+    const gameId = API.getGameId();
+    const teamId = API.getTeamId();
+    if (gameId) {
+      try {
+        const game = await GameAPI.status(gameId);
+        if (!STATE.gameCode && game.game_code) STATE.gameCode = game.game_code;
+        if (API.getGameCode()) STATE.gameCode = API.getGameCode();
+        if (game.status) STATE.gameStatus = mapGameStatus(game.status);
+        if (typeof game.word_pool_locked === 'boolean') STATE.wordsLocked = game.word_pool_locked;
+      } catch (e) {
+        if (e && e.status === 404) { onGameGone(); return; }
+        console.warn('[player] refresh status offline', e && e.message);
+      }
+      try {
+        const s = await GameAPI.getSettings(gameId);
+        if (s) applySettings(s);
+      } catch (e) { console.warn('[player] refresh settings offline', e && e.message); }
+    }
+    await hydrateCategories(gameId);
+    if (gameId && teamId && API.getSessionToken()) {
+      try {
+        const [teamData, wordsData] = await Promise.all([
+          TeamAPI.getMyTeam(teamId).catch(err => {
+            if (err && (err.status === 401 || err.status === 403)) { onSessionExpired(); return null; }
+            return null;
+          }),
+          WordAPI.listMyWords(gameId).catch(() => null),
+        ]);
+        if (teamData) {
+          applyTeamRoster(teamData);
+          if (teamData.team_name) API.setTeamName(teamData.team_name);
+          if (teamData.team_code) API.setTeamCode(teamData.team_code);
+        }
+        if (wordsData && wordsData.words) applyMyWords(wordsData.words);
+      } catch (e) { console.warn('[player] refresh team/words failed', e && e.message); }
+    }
+    renderAll();
+    if (!silent) showToast('Synced');
+  } finally {
+    refreshInProgress = false;
+    lastAutoSyncAt = Date.now();
+  }
+}
+
+// Throttled background sync when the tab regains focus.
+function autoSync() {
+  if (refreshInProgress) return;
+  if (Date.now() - lastAutoSyncAt < 5000) return;
+  if (!API.getSessionToken()) return;
+  if (STATE.fullscreenView) return;
+  refreshAllData({ silent: true });
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') { safeHeartbeat(); autoSync(); }
+});
+window.addEventListener('focus', () => { safeHeartbeat(); autoSync(); });
+window.addEventListener('pageshow', e => {
+  if (e.persisted) autoSync();
+});
+window.addEventListener('pagehide', () => stopHeartbeat());
+
+/* ============================================================
+   PULL-TO-REFRESH (touch) — triggers a full server re-sync.
+   ============================================================ */
+(function initPullToRefresh() {
+  const scroller = $('app-content');
+  const indicator = $('pull-refresh');
+  if (!scroller || !indicator || !('ontouchstart' in window)) return;
+  const textEl = $('pull-refresh-text');
+  const THRESHOLD = 64;
+  let startY = null, pulling = false, currentY = 0;
+
+  function resetPull() {
+    indicator.style.transform = '';
+    indicator.classList.remove('pull-refresh--armed', 'pull-refresh--refreshing');
+    if (textEl) textEl.textContent = 'Pull to refresh';
+    pulling = false;
+    currentY = 0;
+  }
+
+  scroller.addEventListener('touchstart', e => {
+    if (scroller.scrollTop > 0) return;
+    if (e.target.closest('input, select, textarea, button')) return;
+    if (STATE.fullscreenView || refreshInProgress) return;
+    startY = e.touches[0].clientY;
+    pulling = false;
+    currentY = 0;
+  }, { passive: true });
+
+  scroller.addEventListener('touchmove', e => {
+    if (startY === null) return;
+    if (scroller.scrollTop > 0) { resetPull(); startY = null; return; }
+    const dy = e.touches[0].clientY - startY;
+    if (dy <= 0) { resetPull(); startY = null; return; }
+    e.preventDefault();
+    pulling = true;
+    currentY = Math.min(dy, 110);
+    indicator.style.transform = `translateY(${currentY}px)`;
+    const armed = currentY >= THRESHOLD;
+    indicator.classList.toggle('pull-refresh--armed', armed);
+    if (textEl) textEl.textContent = armed ? 'Release to refresh' : 'Pull to refresh';
+  }, { passive: false });
+
+  scroller.addEventListener('touchend', () => {
+    if (startY === null) return;
+    if (pulling && currentY >= THRESHOLD) {
+      indicator.classList.add('pull-refresh--refreshing');
+      indicator.classList.remove('pull-refresh--armed');
+      if (textEl) textEl.textContent = 'Syncing…';
+      refreshAllData({ silent: true }).finally(() => {
+        resetPull();
+      });
+    } else {
+      resetPull();
+    }
+    startY = null;
+  });
+})();
+
 /* ============================================================
    INIT
 ============================================================ */
@@ -1551,12 +2121,7 @@ init();
       // Game no longer exists on the server — clear stale session and send
       // the player back to the landing page with a reconnect prompt.
       if (e && e.status === 404) {
-        API.clearTokens();
-        Connect.showReconnectBanner({
-          title: 'Game not found',
-          message: 'This game has ended or no longer exists. Return to the lobby to join a new one.',
-        });
-        document.body.setAttribute('data-reconnect-target', '../../index.html');
+        onGameGone();
         return; // stop further bootstrap work — no valid game context
       }
     }
@@ -1570,19 +2135,7 @@ init();
   }
 
   // Load real categories for the word-submission dropdown.
-  try {
-    const catData = await WordAPI.listCategories(gameId);
-    const cats = (catData.categories || []).map(c => ({ id: c.category_id, name: c.name })).filter(c => c.name);
-    window.PLAYER_CATEGORY_TO_ID = {};
-    cats.forEach(c => { window.PLAYER_CATEGORY_TO_ID[c.name] = c.id; });
-    if (cats.length) {
-      CATEGORIES.length = 0;
-      cats.forEach(c => CATEGORIES.push(c.name));
-      const sel = $('add-word-category');
-      sel.innerHTML = '<option value="">Select Category</option>';
-      CATEGORIES.forEach(c => { sel.innerHTML += `<option value="${esc(c)}">${esc(c)}</option>`; });
-    }
-  } catch (e) { console.warn('[player] categories offline', e.message); }
+  try { await hydrateCategories(gameId); } catch (e) { console.warn('[player] categories offline', e && e.message); }
 
   // Load the player's real team roster + submitted words (session-backed).
   if (gameId && teamId && API.getSessionToken()) {
@@ -1604,6 +2157,11 @@ init();
   }
 
   window.PINOY_PLAYER_READY = true;
+
+  // Keep the device session alive while the page is open. Without a
+  // heartbeat the backend sweeps the device session after 60s idle,
+  // which would silently break the player's session-backed calls.
+  if (gameId && API.getSessionToken()) startHeartbeat();
   try { renderHeader(); renderTeamsTab(); renderWordsTab(); renderSettingsTab(); renderWaitingScreen(); } catch (e) {}
 })();
 

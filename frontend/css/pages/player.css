@@ -210,6 +210,37 @@ ul, ol { list-style: none; }
 }
 
 /* ============================================================
+   PULL-TO-REFRESH INDICATOR
+============================================================ */
+.pull-refresh {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: var(--header-h);
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.6rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: rgba(255,255,255,0.75);
+  transform: translateY(-120%);
+  pointer-events: none;
+  background: rgba(13,21,37,0.9);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.pull-refresh__spinner i {
+  font-style: normal;
+  display: inline-block;
+  color: var(--primary-400);
+}
+.pull-refresh.pull-refresh--armed .pull-refresh__text { color: #fff; }
+.pull-refresh.pull-refresh--refreshing .pull-refresh__spinner i { animation: spin 0.8s linear infinite; }
+
+/* ============================================================
    TAB VIEWS
 ============================================================ */
 .tab-view {
@@ -317,6 +348,42 @@ ul, ol { list-style: none; }
 }
 .inline-copy-btn:hover { background: rgba(255,255,255,0.14); color: #fff; }
 
+/* Compact copy button inside the connection meta cells */
+.conn-meta-copy {
+  width: 22px; height: 22px;
+  font-size: 0.68rem;
+  flex-shrink: 0;
+}
+
+/* Member capacity readout under Add Member */
+.member-cap {
+  margin-top: 0.6rem;
+  font-size: 0.76rem;
+  color: rgba(255,255,255,0.45);
+}
+.member-cap--full { color: var(--accent-2-400); }
+
+/* Read-only roles note */
+.roles-readonly-note {
+  margin-top: 0.85rem;
+  font-size: 0.78rem;
+  color: rgba(255,255,255,0.45);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* State-driven connection request area */
+.conn-request-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.9rem;
+}
+.conn-request-area .player-btn { width: 100%; }
+.conn-request-area .conn-hint { text-align: center; max-width: none; }
+
 /* ============================================================
    MEMBER LIST
 ============================================================ */
@@ -357,7 +424,15 @@ ul, ol { list-style: none; }
 .member-row__role--manghuhula { color: var(--accent-1-400); }
 .member-row__role--tagasagot  { color: var(--primary-400); }
 
-.member-row__status { flex-shrink: 0; }
+.member-row__status { flex-shrink: 0; display: flex; align-items: center; gap: 0.35rem; }
+
+.member-row__status-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: rgba(255,255,255,0.4);
+  white-space: nowrap;
+}
+.member-row__status-label--connected { color: var(--secondary-400); }
 
 .member-row__remove {
   width: 28px; height: 28px;
@@ -862,6 +937,13 @@ ul, ol { list-style: none; }
   color: rgba(255,255,255,0.45); margin-bottom: 1.25rem; letter-spacing: 0.06em;
   text-transform: uppercase;
 }
+.waiting-card__game {
+  font-size: 0.82rem;
+  color: var(--accent-1-400);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.05em;
+  margin: -0.9rem 0 1rem;
+}
 
 .waiting-checklist {
   display: flex; flex-direction: column; gap: 0.6rem;
@@ -874,6 +956,15 @@ ul, ol { list-style: none; }
   font-size: 0.875rem; font-weight: 600; color: rgba(255,255,255,0.72);
 }
 .waiting-check strong { color: #fff; }
+.waiting-check i { transition: color 0.2s; }
+.waiting-check--ready i { color: var(--secondary-400) !important; }
+.waiting-check--pending i { color: var(--accent-1-400) !important; }
+.waiting-check--ready strong { color: var(--secondary-400); }
+.waiting-check--pending strong { color: var(--accent-1-400); }
+.waiting-check__sub {
+  display: block; width: 100%; margin-left: 1.6rem;
+  font-size: 0.75rem; font-weight: 500; color: rgba(255,255,255,0.35);
+}
 
 .waiting-spinner {
   display: flex; flex-direction: column; align-items: center; gap: 0.75rem;
@@ -1313,6 +1404,7 @@ ul, ol { list-style: none; }
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 .modal-overlay.open { opacity: 1; pointer-events: auto; }
+.modal-overlay--busy.open { pointer-events: none; }
 
 .modal {
   position: relative;
@@ -1362,9 +1454,23 @@ ul, ol { list-style: none; }
   display: flex; align-items: center; justify-content: center; font-size: 1.2rem;
 }
 .modal__icon--blue { background: rgba(49,154,251,0.15); color: var(--primary-400); border: 1px solid rgba(49,154,251,0.2); }
+.modal__icon--red { background: rgba(184,3,30,0.15); color: var(--accent-2-400); border: 1px solid rgba(184,3,30,0.25); }
+.modal__icon--orange { background: rgba(238,147,38,0.15); color: var(--accent-1-400); border: 1px solid rgba(238,147,38,0.2); }
 
 .modal__title    { font-family: 'Baloo 2', sans-serif; font-size: 1.2rem; font-weight: 800; color: #fff; line-height: 1.2; margin-bottom: 0.15rem; }
 .modal__subtitle { font-size: 0.85rem; color: rgba(255,255,255,0.4); }
+.modal__body-text { font-size: 0.88rem; color: rgba(255,255,255,0.55); line-height: 1.6; margin-bottom: 1rem; }
+.modal__warning {
+  display: flex; align-items: flex-start; gap: 0.5rem;
+  background: rgba(184,3,30,0.1);
+  border: 1px solid rgba(184,3,30,0.28);
+  color: rgba(255,255,255,0.75);
+  border-radius: var(--r-md);
+  padding: 0.65rem 0.75rem;
+  font-size: 0.8rem;
+  margin-bottom: 1rem;
+}
+.modal__warning i { font-size: 0.78rem; margin-top: 0.1rem; flex-shrink: 0; color: var(--accent-2-400); }
 
 .modal__form { display: flex; flex-direction: column; gap: 1rem; }
 .modal__actions { display: flex; align-items: center; justify-content: flex-end; gap: 0.65rem; margin-top: 0.75rem; }
@@ -1422,6 +1528,18 @@ ul, ol { list-style: none; }
 }
 .btn-confirm:hover { background: var(--primary-500); transform: translateY(-2px); }
 .btn-confirm:active { transform: scale(0.96); }
+
+.btn-confirm--danger {
+  background: var(--accent-2-600);
+  box-shadow: 0 3px 12px rgba(184,3,30,0.4);
+}
+.btn-confirm--danger:hover { background: var(--accent-2-500); }
+.btn-confirm[disabled], .btn-confirm--danger[disabled] {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
 
 /* ============================================================
    TOAST
@@ -1564,8 +1682,8 @@ ul, ol { list-style: none; }
    PLAYER DISPLAY TOGGLES (server-backed Host Settings)
    body[data-show-*="0"] hides the corresponding player UI area.
    ============================================================ */
-body[data-show-names="0"] .member-row__name,
-body[data-show-names="0"] .tagasagot-row { display: none; }
+body[data-show-names="0"] .member-row__name { font-style: italic; opacity: 0.8; }
+body[data-show-names="0"] .tagasagot-row { font-style: italic; opacity: 0.8; }
 body[data-show-role-labels="0"] .member-row__role { display: none; }
 body[data-show-scores="0"] .game-topbar__score { display: none; }
 body[data-show-qr="0"] .qr-placeholder,
