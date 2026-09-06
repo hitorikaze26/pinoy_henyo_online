@@ -207,7 +207,7 @@ function applySettings(s) {
   if (!s) return;
   STATE.settings = Object.assign({}, STATE.settings, s);
   applyDisplaySettings();
-  try { renderHeader(); renderTeamsTab(); renderWordsTab(); } catch (e) {}
+  try { renderHeader(); renderTeamsTab(); renderWordsTab(); renderSettingsTab(); } catch (e) {}
 }
 
 function applyDisplaySettings() {
@@ -1153,6 +1153,33 @@ function renderSettingsTab() {
   const saveBtn   = $('btn-save-team-settings');
   if (nameInput) nameInput.disabled = !isLeader;
   if (saveBtn)   saveBtn.hidden     = !isLeader;
+
+  // Connection card — server-authoritative host-approval status.
+  const meta = connectionStateMeta(STATE.connectionStatus);
+  const pill = $('conn-status-pill');
+  const pillDot = $('conn-status-pill-dot');
+  if (pill)     pill.className = 'conn-pill ' + meta.pill;
+  if (pillDot)  pillDot.className = 'conn-dot conn-dot--' + meta.dot;
+  if ($('conn-status-pill-label')) $('conn-status-pill-label').textContent = meta.label;
+  if ($('conn-team'))      $('conn-team').textContent      = STATE.teamName || '—';
+  if ($('conn-team-code')) $('conn-team-code').textContent = STATE.teamCode || '—';
+  if ($('conn-game-code')) $('conn-game-code').textContent = STATE.gameCode || '—';
+  if ($('conn-last-sync')) $('conn-last-sync').textContent = formatLastSync();
+
+  // Player & team info — read-only.
+  if ($('pt-username'))  $('pt-username').textContent  = STATE.username || '—';
+  if ($('pt-role'))      $('pt-role').textContent      = STATE.role || '—';
+  if ($('pt-team-name')) $('pt-team-name').textContent = STATE.teamName || '—';
+  if ($('pt-team-code')) $('pt-team-code').textContent = STATE.teamCode || '—';
+  if ($('pt-members'))   $('pt-members').textContent   = STATE.members.length + ' / ' + settingsGet('max_members', 6);
+  if ($('pt-leader')) {
+    $('pt-leader').innerHTML = isLeader
+      ? '<i class="fa-solid fa-star" style="color:var(--gold)"></i> Team Leader'
+      : 'Member';
+  }
+
+  updateDeviceInfo();
+  reflectPrefControls();
 }
 
 $('form-team-settings').addEventListener('submit', async e => {
@@ -1221,6 +1248,7 @@ $('btn-leave-game').addEventListener('click', async () => {
     STATE.isConnected   = false;
     STATE.hostConnected = false;
     STATE.gameStatus    = 'waiting';
+    STATE.connectionStatus = 'NOT_CONNECTED';
     try { renderHeader(); renderTeamsTab(); renderSettingsTab(); } catch (err) {}
     closeConfirm();
     showToast('Left the game');
@@ -1780,6 +1808,7 @@ function onSessionExpired() {
   stopHeartbeat();
   API.clearTokens();
   setConnectionStatus('NOT_CONNECTED');
+  applySessionGating();
   Connect.showReconnectBanner({
     title: 'Session expired',
     message: 'Your connection could not be restored. Please rejoin with the QR or game code.',
@@ -1791,6 +1820,8 @@ function onSessionExpired() {
 function onGameGone() {
   stopHeartbeat();
   API.clearTokens();
+  setConnectionStatus('NOT_CONNECTED');
+  applySessionGating();
   Connect.showReconnectBanner({
     title: 'Game not found',
     message: 'This game has ended or no longer exists. Return to the lobby to join a new one.',
@@ -1956,13 +1987,599 @@ window.addEventListener('pagehide', () => stopHeartbeat());
 })();
 
 /* ============================================================
+   PLAYER LOCAL PREFERENCES (device-local settings)
+   Stored under the shared `pinoy_henyo_settings` key (same one the
+   Host Settings page uses for its device-local audio) using MERGE
+   writes, so saving one section can never wipe another.
+
+     audio:  { musicOn, musicVolume, musicTrack, sfxOn, sfxVolume }
+     player: { display, haptics, notifications }
+
+   Host-controlled game rules are server-backed and read-only here.
+   ============================================================ */
+const PLAYER_SETTINGS_KEY = 'pinoy_henyo_settings';
+const PLAYER_MUSIC_TRACKS = ['game music.mp3'];
+const PREF_RANDOM_TRACK   = '__random__';
+
+const PLAYER_DEFAULT_PREFS = {
+  audio: { musicOn: true, musicVolume: 0.4, musicTrack: 'game music.mp3', sfxOn: true, sfxVolume: 0.6 },
+  player: {
+    display: { fullscreen: false, keepAwake: false, compact: false, largeText: false, reduceMotion: false },
+    haptics: { enabled: true, timer: true, correct: true, wrong: true },
+    notifications: { connection: true, approved: true, disconnected: true, gameStarted: true, roundStarted: true, gameEnded: true },
+  },
+};
+
+const PREF_VIBE_PATTERNS = {
+  timer:   [30],
+  correct: [40, 60, 40],
+  wrong:   [60, 40, 60, 40, 160],
+  pass:    [40, 40, 40],
+};
+
+function deepMergePrefs() {
+  const out = {};
+  for (let i = 0; i < arguments.length; i++) {
+    const src = arguments[i];
+    if (!src || typeof src !== 'object') continue;
+    Object.keys(src).forEach((k) => {
+      const v = src[k];
+      if (v && typeof v === 'object' && !Array.isArray(v)) {
+        out[k] = deepMergePrefs(out[k] && typeof out[k] === 'object' ? out[k] : {}, v);
+      } else {
+        out[k] = Array.isArray(v) ? v.slice() : v;
+      }
+    });
+  }
+  return out;
+}
+
+function readRawPrefs() {
+  try {
+    const raw = localStorage.getItem(PLAYER_SETTINGS_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; }
+}
+
+let PREF = {};
+try {
+  PREF = deepMergePrefs({}, PLAYER_DEFAULT_PREFS, readRawPrefs());
+} catch (e) { PREF = deepMergePrefs({}, PLAYER_DEFAULT_PREFS); }
+
+function saveRawPrefs() {
+  try { localStorage.setItem(PLAYER_SETTINGS_KEY, JSON.stringify(PREF)); } catch (e) {}
+}
+
+function patchPrefs(section, patch) {
+  if (section === 'audio') {
+    PREF.audio = deepMergePrefs(PREF.audio, patch);
+  } else {
+    PREF.player[section] = deepMergePrefs(PREF.player[section], patch);
+  }
+  saveRawPrefs();
+}
+
+function resetPlayerSection(section) {
+  PREF.player[section] = deepMergePrefs({}, PLAYER_DEFAULT_PREFS.player[section]);
+  saveRawPrefs();
+}
+
+function resolveMusicTrack(track) {
+  if (track === PREF_RANDOM_TRACK || PLAYER_MUSIC_TRACKS.indexOf(track) === -1) {
+    const list = PLAYER_MUSIC_TRACKS.length ? PLAYER_MUSIC_TRACKS : ['game music.mp3'];
+    return list[Math.floor(Math.random() * list.length)];
+  }
+  return track;
+}
+
+function trackLabel(fileName) {
+  return String(fileName).replace(/\.mp3$/i, '').replace(/-/g, ' ')
+    .replace(/^\w/, (c) => c.toUpperCase());
+}
+
+function applyAudioPrefs() {
+  const a = PREF.audio;
+  const audio = window.GameAudio;
+  if (!audio) return;
+  try {
+    audio.setMusicEnabled(a.musicOn);
+    audio.setEffectsEnabled(a.sfxOn);
+    audio.setVolume('music', a.musicVolume);
+    audio.setVolume('effects', a.sfxVolume);
+    audio.setMusicTrack(resolveMusicTrack(a.musicTrack));
+  } catch (e) {}
+}
+
+function testSound() {
+  const audio = window.GameAudio;
+  if (!audio) { showToast('Audio is not available on this device.'); return; }
+  try { audio.play('notification'); showToast('Testing sound effects…'); }
+  catch (e) { showToast('Audio could not be played on this device.'); }
+}
+
+function resetAudioPrefs() {
+  PREF.audio = deepMergePrefs({}, PLAYER_DEFAULT_PREFS.audio);
+  saveRawPrefs();
+  reflectPrefControls();
+  applyAudioPrefs();
+  showToast('Audio settings reset');
+}
+
+/* ---------- display (device-local) ---------- */
+let wakeLockRef = null;
+function wakeLockSupported() { return typeof navigator !== 'undefined' && !!navigator.wakeLock; }
+function releaseWakeLock() {
+  if (!wakeLockRef) return;
+  try { wakeLockRef.release(); } catch (e) {}
+  wakeLockRef = null;
+}
+async function updateWakeLock() {
+  if (!wakeLockSupported() || !PREF.player.display.keepAwake) { releaseWakeLock(); return; }
+  if (document.visibilityState !== 'visible') return;
+  try {
+    if (!wakeLockRef) {
+      wakeLockRef = await navigator.wakeLock.request('screen');
+      wakeLockRef.addEventListener('release', () => { wakeLockRef = null; });
+    }
+  } catch (e) {}
+}
+function fullscreenSupported() { return !!(document.documentElement && document.documentElement.requestFullscreen); }
+function isBrowserFullscreen() { return !!document.fullscreenElement; }
+async function toggleBrowserFullscreen() {
+  if (!fullscreenSupported()) { showToast('Fullscreen is not supported on this device.'); reflectPrefControls(); return; }
+  try {
+    if (isBrowserFullscreen()) await document.exitFullscreen();
+    else await document.documentElement.requestFullscreen();
+  } catch (e) { showToast('Fullscreen was not possible on this device.'); reflectPrefControls(); }
+}
+function applyDisplayPrefs() {
+  const d = PREF.player.display;
+  document.body.setAttribute('data-compact',       d.compact       ? '1' : '0');
+  document.body.setAttribute('data-reduce-motion', d.reduceMotion  ? '1' : '0');
+  document.body.setAttribute('data-large-text',    d.largeText     ? '1' : '0');
+  if (document.documentElement) document.documentElement.setAttribute('data-large-text', d.largeText ? '1' : '0');
+  updateWakeLock();
+}
+function resetDisplayPrefs() {
+  PREF.player.display = deepMergePrefs({}, PLAYER_DEFAULT_PREFS.player.display);
+  saveRawPrefs();
+  applyDisplayPrefs();
+  releaseWakeLock();
+  if (isBrowserFullscreen()) { document.exitFullscreen().catch(() => {}); }
+  reflectPrefControls();
+  showToast('Display settings reset');
+}
+
+/* ---------- haptics ---------- */
+function hapticSupported() { return typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function'; }
+function haptic(kind) {
+  if (!hapticSupported()) return;
+  if (!PREF.player.haptics.enabled) return;
+  const gate = kind === 'pass' ? 'wrong' : (kind === 'correct' ? 'correct' : 'timer');
+  if (!PREF.player.haptics[gate]) return;
+  const pattern = PREF_VIBE_PATTERNS[kind] || PREF_VIBE_PATTERNS.correct;
+  try { navigator.vibrate(pattern); } catch (e) {}
+}
+function resetHapticPrefs() {
+  resetPlayerSection('haptics');
+  reflectPrefControls();
+  showToast('Vibration settings reset');
+}
+
+/* ---------- notifications (in-app toasts) ---------- */
+function notifyIf(cat, fn) {
+  const map = {
+    connection: 'connection', approved: 'approved', disconnected: 'disconnected',
+    gameStarted: 'gameStarted', roundStarted: 'roundStarted', gameEnded: 'gameEnded',
+  };
+  const key = map[cat] || cat;
+  if (!PREF.player.notifications[key]) return;
+  try { fn(); } catch (e) {}
+}
+function resetNotificationPrefs() {
+  resetPlayerSection('notifications');
+  reflectPrefControls();
+  showToast('Notification settings reset');
+}
+
+function resetAllPlayerPrefs() {
+  PREF = deepMergePrefs({}, PLAYER_DEFAULT_PREFS);
+  saveRawPrefs();
+  applyAudioPrefs();
+  applyDisplayPrefs();
+  releaseWakeLock();
+  if (isBrowserFullscreen()) { document.exitFullscreen().catch(() => {}); }
+  reflectPrefControls();
+  showToast('All player settings reset');
+}
+
+/* ---------- host-controlled game display (read-only rows) ---------- */
+function hostToggleText(key, fallback) {
+  return settingsGet(key, fallback) !== false ? 'Visible' : 'Hidden';
+}
+function renderGameDisplayRows() {
+  const rows = {
+    'gd-names':          hostToggleText('show_player_names', true),
+    'gd-roles':          hostToggleText('show_role_labels', true),
+    'gd-scores':         hostToggleText('show_scores', true),
+    'gd-round-category': hostToggleText('show_round_category', true),
+    'gd-qr':             hostToggleText('show_qr_code', true),
+  };
+  Object.entries(rows).forEach(([id, val]) => {
+    const el = $(id);
+    if (!el) return;
+    el.textContent = val;
+    el.classList.toggle('gd-val--visible', val === 'Visible');
+    el.classList.toggle('gd-val--hidden', val === 'Hidden');
+  });
+}
+
+/* ---------- device info ---------- */
+function detectDeviceType() {
+  const touch = ('ontouchstart' in window) || (navigator.maxTouchPoints && navigator.maxTouchPoints > 0);
+  if (!touch) return 'Desktop';
+  const w = Math.min(window.innerWidth, window.screen.width || 0);
+  const h = Math.max(window.innerHeight, window.screen.height || 0);
+  if (h >= 1024 && w >= 768) return 'Tablet';
+  return 'Mobile';
+}
+function detectBrowserName() {
+  const ua = navigator.userAgent || '';
+  if (/edg\//i.test(ua)) return 'Edge';
+  if (/opr\//i.test(ua) || /opera/i.test(ua)) return 'Opera';
+  if (/chrome|crios/i.test(ua)) return 'Chrome';
+  if (/fxios|firefox/i.test(ua)) return 'Firefox';
+  if (/safari/i.test(ua)) return 'Safari';
+  return 'Browser';
+}
+function orientationName() {
+  if (window.matchMedia && window.matchMedia('(orientation: landscape)').matches) return 'Landscape';
+  return 'Portrait';
+}
+function updateDeviceInfo() {
+  const map = {
+    'dev-type': detectDeviceType(),
+    'dev-browser': detectBrowserName(),
+    'dev-orientation': orientationName(),
+    'dev-network': navigator.onLine ? 'Online' : 'Offline',
+    'dev-fullscreen': isBrowserFullscreen() ? 'On' : 'Off',
+  };
+  Object.entries(map).forEach(([id, val]) => {
+    const el = $(id);
+    if (el) el.textContent = val;
+  });
+  const realtimeEl = $('conn-realtime');
+  if (realtimeEl) {
+    realtimeEl.innerHTML = STATE.isConnected
+      ? '<span class="conn-dot conn-dot--connected"></span> Connected'
+      : '<span class="conn-dot conn-dot--disconnected"></span> Disconnected';
+  }
+}
+
+/* ---------- last sync ---------- */
+function formatLastSync() {
+  if (!lastAutoSyncAt) return 'Never';
+  const s = Math.max(0, Math.floor((Date.now() - lastAutoSyncAt) / 1000));
+  if (s < 5) return 'Just now';
+  if (s < 60) return s + ' seconds ago';
+  const m = Math.floor(s / 60);
+  return m < 60 ? (m + ' minute' + (m === 1 ? '' : 's') + ' ago') : (Math.floor(m / 60) + ' hours ago');
+}
+let lastSyncTicker = null;
+function startLastSyncTicker() {
+  if (lastSyncTicker) return;
+  lastSyncTicker = setInterval(() => {
+    const el = $('conn-last-sync');
+    if (el) el.textContent = formatLastSync();
+  }, 5000);
+}
+
+/* ---------- connection tools ---------- */
+async function refreshPlayerConnectionStatus() {
+  const teamId = API.getTeamId();
+  if (!teamId || !API.getSessionToken()) return;
+  try {
+    const teamData = await TeamAPI.getMyTeam(teamId);
+    if (teamData) applyTeamRoster(teamData);
+  } catch (e) {}
+}
+async function handleSyncNow() {
+  const btn = $('btn-sync-now');
+  if (refreshInProgress) { showToast('Already syncing…'); return; }
+  setBtnBusyText(btn, 'Syncing…');
+  try { await refreshAllData(); } finally { setBtnBusyText(btn); }
+}
+async function handleReconnect() {
+  const btn = $('btn-reconnect');
+  const rt = window.Realtime;
+  if (!rt || !API.getSessionToken()) { showToast('No active session to reconnect.'); return; }
+  setBtnBusyText(btn, 'Reconnecting…');
+  try {
+    const ok = rt.reconnect();
+    if (!ok) { showToast('Unable to reconnect. Try again.'); return; }
+    await refreshAllData({ silent: true });
+  } catch (e) { showToast('Unable to reconnect. Try again.'); }
+  finally { setBtnBusyText(btn); }
+}
+async function handleRefreshConnection() {
+  const btn = $('btn-refresh-connection');
+  if (!API.getSessionToken()) { showToast('No active session.'); return; }
+  setBtnBusyText(btn, 'Refreshing…');
+  try {
+    await refreshPlayerConnectionStatus();
+    renderAll();
+    showToast('Connection status refreshed');
+  } catch (e) { showToast('Could not refresh the connection. Try again.'); }
+  finally { setBtnBusyText(btn); }
+}
+function setBtnBusyText(btn, busyText) {
+  if (!btn) return;
+  const original = btn.dataset.originalLabel || btn.textContent;
+  if (busyText) {
+    btn.dataset.originalLabel = original;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> ' + esc(busyText);
+  } else {
+    btn.disabled = false;
+    btn.innerHTML = original;
+    delete btn.dataset.originalLabel;
+  }
+}
+
+/* ---------- settings controls reflection + wiring ---------- */
+function setSwitchChecked(id, checked) {
+  const el = $(id);
+  if (el) el.checked = !!checked;
+}
+function bindPrefSlider(inputSel, valSel, applyLive, onCommit) {
+  const input = $(inputSel);
+  const val = $(valSel);
+  if (!input) return;
+  const render = () => {
+    if (val) val.textContent = input.value + '%';
+    input.setAttribute('aria-valuetext', input.value + ' percent');
+  };
+  input.addEventListener('input', () => { render(); if (applyLive) applyLive(Number(input.value)); });
+  input.addEventListener('change', () => { render(); if (onCommit) onCommit(Number(input.value)); });
+}
+function closeAudioDependentRows() {
+  const musicRow = $('row-pref-music-vol');
+  const track = $('pref-music-track');
+  const sfxRow = $('row-pref-sfx-vol');
+  if (musicRow) musicRow.classList.toggle('set-row--disabled', !PREF.audio.musicOn);
+  if (track) track.disabled = !PREF.audio.musicOn;
+  if (sfxRow) sfxRow.classList.toggle('set-row--disabled', !PREF.audio.sfxOn);
+}
+function reflectPrefControls() {
+  setSwitchChecked('pref-music-on', PREF.audio.musicOn);
+  setSwitchChecked('pref-sfx-on', PREF.audio.sfxOn);
+  const musicVol = $('pref-music-vol');
+  const sfxVol = $('pref-sfx-vol');
+  if (musicVol) {
+    musicVol.value = String(Math.round(PREF.audio.musicVolume * 100));
+    if ($('pref-music-vol-val')) $('pref-music-vol-val').textContent = musicVol.value + '%';
+  }
+  if (sfxVol) {
+    sfxVol.value = String(Math.round(PREF.audio.sfxVolume * 100));
+    if ($('pref-sfx-vol-val')) $('pref-sfx-vol-val').textContent = sfxVol.value + '%';
+  }
+  const trackSel = $('pref-music-track');
+  if (trackSel) {
+    const stored = PREF.audio.musicTrack;
+    trackSel.value = (stored === PREF_RANDOM_TRACK || PLAYER_MUSIC_TRACKS.indexOf(stored) === -1)
+      ? PREF_RANDOM_TRACK : stored;
+  }
+  closeAudioDependentRows();
+
+  setSwitchChecked('pref-display-fullscreen', isBrowserFullscreen());
+  setSwitchChecked('pref-display-keep-awake', PREF.player.display.keepAwake);
+  setSwitchChecked('pref-display-compact', PREF.player.display.compact);
+  setSwitchChecked('pref-display-large-text', PREF.player.display.largeText);
+  setSwitchChecked('pref-display-reduce-motion', PREF.player.display.reduceMotion);
+
+  const fsToggle = $('pref-display-fullscreen');
+  const unsup = $('display-unsupported-msg');
+  if (fsToggle) fsToggle.disabled = !fullscreenSupported();
+  if (unsup) {
+    const msgs = [];
+    if (!fullscreenSupported()) msgs.push('Fullscreen is unavailable on this device.');
+    if (!wakeLockSupported()) msgs.push('Keep Screen Awake is unavailable on this device.');
+    unsup.hidden = msgs.length === 0;
+    unsup.textContent = msgs.join(' ');
+  }
+  if ($('pref-display-keep-awake')) $('pref-display-keep-awake').disabled = !wakeLockSupported();
+
+  const vibeSupported = hapticSupported();
+  ['pref-vibe-enabled', 'pref-vibe-timer', 'pref-vibe-correct', 'pref-vibe-wrong'].forEach(id => {
+    const el = $(id);
+    if (el) el.disabled = !vibeSupported;
+  });
+  setSwitchChecked('pref-vibe-enabled', PREF.player.haptics.enabled);
+  setSwitchChecked('pref-vibe-timer', PREF.player.haptics.timer);
+  setSwitchChecked('pref-vibe-correct', PREF.player.haptics.correct);
+  setSwitchChecked('pref-vibe-wrong', PREF.player.haptics.wrong);
+  const subEnabled = vibeSupported && PREF.player.haptics.enabled;
+  ['pref-vibe-timer', 'pref-vibe-correct', 'pref-vibe-wrong'].forEach(id => {
+    const el = $(id);
+    if (el) {
+      el.disabled = !subEnabled;
+      const row = el.closest('.set-row');
+      if (row) row.classList.toggle('set-row--disabled', !subEnabled);
+    }
+  });
+  const vibeNote = $('vibe-unsupported-msg');
+  if (vibeNote) {
+    vibeNote.hidden = vibeSupported;
+    vibeNote.textContent = 'Vibration isn\u2019t supported on this device.';
+  }
+
+  [
+    ['pref-notify-connection', PREF.player.notifications.connection],
+    ['pref-notify-approved', PREF.player.notifications.approved],
+    ['pref-notify-disconnected', PREF.player.notifications.disconnected],
+    ['pref-notify-game-started', PREF.player.notifications.gameStarted],
+    ['pref-notify-round-started', PREF.player.notifications.roundStarted],
+    ['pref-notify-game-ended', PREF.player.notifications.gameEnded],
+  ].forEach(([id, val]) => setSwitchChecked(id, val));
+
+  renderGameDisplayRows();
+}
+
+function initPlayerPrefsUi() {
+  function on(id, evt, fn) { var el = $(id); if (el) el.addEventListener(evt, fn); }
+
+  const trackSel = $('pref-music-track');
+  if (trackSel) {
+    const rnd = document.createElement('option');
+    rnd.value = PREF_RANDOM_TRACK;
+    rnd.textContent = 'Random';
+    trackSel.appendChild(rnd);
+    PLAYER_MUSIC_TRACKS.forEach((t) => {
+      const o = document.createElement('option');
+      o.value = t;
+      o.textContent = trackLabel(t);
+      trackSel.appendChild(o);
+    });
+    trackSel.addEventListener('change', () => {
+      PREF.audio.musicTrack = trackSel.value;
+      saveRawPrefs();
+      const audio = window.GameAudio;
+      if (audio) audio.setMusicTrack(resolveMusicTrack(trackSel.value));
+      closeAudioDependentRows();
+    });
+  }
+
+  bindPrefSlider(
+    'pref-music-vol', 'pref-music-vol-val',
+    (pct) => { PREF.audio.musicVolume = Math.round(pct) / 100; if (window.GameAudio) window.GameAudio.setVolume('music', PREF.audio.musicVolume); },
+    (pct) => { PREF.audio.musicVolume = Math.round(pct) / 100; saveRawPrefs(); }
+  );
+  bindPrefSlider(
+    'pref-sfx-vol', 'pref-sfx-vol-val',
+    (pct) => { PREF.audio.sfxVolume = Math.round(pct) / 100; if (window.GameAudio) window.GameAudio.setVolume('effects', PREF.audio.sfxVolume); },
+    (pct) => { PREF.audio.sfxVolume = Math.round(pct) / 100; saveRawPrefs(); }
+  );
+
+  on('pref-music-on', 'change', (e) => {
+    PREF.audio.musicOn = e.target.checked;
+    saveRawPrefs();
+    if (window.GameAudio) window.GameAudio.setMusicEnabled(PREF.audio.musicOn);
+    closeAudioDependentRows();
+  });
+  on('pref-sfx-on', 'change', (e) => {
+    PREF.audio.sfxOn = e.target.checked;
+    saveRawPrefs();
+    if (window.GameAudio) window.GameAudio.setEffectsEnabled(PREF.audio.sfxOn);
+    closeAudioDependentRows();
+  });
+  on('btn-pref-test-sound', 'click', testSound);
+  on('btn-pref-audio-reset', 'click', resetAudioPrefs);
+
+  on('pref-display-fullscreen', 'change', () => { toggleBrowserFullscreen(); });
+  on('pref-display-keep-awake', 'change', (e) => {
+    patchPrefs('display', { keepAwake: e.target.checked });
+    updateWakeLock();
+    if (!e.target.checked) releaseWakeLock();
+  });
+  [['compact', 'pref-display-compact'], ['largeText', 'pref-display-large-text'], ['reduceMotion', 'pref-display-reduce-motion']].forEach(([key, id]) => {
+    on(id, 'change', (e) => {
+      patchPrefs('display', { [key]: e.target.checked });
+      applyDisplayPrefs();
+    });
+  });
+  on('btn-pref-display-reset', 'click', resetDisplayPrefs);
+
+  on('pref-vibe-enabled', 'change', (e) => {
+    patchPrefs('haptics', { enabled: e.target.checked });
+    reflectPrefControls();
+  });
+  [['timer', 'pref-vibe-timer'], ['correct', 'pref-vibe-correct'], ['wrong', 'pref-vibe-wrong']].forEach(([key, id]) => {
+    on(id, 'change', (e) => {
+      patchPrefs('haptics', { [key]: e.target.checked });
+      reflectPrefControls();
+    });
+  });
+  on('btn-pref-vibe-reset', 'click', resetHapticPrefs);
+
+  [
+    ['connection', 'pref-notify-connection'],
+    ['approved', 'pref-notify-approved'],
+    ['disconnected', 'pref-notify-disconnected'],
+    ['gameStarted', 'pref-notify-game-started'],
+    ['roundStarted', 'pref-notify-round-started'],
+    ['gameEnded', 'pref-notify-game-ended'],
+  ].forEach(([key, id]) => {
+    on(id, 'change', (e) => {
+      patchPrefs('notifications', { [key]: e.target.checked });
+      reflectPrefControls();
+    });
+  });
+  on('btn-pref-notify-reset', 'click', resetNotificationPrefs);
+
+  on('btn-sync-now', 'click', handleSyncNow);
+  on('btn-reconnect', 'click', handleReconnect);
+  on('btn-refresh-connection', 'click', handleRefreshConnection);
+
+  on('btn-reset-all-prefs', 'click', async () => {
+    const confirmed = await openConfirm({
+      title: 'Reset all player settings?',
+      subtitle: 'Audio, display, vibration, and notifications',
+      body: 'Everything on this device returns to its defaults. Your team, username, and this game are not affected.',
+      confirmLabel: 'Reset All',
+    });
+    if (!confirmed) return;
+    resetAllPlayerPrefs();
+    setTimeout(closeConfirm, 250);
+  });
+
+  reflectPrefControls();
+  applyAudioPrefs();
+  applyDisplayPrefs();
+  updateDeviceInfo();
+  startLastSyncTicker();
+}
+
+function initPlayerPrefsEvents() {
+  document.addEventListener('fullscreenchange', () => {
+    reflectPrefControls();
+    if (PREF.player.display.fullscreen && !isBrowserFullscreen()) {
+      PREF.player.display.fullscreen = false;
+      saveRawPrefs();
+    }
+    updateDeviceInfo();
+  });
+  window.addEventListener('resize', () => updateDeviceInfo());
+  window.addEventListener('orientationchange', () => updateDeviceInfo());
+  window.addEventListener('online', () => updateDeviceInfo());
+  window.addEventListener('offline', () => updateDeviceInfo());
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') updateWakeLock();
+  });
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('#btn-copy-conn-code');
+    if (btn) copyText(STATE.teamCode, 'Team Code');
+  });
+}
+
+function applySessionGating() {
+  const hasSession = !!API.getSessionToken();
+  document.querySelectorAll('[data-gate="session"]').forEach((el) => {
+    el.hidden = !hasSession;
+  });
+}
+
+/* ============================================================
    INIT
-============================================================ */
+   ============================================================ */
 function init() {
   renderHeader();
   renderTeamsTab();
   renderWordsTab();
   renderSettingsTab();
+
+  try { initPlayerPrefsUi(); } catch (e) { console.warn('[player] prefs UI init:', e.message); }
+  try { initPlayerPrefsEvents(); } catch (e) { console.warn('[player] prefs events init:', e.message); }
+  applySessionGating();
 
   // Set initial tab
   switchTab('teams');
@@ -1987,6 +2604,7 @@ init();
   try {
     const rc = await Connect.restorePlayerSession();
     if (rc.status === 'invalid') {
+      applySessionGating();
       Connect.showReconnectBanner({
         title: 'Session expired',
         message: 'Your connection could not be restored. Please rejoin with the QR or game code.',
@@ -2081,6 +2699,7 @@ init();
   const myTeamId = API.getTeamId();
   let knownTurnId = null;
   let tickTimer = null;
+  let lastTimerWarningFired = false;
 
   function gameIdMatches(p) { return p && p.game_id ? String(p.game_id) === String(API.getGameId()) : (myTeamId != null); }
   function forMyTeam(p) {
@@ -2099,7 +2718,10 @@ init();
   /* ---------- server-authoritative timer mirror ---------- */
   function applyTimer(p) {
     if (!p) return;
-    if (typeof p.remaining_seconds === 'number') STATE.timeRemaining = p.remaining_seconds;
+    if (typeof p.remaining_seconds === 'number') {
+      STATE.timeRemaining = p.remaining_seconds;
+      if (p.remaining_seconds > 10) lastTimerWarningFired = false;
+    }
     if (typeof p.status === 'string') {
       STATE.timerRunning = (p.status === 'ACTIVE');
       syncTimerTicker();
@@ -2111,6 +2733,11 @@ init();
     if (STATE.timerRunning) {
       tickTimer = setInterval(() => {
         STATE.timeRemaining = Math.max(0, STATE.timeRemaining - 1);
+        if (STATE.timeRemaining <= 10 && !lastTimerWarningFired) {
+          lastTimerWarningFired = true;
+          try { haptic('timer'); } catch (e) {}
+        }
+        if (STATE.timeRemaining > 10) lastTimerWarningFired = false;
         try { updateGameTimerDisplay(); } catch (e) {}
       }, 1000);
     }
@@ -2171,12 +2798,14 @@ init();
     if (!forMyTeam(p)) return;
     if (typeof p.correct_words === 'number') STATE.wordsGuessed = p.correct_words;
     applyTimer(p);
+    try { haptic('correct'); } catch (e) {}
     try { updateGameProgress(); } catch (e) {}
   });
   rt.on('word_passed', (p) => {
     if (!forMyTeam(p)) return;
     if (typeof p.passed_words === 'number') STATE.score = p.passed_words;
     applyTimer(p);
+    try { haptic('pass'); } catch (e) {}
     try { updateGameProgress(); } catch (e) {}
   });
 
@@ -2186,6 +2815,7 @@ init();
       rt.on(evt, (p) => {
         if (p && p.turn_id != null && p.turn_id !== knownTurnId) return; // not our turn
         if (!forMyTeam(p)) return;
+        if (evt === 'penalty_applied') { try { haptic('wrong'); } catch (e) {} }
         if (p.status === 'PAUSED') { stopTimerTicker(); }
         else applyTimer(p);
         try { renderTagasagotView(); } catch (e) {}
@@ -2203,13 +2833,13 @@ init();
     if (!gameIdMatches(p)) return;
     STATE.gameStatus = 'ready';
     try { renderHeader(); } catch (e) {}
-    showToast('Round complete!');
+    notifyIf('roundStarted', () => showToast('Round complete!'));
   });
   rt.on('game_completed', (p) => {
     if (!gameIdMatches(p)) return;
     STATE.gameStatus = 'complete';
     try { renderHeader(); } catch (e) {}
-    showToast('Game complete!');
+    notifyIf('gameEnded', () => showToast('Game complete!'));
   });
   rt.on('round_started', (p) => {
     if (!gameIdMatches(p)) return;
@@ -2217,6 +2847,7 @@ init();
     STATE.currentRound = Number(roundNo) || 1;
     STATE.gameStatus = roundLabel(roundNo);
     try { renderHeader(); } catch (e) {}
+    notifyIf('roundStarted', () => showToast('Round ' + (Number(roundNo) || 1) + ' started!'));
   });
 
   // Settings change (word cap / display toggles) → apply live.
@@ -2232,6 +2863,7 @@ init();
       STATE.wordsLocked = true;
       try { renderWordsTab(); } catch (e) {}
     }
+    notifyIf('gameStarted', () => showToast('The game has started!'));
   });
 
   // A team word changed somewhere -> refetch (server is source of truth).
@@ -2254,26 +2886,18 @@ init();
   // Lifecycle: on (re)connect rejoin the known turn room to re-push state.
   // NOTE: the device socket being up is NOT proof the host approved the team —
   // host approval is ``Team.connection_status``, re-read from the server.
-  async function refreshConnectionStatus() {
-    const teamId = API.getTeamId();
-    if (!teamId || !API.getSessionToken()) return;
-    try {
-      const teamData = await TeamAPI.getMyTeam(teamId);
-      if (teamData) applyTeamRoster(teamData);
-    } catch (e) { /* keep last known state */ }
-  }
   rt.onConnect(() => {
     STATE.isConnected = true;
     if (knownTurnId) rt.joinTurn(knownTurnId);
-    refreshConnectionStatus();
+    refreshPlayerConnectionStatus();
     try { renderHeader(); } catch (e) {}
   });
   rt.onReconnect(() => {
     STATE.isConnected = true;
     if (knownTurnId) rt.joinTurn(knownTurnId);
-    refreshConnectionStatus();
+    refreshPlayerConnectionStatus();
     try { renderHeader(); } catch (e) {}
-    showToast('Reconnected');
+    notifyIf('connection', () => showToast('Reconnected'));
   });
   rt.onDisconnect(() => {
     STATE.isConnected = false;
@@ -2289,17 +2913,17 @@ init();
   rt.on('connection_approved', (p) => {
     if (!forMyTeam(p)) return;
     setConnectionStatus('CONNECTED');
-    showToast('Host approved your team!');
+    notifyIf('approved', () => showToast('Host approved your team!'));
   });
   rt.on('connection_declined', (p) => {
     if (!forMyTeam(p)) return;
     setConnectionStatus('DECLINED');
-    showToast('The host declined your team. Scan or enter the code to try again.');
+    notifyIf('disconnected', () => showToast('The host declined your team. Scan or enter the code to try again.'));
   });
   rt.on('connection_disconnected', (p) => {
     if (!forMyTeam(p)) return;
     setConnectionStatus('DISCONNECTED');
-    showToast('The host disconnected your team.');
+    notifyIf('disconnected', () => showToast('The host disconnected your team.'));
   });
 
   // Connect the device socket.

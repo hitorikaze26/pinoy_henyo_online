@@ -286,10 +286,11 @@
       <div class="tab-view tab-view--hidden" id="tab-settings" role="tabpanel" aria-label="Settings">
 
         <!-- Team Settings -->
-        <div class="player-card fade-in">
+        <div class="player-card fade-in" data-gate="session">
           <h2 class="player-card__title">
             <i class="fa-solid fa-users-gear"></i> Team Settings
           </h2>
+          <p class="set-card-desc">Only the team leader can change the team name. Team Code is fixed for this game.</p>
           <form class="settings-form" id="form-team-settings" novalidate>
             <div class="settings-group">
               <label class="settings-label" for="setting-team-name">Team Name</label>
@@ -315,6 +316,7 @@
           <h2 class="player-card__title">
             <i class="fa-solid fa-user-gear"></i> Player Settings
           </h2>
+          <p class="set-card-desc">Update your in-game username. This applies to your player across the game.</p>
           <form class="settings-form" id="form-player-settings" novalidate>
             <div class="settings-group">
               <label class="settings-label" for="setting-username">Your Username</label>
@@ -326,31 +328,548 @@
           </form>
         </div>
 
-        <!-- Game Information -->
+        <!-- Audio -->
         <div class="player-card fade-in" style="--fd:0.14s">
           <h2 class="player-card__title">
-            <i class="fa-solid fa-circle-info"></i> Game Information
+            <i class="fa-solid fa-music"></i> Audio
           </h2>
-          <div class="info-rows">
-            <div class="info-row">
-              <span class="info-row__label">Current Round</span>
-              <span class="info-row__value" id="settings-round">—</span>
+          <p class="set-card-desc">Background music and sound effects on this device only. Saved automatically.</p>
+
+          <div class="set-row">
+            <div class="set-row__info">
+              <p class="set-row__title">Background Music</p>
+              <p class="set-row__sub">Plays the selected track quietly in the background.</p>
             </div>
-            <div class="info-row">
-              <span class="info-row__label">Host</span>
-              <span class="info-row__value">
-                <span class="conn-dot conn-dot--connected"></span> Connected
-              </span>
-            </div>
-            <div class="info-row">
-              <span class="info-row__label">Status</span>
-              <span class="info-row__value" id="settings-status">Waiting for Host</span>
+            <div class="set-row__control">
+              <label class="setting-switch">
+                <input type="checkbox" id="pref-music-on" role="switch" />
+                <span class="setting-switch__track" aria-hidden="true"></span>
+              </label>
             </div>
           </div>
-          <div class="settings-actions">
-            <button class="player-btn player-btn--danger" id="btn-leave-game">
-              <i class="fa-solid fa-right-from-bracket"></i> Leave Game
-            </button>
+
+          <div class="set-row" id="row-pref-music-vol">
+            <div class="set-row__info">
+              <p class="set-row__title">Music Volume</p>
+              <p class="set-row__sub">Applies immediately to background music.</p>
+            </div>
+            <div class="set-row__control set-row__control--slider">
+              <div class="slider-wrap">
+                <input type="range" id="pref-music-vol" class="set-slider" min="0" max="100" step="1" value="40" aria-label="Music volume" />
+                <span class="slider-wrap__val" id="pref-music-vol-val" aria-live="polite">40%</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="set-row">
+            <div class="set-row__info">
+              <p class="set-row__title">Music Track</p>
+              <p class="set-row__sub">Choose the track to play. Random picks one each time.</p>
+            </div>
+            <div class="set-row__control set-row__control--stacked">
+              <select class="controls-filter dd dd--pill" id="pref-music-track" aria-label="Music track"></select>
+            </div>
+          </div>
+
+          <div class="set-row">
+            <div class="set-row__info">
+              <p class="set-row__title">Sound Effects</p>
+              <p class="set-row__sub">Clicks, confirms, notifications, and timer cues.</p>
+            </div>
+            <div class="set-row__control">
+              <label class="setting-switch">
+                <input type="checkbox" id="pref-sfx-on" role="switch" />
+                <span class="setting-switch__track" aria-hidden="true"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="set-row" id="row-pref-sfx-vol">
+            <div class="set-row__info">
+              <p class="set-row__title">Effects Volume</p>
+              <p class="set-row__sub">Applies immediately to UI sound effects.</p>
+            </div>
+            <div class="set-row__control set-row__control--slider">
+              <div class="slider-wrap">
+                <input type="range" id="pref-sfx-vol" class="set-slider" min="0" max="100" step="1" value="60" aria-label="Effects volume" />
+                <span class="slider-wrap__val" id="pref-sfx-vol-val" aria-live="polite">60%</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="set-row set-row--actions">
+            <div class="set-row__info">
+              <p class="set-row__title">Test Sound</p>
+              <p class="set-row__sub">Your browser may block audio until you interact with the page once.</p>
+            </div>
+            <div class="set-row__control set-row__control--stacked">
+              <button type="button" class="controls-btn controls-btn--refresh" id="btn-pref-test-sound">
+                <i class="fa-solid fa-bell"></i> Test
+              </button>
+              <button type="button" class="controls-btn controls-btn--refresh" id="btn-pref-audio-reset">
+                <i class="fa-solid fa-rotate-left"></i> Reset
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Display -->
+        <div class="player-card fade-in" style="--fd:0.2s">
+          <h2 class="player-card__title">
+            <i class="fa-solid fa-display"></i> Display
+          </h2>
+          <p class="set-card-desc">How this screen looks and behaves on this device. Saved automatically.</p>
+          <p class="set-unsupported-note" id="display-unsupported-msg" hidden></p>
+
+          <div class="set-row">
+            <div class="set-row__info">
+              <p class="set-row__title">Fullscreen</p>
+              <p class="set-row__sub">Expand this page to fill the whole screen. Toggled live.</p>
+            </div>
+            <div class="set-row__control">
+              <label class="setting-switch">
+                <input type="checkbox" id="pref-display-fullscreen" role="switch" />
+                <span class="setting-switch__track" aria-hidden="true"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="set-row">
+            <div class="set-row__info">
+              <p class="set-row__title">Keep Screen Awake</p>
+              <p class="set-row__sub">Prevents the screen from sleeping while this page is open.</p>
+            </div>
+            <div class="set-row__control">
+              <label class="setting-switch">
+                <input type="checkbox" id="pref-display-keep-awake" role="switch" />
+                <span class="setting-switch__track" aria-hidden="true"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="set-row">
+            <div class="set-row__info">
+              <p class="set-row__title">Compact Display</p>
+              <p class="set-row__sub">Reduces spacing so more fits on the screen.</p>
+            </div>
+            <div class="set-row__control">
+              <label class="setting-switch">
+                <input type="checkbox" id="pref-display-compact" role="switch" />
+                <span class="setting-switch__track" aria-hidden="true"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="set-row">
+            <div class="set-row__info">
+              <p class="set-row__title">Large Text</p>
+              <p class="set-row__sub">Scales up readable text sizes across the app.</p>
+            </div>
+            <div class="set-row__control">
+              <label class="setting-switch">
+                <input type="checkbox" id="pref-display-large-text" role="switch" />
+                <span class="setting-switch__track" aria-hidden="true"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="set-row">
+            <div class="set-row__info">
+              <p class="set-row__title">Reduce Motion</p>
+              <p class="set-row__sub">Minimizes animations and transitions for comfort.</p>
+            </div>
+            <div class="set-row__control">
+              <label class="setting-switch">
+                <input type="checkbox" id="pref-display-reduce-motion" role="switch" />
+                <span class="setting-switch__track" aria-hidden="true"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="set-row set-row--actions">
+            <div class="set-row__info"></div>
+            <div class="set-row__control set-row__control--stacked">
+              <button type="button" class="controls-btn controls-btn--refresh" id="btn-pref-display-reset">
+                <i class="fa-solid fa-rotate-left"></i> Reset
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Game Display (host-controlled, read-only) -->
+        <div class="player-card fade-in" style="--fd:0.26s" data-gate="session">
+          <h2 class="player-card__title">
+            <i class="fa-solid fa-tv"></i> Game Display
+          </h2>
+          <p class="set-card-desc">These are controlled by the host and are shown here for reference. They update live.</p>
+
+          <div class="set-row">
+            <div class="set-row__info"><p class="set-row__title">Player Names</p></div>
+            <div class="set-row__control"><span class="gd-val" id="gd-names">—</span></div>
+          </div>
+          <div class="set-row">
+            <div class="set-row__info"><p class="set-row__title">Role Labels</p></div>
+            <div class="set-row__control"><span class="gd-val" id="gd-roles">—</span></div>
+          </div>
+          <div class="set-row">
+            <div class="set-row__info"><p class="set-row__title">Scores</p></div>
+            <div class="set-row__control"><span class="gd-val" id="gd-scores">—</span></div>
+          </div>
+          <div class="set-row">
+            <div class="set-row__info"><p class="set-row__title">Round Category</p></div>
+            <div class="set-row__control"><span class="gd-val" id="gd-round-category">—</span></div>
+          </div>
+          <div class="set-row">
+            <div class="set-row__info"><p class="set-row__title">QR / Join Code</p></div>
+            <div class="set-row__control"><span class="gd-val" id="gd-qr">—</span></div>
+          </div>
+        </div>
+
+        <!-- Vibration -->
+        <div class="player-card fade-in" style="--fd:0.32s">
+          <h2 class="player-card__title">
+            <i class="fa-solid fa-mobile-screen"></i> Vibration
+          </h2>
+          <p class="set-card-desc">Haptic feedback through this device's vibration motor. Saved automatically.</p>
+          <p class="set-unsupported-note" id="vibe-unsupported-msg" hidden></p>
+
+          <div class="set-row">
+            <div class="set-row__info">
+              <p class="set-row__title">Vibration</p>
+              <p class="set-row__sub">Master switch for all haptic feedback.</p>
+            </div>
+            <div class="set-row__control">
+              <label class="setting-switch">
+                <input type="checkbox" id="pref-vibe-enabled" role="switch" />
+                <span class="setting-switch__track" aria-hidden="true"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="set-row set-row--indent" id="row-vibe-timer">
+            <div class="set-row__info">
+              <p class="set-row__title">Timer Warning</p>
+              <p class="set-row__sub">When only 10 seconds remain on the turn timer.</p>
+            </div>
+            <div class="set-row__control">
+              <label class="setting-switch">
+                <input type="checkbox" id="pref-vibe-timer" role="switch" />
+                <span class="setting-switch__track" aria-hidden="true"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="set-row set-row--indent" id="row-vibe-correct">
+            <div class="set-row__info">
+              <p class="set-row__title">Correct Answer</p>
+              <p class="set-row__sub">A short pulse when a word is guessed correctly.</p>
+            </div>
+            <div class="set-row__control">
+              <label class="setting-switch">
+                <input type="checkbox" id="pref-vibe-correct" role="switch" />
+                <span class="setting-switch__track" aria-hidden="true"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="set-row set-row--indent" id="row-vibe-wrong">
+            <div class="set-row__info">
+              <p class="set-row__title">Wrong / Pass</p>
+              <p class="set-row__sub">A longer buzz when a word is wrong or passed.</p>
+            </div>
+            <div class="set-row__control">
+              <label class="setting-switch">
+                <input type="checkbox" id="pref-vibe-wrong" role="switch" />
+                <span class="setting-switch__track" aria-hidden="true"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="set-row set-row--actions">
+            <div class="set-row__info"></div>
+            <div class="set-row__control set-row__control--stacked">
+              <button type="button" class="controls-btn controls-btn--refresh" id="btn-pref-vibe-reset">
+                <i class="fa-solid fa-rotate-left"></i> Reset
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Notifications -->
+        <div class="player-card fade-in" style="--fd:0.38s">
+          <h2 class="player-card__title">
+            <i class="fa-solid fa-bell"></i> Notifications
+          </h2>
+          <p class="set-card-desc">Which in-app toasts and alerts you see on this device. Saved automatically.</p>
+
+          <div class="set-row">
+            <div class="set-row__info">
+              <p class="set-row__title">Connection Changes</p>
+              <p class="set-row__sub">When you reconnect or your connection state changes.</p>
+            </div>
+            <div class="set-row__control">
+              <label class="setting-switch">
+                <input type="checkbox" id="pref-notify-connection" role="switch" />
+                <span class="setting-switch__track" aria-hidden="true"></span>
+              </label>
+            </div>
+          </div>
+          <div class="set-row">
+            <div class="set-row__info">
+              <p class="set-row__title">Team Approved</p>
+              <p class="set-row__sub">When the host approves your team's connection.</p>
+            </div>
+            <div class="set-row__control">
+              <label class="setting-switch">
+                <input type="checkbox" id="pref-notify-approved" role="switch" />
+                <span class="setting-switch__track" aria-hidden="true"></span>
+              </label>
+            </div>
+          </div>
+          <div class="set-row">
+            <div class="set-row__info">
+              <p class="set-row__title">Team Disconnected</p>
+              <p class="set-row__sub">When the host declines or disconnects your team.</p>
+            </div>
+            <div class="set-row__control">
+              <label class="setting-switch">
+                <input type="checkbox" id="pref-notify-disconnected" role="switch" />
+                <span class="setting-switch__track" aria-hidden="true"></span>
+              </label>
+            </div>
+          </div>
+          <div class="set-row">
+            <div class="set-row__info">
+              <p class="set-row__title">Game Started</p>
+              <p class="set-row__sub">When the host starts the game.</p>
+            </div>
+            <div class="set-row__control">
+              <label class="setting-switch">
+                <input type="checkbox" id="pref-notify-game-started" role="switch" />
+                <span class="setting-switch__track" aria-hidden="true"></span>
+              </label>
+            </div>
+          </div>
+          <div class="set-row">
+            <div class="set-row__info">
+              <p class="set-row__title">Round Started / Complete</p>
+              <p class="set-row__sub">When a round begins or finishes.</p>
+            </div>
+            <div class="set-row__control">
+              <label class="setting-switch">
+                <input type="checkbox" id="pref-notify-round-started" role="switch" />
+                <span class="setting-switch__track" aria-hidden="true"></span>
+              </label>
+            </div>
+          </div>
+          <div class="set-row">
+            <div class="set-row__info">
+              <p class="set-row__title">Game Ended</p>
+              <p class="set-row__sub">When the whole game completes.</p>
+            </div>
+            <div class="set-row__control">
+              <label class="setting-switch">
+                <input type="checkbox" id="pref-notify-game-ended" role="switch" />
+                <span class="setting-switch__track" aria-hidden="true"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="set-row set-row--actions">
+            <div class="set-row__info"></div>
+            <div class="set-row__control set-row__control--stacked">
+              <button type="button" class="controls-btn controls-btn--refresh" id="btn-pref-notify-reset">
+                <i class="fa-solid fa-rotate-left"></i> Reset
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Connection -->
+        <div class="player-card fade-in" style="--fd:0.44s" data-gate="session">
+          <h2 class="player-card__title">
+            <i class="fa-solid fa-wifi"></i> Connection
+          </h2>
+          <p class="set-card-desc">Your live connection to the host and the game server. Actions sync and reconnect this device.</p>
+
+          <div class="set-row">
+            <div class="set-row__info">
+              <p class="set-row__title">Host Approval</p>
+              <p class="set-row__sub">Whether the host has approved your team.</p>
+            </div>
+            <div class="set-row__control">
+              <span class="conn-pill conn-pill--none" id="conn-status-pill" role="status">
+                <span class="conn-dot conn-dot--none" id="conn-status-pill-dot"></span>
+                <span id="conn-status-pill-label">Not Connected</span>
+              </span>
+            </div>
+          </div>
+          <div class="set-row">
+            <div class="set-row__info">
+              <p class="set-row__title">Realtime Socket</p>
+              <p class="set-row__sub">Live event stream to the game server.</p>
+            </div>
+            <div class="set-row__control"><span class="gd-val" id="conn-realtime">—</span></div>
+          </div>
+          <div class="set-row">
+            <div class="set-row__info">
+              <p class="set-row__title">Team</p>
+            </div>
+            <div class="set-row__control"><span class="code-val" id="conn-team">—</span></div>
+          </div>
+          <div class="set-row">
+            <div class="set-row__info">
+              <p class="set-row__title">Team Code</p>
+            </div>
+            <div class="set-row__control">
+              <span class="code-val" id="conn-team-code">—</span>
+              <button type="button" class="inline-copy-btn" id="btn-copy-conn-code" aria-label="Copy team code">
+                <i class="fa-regular fa-copy"></i>
+              </button>
+            </div>
+          </div>
+          <div class="set-row">
+            <div class="set-row__info">
+              <p class="set-row__title">Game Code</p>
+            </div>
+            <div class="set-row__control"><span class="code-val" id="conn-game-code">—</span></div>
+          </div>
+          <div class="set-row">
+            <div class="set-row__info">
+              <p class="set-row__title">Last Sync</p>
+              <p class="set-row__sub">When data was last refreshed from the server.</p>
+            </div>
+            <div class="set-row__control"><span class="code-val" id="conn-last-sync">Never</span></div>
+          </div>
+
+          <div class="set-row set-row--actions">
+            <div class="set-row__info"></div>
+            <div class="set-row__control set-row__control--stacked conn-actions">
+              <button type="button" class="controls-btn controls-btn--refresh" id="btn-sync-now">
+                <i class="fa-solid fa-arrows-rotate"></i> Sync Now
+              </button>
+              <button type="button" class="controls-btn controls-btn--refresh" id="btn-reconnect">
+                <i class="fa-solid fa-plug-circle-bolt"></i> Reconnect
+              </button>
+              <button type="button" class="controls-btn controls-btn--refresh" id="btn-refresh-connection">
+                <i class="fa-solid fa-rotate"></i> Refresh Connection
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Player & Team Info -->
+        <div class="player-card fade-in" style="--fd:0.5s" data-gate="session">
+          <h2 class="player-card__title">
+            <i class="fa-solid fa-users"></i> Player &amp; Team Info
+          </h2>
+          <p class="set-card-desc">Your current player and team details, updated live from the server.</p>
+
+          <div class="set-row">
+            <div class="set-row__info"><p class="set-row__title">Username</p></div>
+            <div class="set-row__control"><span class="code-val" id="pt-username">—</span></div>
+          </div>
+          <div class="set-row">
+            <div class="set-row__info"><p class="set-row__title">Your Role</p></div>
+            <div class="set-row__control"><span class="code-val" id="pt-role">—</span></div>
+          </div>
+          <div class="set-row">
+            <div class="set-row__info"><p class="set-row__title">Team Name</p></div>
+            <div class="set-row__control"><span class="code-val" id="pt-team-name">—</span></div>
+          </div>
+          <div class="set-row">
+            <div class="set-row__info"><p class="set-row__title">Team Code</p></div>
+            <div class="set-row__control"><span class="code-val" id="pt-team-code">—</span></div>
+          </div>
+          <div class="set-row">
+            <div class="set-row__info"><p class="set-row__title">Members</p></div>
+            <div class="set-row__control"><span class="code-val" id="pt-members">—</span></div>
+          </div>
+          <div class="set-row">
+            <div class="set-row__info"><p class="set-row__title">Team Leader</p></div>
+            <div class="set-row__control"><span class="code-val" id="pt-leader">—</span></div>
+          </div>
+        </div>
+
+        <!-- Device Info -->
+        <div class="player-card fade-in" style="--fd:0.56s">
+          <h2 class="player-card__title">
+            <i class="fa-solid fa-microchip"></i> Device Info
+          </h2>
+          <p class="set-card-desc">Detected information about the device and browser you're using.</p>
+
+          <div class="set-row">
+            <div class="set-row__info"><p class="set-row__title">Device Type</p></div>
+            <div class="set-row__control"><span class="code-val" id="dev-type">—</span></div>
+          </div>
+          <div class="set-row">
+            <div class="set-row__info"><p class="set-row__title">Browser</p></div>
+            <div class="set-row__control"><span class="code-val" id="dev-browser">—</span></div>
+          </div>
+          <div class="set-row">
+            <div class="set-row__info"><p class="set-row__title">Orientation</p></div>
+            <div class="set-row__control"><span class="code-val" id="dev-orientation">—</span></div>
+          </div>
+          <div class="set-row">
+            <div class="set-row__info"><p class="set-row__title">Network</p></div>
+            <div class="set-row__control"><span class="code-val" id="dev-network">—</span></div>
+          </div>
+          <div class="set-row">
+            <div class="set-row__info"><p class="set-row__title">Fullscreen</p></div>
+            <div class="set-row__control"><span class="code-val" id="dev-fullscreen">—</span></div>
+          </div>
+        </div>
+
+        <!-- Local Preferences -->
+        <div class="player-card fade-in" style="--fd:0.62s">
+          <h2 class="player-card__title">
+            <i class="fa-solid fa-database"></i> Local Preferences
+          </h2>
+          <p class="set-card-desc">Everything in this tab is stored only on this device. Use Reset to return to defaults.</p>
+
+          <div class="set-row set-row--actions">
+            <div class="set-row__info">
+              <p class="set-row__title">Reset All Player Settings</p>
+              <p class="set-row__sub">Audio, display, vibration, and notifications return to their defaults. Your team and username are not affected.</p>
+            </div>
+            <div class="set-row__control set-row__control--stacked">
+              <button type="button" class="controls-btn controls-btn--danger" id="btn-reset-all-prefs">
+                <i class="fa-solid fa-trash-can"></i> Reset All
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Danger Zone -->
+        <div class="player-card player-card--danger fade-in" style="--fd:0.68s" data-gate="session">
+          <h2 class="player-card__title">
+            <i class="fa-solid fa-triangle-exclamation"></i> Danger Zone
+          </h2>
+          <p class="set-card-desc">Actions you can't undo. Leaving the game ends your participation here.</p>
+
+          <div class="set-row">
+            <div class="set-row__info">
+              <p class="set-row__title">Leave Game</p>
+              <p class="set-row__sub">Disconnect your device from this game's lobby and return to the home screen.</p>
+            </div>
+            <div class="set-row__control">
+              <button type="button" class="player-btn player-btn--danger" id="btn-leave-game">
+                <i class="fa-solid fa-right-from-bracket"></i> Leave Game
+              </button>
+            </div>
+          </div>
+
+          <div class="set-row">
+            <div class="set-row__info">
+              <p class="set-row__title">Current Round</p>
+            </div>
+            <div class="set-row__control"><span class="code-val" id="settings-round">—</span></div>
+          </div>
+          <div class="set-row">
+            <div class="set-row__info">
+              <p class="set-row__title">Status</p>
+            </div>
+            <div class="set-row__control"><span class="code-val" id="settings-status">Waiting for Host</span></div>
           </div>
         </div>
 
@@ -639,6 +1158,7 @@
   <script src="../../js/core/config.js"></script>
   <script src="../../js/core/toast.js"></script>
   <script src="../../js/core/confirm.js"></script>
+  <script src="../../js/core/audio.js"></script>
   <script src="../../js/api/api.js"></script>
   <script src="../../js/api/game-api.js"></script>
   <script src="../../js/api/team-api.js"></script>

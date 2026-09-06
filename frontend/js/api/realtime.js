@@ -117,12 +117,12 @@ const Realtime = (() => {
     });
   }
 
-  function teardown() {
+  function teardown(opts = {}) {
     if (!socket) return;
     socket.close();
     socket = null;
     mode = null;
-    handlers.clear();
+    if (!opts.preserveHandlers) handlers.clear();
   }
 
   /* ---------- public connection API ---------- */
@@ -181,6 +181,23 @@ const Realtime = (() => {
     return socket;
   }
 
+  /* ---------- manual reconnect ----------
+     Tears down the current socket and rebuilds it with the same mode and
+     auth. Listeners (registered via on()/onConnect/onDisconnect/... ) are
+     preserved because teardown({ preserveHandlers:true }) keeps them. A
+     fresh socket re-emits LIFECYCLE.connect; reconnect() additionally fires
+     LIFECYCLE.reconnect so pages showing a "Reconnected" toast keep working.
+     Returns false if the socket was never live or the CDN isn't ready. */
+  function reconnect() {
+    if (!socket || !isReady()) return false;
+    const prevMode = mode || 'player';
+    teardown({ preserveHandlers: true });
+    const s = connect({ mode: prevMode });
+    if (!s) return false;
+    notify(LIFECYCLE.reconnect, 0);
+    return true;
+  }
+
   // Report which backend events the frontend is *not* listening to,
   // so unsupported features are visible rather than silently ignored.
   function unsupportedReport() {
@@ -207,6 +224,7 @@ const Realtime = (() => {
 
   return {
     connect,
+    reconnect,
     on,
     off,
     onConnect,
