@@ -314,7 +314,14 @@ async function disconnectTeam(teamId) {
   if (!team || !gameId) return;
   if (STATE.inFlight.has(team.id)) return;
 
-  const confirmed = window.confirm(`Disconnect "${team.name}"? Players on this team will need to request a connection again.`);
+  const confirmed = await Confirm.open({
+    title:        `Disconnect "${team.name}"?`,
+    body:         'Players on this team will need to request a new connection.',
+    confirmLabel: 'Disconnect',
+    icon:         'disconnect',
+    destructive:  true,
+    requestKey:   `disconnect-team-${team.id}`,
+  });
   if (!confirmed) return;
 
   STATE.inFlight.add(team.id);

@@ -15,7 +15,6 @@ function teamOf(w) { return w.team || HOST_TEAM_LABEL; }
 let STATE = {
   locked: false,
   nextId: 1,
-  pendingDeleteId: null,
   pendingEditId:   null,
   pendingDupAction: null,  // { word, category, team, round } to save after dup confirm
   search:     '',
@@ -493,7 +492,15 @@ function renderBulkBar() {
 $('bulk-delete').addEventListener('click', async () => {
   const count = STATE.selectedIds.size;
   if (!count) return;
-  if (!confirm(`Delete ${count} word${count !== 1 ? 's' : ''}? This cannot be undone.`)) return;
+  const confirmed = await Confirm.open({
+    title:        `Delete ${count} word${count !== 1 ? 's' : ''}?`,
+    body:         'This cannot be undone.',
+    confirmLabel: `Delete ${count} Word${count !== 1 ? 's' : ''}`,
+    icon:         'delete',
+    destructive:  true,
+    requestKey:   'bulk-delete-words',
+  });
+  if (!confirmed) return;
   const ids = [...STATE.selectedIds];
 
   // Real backend integration when a host game context exists.
@@ -894,56 +901,50 @@ $('form-edit').addEventListener('submit', async e => {
 /* ============================================================
    DELETE WORD
 ============================================================ */
-function openDeleteWord(id) {
+async function openDeleteWord(id) {
   if (STATE.locked) { showToast('Words are locked.'); return; }
   const w = STATE.words.find(x => x.id === id);
   if (!w) return;
-  STATE.pendingDeleteId = id;
-  $('delete-word-name').textContent = w.word;
-  $('delete-subtitle').textContent  = `Remove "${w.word}" from the game?`;
-  openModal('modal-delete');
-}
 
-$('close-delete').addEventListener('click',     () => closeModal('modal-delete'));
-$('cancel-delete').addEventListener('click',    () => closeModal('modal-delete'));
-$('btn-confirm-delete').addEventListener('click', async () => {
-  const w = STATE.words.find(x => x.id === STATE.pendingDeleteId);
-  if (!w) return;
+  const confirmed = await Confirm.open({
+    title:        'Delete word?',
+    body:         `"${w.word}" will be permanently removed from the game.`,
+    confirmLabel: 'Delete Word',
+    icon:         'delete',
+    destructive:  true,
+    requestKey:   `delete-word-host-${w.id}`,
+  });
+  if (!confirmed) return;
+
   const name = w.word;
+  Confirm.busy(true, 'Deleting\u2026');
 
   // Real backend integration when a host game context exists.
   if (window.WordAPI && API.getGameId()) {
-    const btn = $('btn-confirm-delete');
-    const original = btn.textContent;
-    btn.disabled = true;
     try {
       await API.withLoading('delete-word', () => WordAPI.deleteWord(w.id, { asHost: true }));
       STATE.words = STATE.words.filter(x => x.id !== w.id);
       STATE.totalWords = Math.max(0, STATE.totalWords - 1);
       STATE.selectedIds.delete(w.id);
-      STATE.pendingDeleteId = null;
-      closeModal('modal-delete');
       render();
       showToast(`"${name}" deleted`);
     } catch (err) {
       console.error('[Pinoy Henyo] delete word failed', err);
       showToast(err.message || 'Could not delete the word.');
-      closeModal('modal-delete');
     } finally {
-      btn.disabled = false;
-      btn.textContent = original;
+      Confirm.close();
     }
     return;
   }
 
-  STATE.words = STATE.words.filter(x => x.id !== STATE.pendingDeleteId);
+  // Offline / demo path
+  STATE.words = STATE.words.filter(x => x.id !== w.id);
   STATE.totalWords = Math.max(0, STATE.totalWords - 1);
-  STATE.selectedIds.delete(STATE.pendingDeleteId);
-  STATE.pendingDeleteId = null;
-  closeModal('modal-delete');
+  STATE.selectedIds.delete(w.id);
   render();
   showToast(`"${name}" deleted`);
-});
+  Confirm.close();
+}
 
 /* ============================================================
    WORD STATUS PANEL (real per-team-per-category readiness)
@@ -1361,7 +1362,16 @@ function mapWordStatus(status) {
     if (STATE.locked) { showToast('Categories are locked once the game starts.'); return; }
     const id = parseInt(btn.dataset.id, 10);
     const name = btn.dataset.name;
-    if (!confirm(`Delete category "${name}"? All of its words will also be removed.`)) return;
+    const confirmed = await Confirm.open({
+      title:        `Delete category "${name}"?`,
+      body:         'All words in this category will also be permanently removed.',
+      confirmLabel: 'Delete Category',
+      icon:         'delete',
+      destructive:  true,
+      requestKey:   `delete-category-${id}`,
+    });
+    if (!confirmed) return;
+    Confirm.busy(true, 'Deleting…');
     btn.disabled = true;
     try {
       await API.withLoading('delete-category', () => WordAPI.deleteCategory(id));
@@ -1372,6 +1382,7 @@ function mapWordStatus(status) {
       console.error('[Pinoy Henyo] delete category failed', err);
       showToast(err.message || 'Could not delete the category.');
     } finally {
+      Confirm.close();
       btn.disabled = false;
     }
   }

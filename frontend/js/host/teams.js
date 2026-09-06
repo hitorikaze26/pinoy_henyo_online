@@ -20,7 +20,6 @@ let STATE = {
   nextMemberId: 20,
   activeManageTeamId: null,   // team open in Manage Members modal
   activeEditTeamId: null,     // team open in Edit Team modal
-  pendingRemoveTeamId: null,  // team pending removal confirmation
   search: '',
   filter: 'all',              // all | connected | waiting | disconnected
   noSession: false,           // true when no host game context could be resolved
@@ -751,35 +750,29 @@ $('form-edit-team').addEventListener('submit', async e => {
 /* ============================================================
    MODAL: REMOVE TEAM
 ============================================================ */
-function openRemoveTeam(teamId) {
+async function openRemoveTeam(teamId) {
   const team = STATE.teams.find(t => t.id === teamId);
   if (!team) return;
-  STATE.pendingRemoveTeamId = teamId;
-  $('remove-team-subtitle').textContent = `Remove "${team.name}"?`;
-  openModal($('modal-remove-team'));
-}
 
-$('close-remove-team').addEventListener('click',  () => closeModal($('modal-remove-team')));
-$('cancel-remove-team').addEventListener('click', () => closeModal($('modal-remove-team')));
+  const confirmed = await Confirm.open({
+    title:        `Remove team?`,
+    body:         `"${team.name}" and all its members will be permanently removed from this game.`,
+    confirmLabel: 'Remove Team',
+    icon:         'delete',
+    destructive:  true,
+    requestKey:   `remove-team-${teamId}`,
+  });
+  if (!confirmed) return;
 
-$('btn-confirm-remove').addEventListener('click', async () => {
-  const team = STATE.teams.find(t => t.id === STATE.pendingRemoveTeamId);
-  if (!team) return;
   const name = team.name;
-  const teamId = team.id;
-  const btn = $('btn-confirm-remove');
-  const original = btn.innerHTML;
-  btn.disabled = true;
+  Confirm.busy(true, 'Removing\u2026');
   try {
     await TeamAPI.deleteTeam(teamId);
     STATE.teams = STATE.teams.filter(t => t.id !== teamId);
-    STATE.pendingRemoveTeamId = null;
-    closeModal($('modal-remove-team'));
     if (API.removeKnownTeam) API.removeKnownTeam(teamId);
     render();
     showToast(`Team "${name}" removed`);
   } catch (err) {
-    btn.disabled = false;
     const code = (err && err.code) || '';
     if (code === 'TEAM_DELETE_BLOCKED_MATCH_REFERENCE') {
       showToast(`Team "${name}" is in a match and cannot be removed.`, 4000);
@@ -787,9 +780,9 @@ $('btn-confirm-remove').addEventListener('click', async () => {
       showToast((err && err.message) || 'Could not remove team', 4000);
     }
   } finally {
-    btn.innerHTML = original;
+    Confirm.close();
   }
-});
+}
 
 /* ============================================================
    MODAL: MANAGE MEMBERS
@@ -820,7 +813,16 @@ function buildManageMemberRow(teamId, member) {
   row.querySelector('.manage-member-row__btn--remove').addEventListener('click', async () => {
     const team = STATE.teams.find(t => t.id === teamId);
     if (!team) return;
-    if (!window.confirm(`Remove "${member.name}" from "${team.name}"?`)) return;
+    const confirmed = await Confirm.open({
+      title:        `Remove "${member.name}"?`,
+      body:         `They will be removed from "${team.name}". You can add them back at any time.`,
+      confirmLabel: 'Remove Member',
+      icon:         'remove',
+      destructive:  true,
+      requestKey:   `remove-member-${member.id}`,
+    });
+    if (!confirmed) return;
+    Confirm.busy(true, 'Removing…');
     try {
       await TeamAPI.removeMember(member.id);
       team.members = team.members.filter(m => m.id !== member.id);
@@ -830,6 +832,8 @@ function buildManageMemberRow(teamId, member) {
       showToast(`${member.name} removed`);
     } catch (err) {
       showToast((err && err.message) || 'Could not remove member', 4000);
+    } finally {
+      Confirm.close();
     }
   });
 

@@ -299,119 +299,48 @@ function closeModal(id) {
 
 // Close on backdrop click
 $$('.modal-overlay').forEach(o => {
-  o.addEventListener('click', e => { if (e.target === o && o.id !== 'modal-confirm') closeModal(o.id); });
+  o.addEventListener('click', e => { if (e.target === o) closeModal(o.id); });
 });
 
-// Escape key closes modals
+// Escape key closes modals — ph-confirm overlay is handled by its own manager
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
-  if ($('modal-confirm') && $('modal-confirm').classList.contains('open')) {
-    if (!confirmBusy) resolveConfirm(false);
-    return;
-  }
   $$('.modal-overlay.open').forEach(o => closeModal(o.id));
   // Also close fullscreen views
   if (STATE.fullscreenView === 'qr-scanner') closeQrScanner();
 });
 
 /* ============================================================
-   CONFIRM MODAL (promise-based replacement for confirm())
-   Resolves true on the action button (modal stays open for the
-   caller to run its async work), false on cancel/close/Escape.
+   CONFIRM MODAL — delegates to the global ConfirmManager
+   (js/core/confirm.js).  These function names are preserved
+   so all existing call sites inside this file work unchanged.
 ============================================================ */
-let confirmResolve  = null;   // currently awaiting openConfirm()
-let confirmBusy     = false;  // locked while an action is processing
-let confirmLastFocus = null;
-let confirmLabelPending = ''; // action label restored after a busy action
 
-function openConfirm({ title, subtitle = '', body = '', confirmLabel = 'Confirm' }) {
-  return new Promise(resolve => {
-    const overlay = $('modal-confirm');
-    $('confirm-title').textContent    = title;
-    $('confirm-subtitle').textContent = subtitle;
-    $('confirm-body').textContent     = body;
-    const action = $('btn-confirm-action');
-    action.disabled     = false;
-    action.textContent  = confirmLabel;
-    const cancel  = $('cancel-confirm');
-    const closeX  = $('close-confirm');
-    cancel.disabled = false;
-    closeX.disabled = false;
-    overlay.classList.remove('modal-overlay--busy');
-    confirmBusy      = false;
-    confirmLastFocus = document.activeElement;
-    confirmResolve   = resolve;
-    openModal('modal-confirm');
+// Thin wrappers — ConfirmManager registers window.openConfirm,
+// window.closeConfirm, window.setConfirmBusy, window.resolveConfirm,
+// but we also keep local function names for the call sites below
+// that call them directly without the window. prefix.
+
+function openConfirm(opts) {
+  // Map legacy { title, subtitle, body, confirmLabel } to new API.
+  // The 'subtitle' field is folded into body when present.
+  const body = [opts.subtitle, opts.body].filter(Boolean).join('\n') || opts.body || '';
+  return Confirm.open({
+    title:        opts.title        || 'Are you sure?',
+    body,
+    confirmLabel: opts.confirmLabel || 'Confirm',
+    icon:         opts.icon         || 'warning',
+    destructive:  opts.destructive  !== false, // default true for backward-compat
+    requestKey:   opts.requestKey   || null,
   });
 }
 
-// Called when the user picks an action.
-// Returns true if the modal accepted the choice, false if swallows
-// (e.g. already resolved, or locked by a running action).
-function resolveConfirm(val) {
-  if (confirmBusy) return false;
-  const resolver = confirmResolve;
-  if (!resolver) return false;
-  confirmResolve = null;
-  const action = $('btn-confirm-action');
-  if (action) action.disabled = true;
-  if (val === false) closeConfirm();        // cancel path closes now
-  confirmLastFocus = null;
-  resolver(val);
-  return true;
-}
+function closeConfirm()            { Confirm.close(); }
+function setConfirmBusy(busy, lbl) { Confirm.busy(busy, lbl); }
+function resolveConfirm(val)       { return Confirm._resolve(val); }
 
-// Close the confirm modal and restore focus (use in finally).
-function closeConfirm() {
-  const overlay = $('modal-confirm');
-  overlay.classList.remove('modal-overlay--busy');
-  confirmBusy = false;
-  const action = $('btn-confirm-action');
-  if (action) { action.disabled = false; action.textContent = 'Confirm'; }
-  const cancel = $('cancel-confirm');
-  const closeX = $('close-confirm');
-  if (cancel) cancel.disabled = false;
-  if (closeX) closeX.disabled = false;
-  closeModal('modal-confirm');
-  if (confirmLastFocus) { const f = confirmLastFocus; confirmLastFocus = null; setTimeout(() => f.focus(), 30); }
-}
-
-// Lock the modal while an async action runs and show progress.
-function setConfirmBusy(busy, label) {
-  confirmBusy = busy;
-  const overlay = $('modal-confirm');
-  const action  = $('btn-confirm-action');
-  const cancel  = $('cancel-confirm');
-  const closeX  = $('close-confirm');
-  if (busy) {
-    overlay.classList.add('modal-overlay--busy');
-    action.disabled = true;
-    if (label) action.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${esc(label)}`;
-    if (cancel) cancel.disabled = true;
-    if (closeX) closeX.disabled = true;
-  } else {
-    overlay.classList.remove('modal-overlay--busy');
-    action.disabled = false;
-    action.textContent = confirmLabelPending || action.dataset.label || action.textContent;
-    if (cancel) cancel.disabled = false;
-    if (closeX) closeX.disabled = false;
-  }
-}
-
-// Wire the shared confirm modal once at init.
-(function initConfirmModal() {
-  const overlay = $('modal-confirm');
-  $('btn-confirm-action').addEventListener('click', () => {
-    if (!confirmResolve) return;
-    confirmLabelPending = $('btn-confirm-action').textContent;
-    resolveConfirm(true);
-  });
-  $('cancel-confirm').addEventListener('click', () => resolveConfirm(false));
-  $('close-confirm').addEventListener('click',  () => resolveConfirm(false));
-  overlay.addEventListener('click', e => {
-    if (e.target === overlay && !confirmBusy) resolveConfirm(false);
-  });
-})();
+// Removed: initConfirmModal() IIFE — no longer needed; the manager
+// wires its own buttons internally via _ensureDOM().
 
 /* ============================================================
    QR GRID RENDERER
@@ -658,6 +587,8 @@ async function removeMember(m) {
     subtitle: `"${m.name}"`,
     body: 'They will be disconnected from the host and removed from your team. You can add them back at any time.',
     confirmLabel: 'Remove',
+    icon: 'remove',
+    requestKey: `remove-member-${m.id}`,
   });
   if (!confirmed) return;
   setConfirmBusy(true, 'Removing member…');
@@ -1014,6 +945,8 @@ async function deleteWord(w) {
     subtitle: `"${w.word}" · ${w.category}`,
     body: 'This word will be removed from your team pool for all future rounds. This cannot be undone.',
     confirmLabel: 'Delete Word',
+    icon: 'delete',
+    requestKey: `delete-word-${w.id}`,
   });
   if (!confirmed) return;
   setConfirmBusy(true, 'Deleting…');
@@ -1278,6 +1211,8 @@ $('btn-leave-game').addEventListener('click', async () => {
     subtitle: '',
     body: 'You will be disconnected from the host. You can rejoin anytime with your team code or the host’s QR.',
     confirmLabel: 'Leave Game',
+    icon: 'leave',
+    requestKey: 'leave-game',
   });
   if (!confirmed) return;
   setConfirmBusy(true, 'Leaving game…');

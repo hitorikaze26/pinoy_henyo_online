@@ -1859,7 +1859,16 @@ rebind('btn-penalty', (e) => handlePenalty(-penaltySeconds(), e));
 
   async function resetRoundLive() {
     const r = targetRoundNumber();
-    if (!window.confirm('Reset Round ' + r + '? All turns, matches, and scores for this round will be erased.')) return;
+    const confirmed = await Confirm.open({
+      title:        `Reset Round ${r}?`,
+      body:         'All turns, matches, and scores for this round will be permanently erased.',
+      confirmLabel: 'Reset Round',
+      icon:         'reset',
+      destructive:  true,
+      requestKey:   `reset-round-${r}`,
+    });
+    if (!confirmed) return;
+    Confirm.busy(true, 'Resetting…');
     setBusy('btn-reset-round', true);
     try {
       await RoundAPI.resetRound(gameId, r);
@@ -1871,6 +1880,7 @@ rebind('btn-penalty', (e) => handlePenalty(-penaltySeconds(), e));
     } catch (err) {
       toast('<i class="fa-solid fa-triangle-exclamation"></i> ' + ((err && err.message) || 'Could not reset the round.'));
     } finally {
+      Confirm.close();
       setBusy('btn-reset-round', false);
     }
   }

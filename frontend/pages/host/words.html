@@ -18,6 +18,8 @@
   <link rel="stylesheet" href="../../css/global.css" />
   <!-- Toast Manager -->
   <link rel="stylesheet" href="../../css/components/toast.css" />
+  <!-- Confirmation Modal -->
+  <link rel="stylesheet" href="../../css/components/confirm.css" />
   <link rel="stylesheet" href="../../css/pages/words.css" />
 </head>
 <body>
@@ -434,28 +436,7 @@
     </div>
   </div>
 
-  <!-- DELETE CONFIRMATION -->
-  <div class="modal-overlay" id="modal-delete" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="delete-title">
-    <div class="modal">
-      <button class="modal__close" id="close-delete"><i class="fa-solid fa-xmark"></i></button>
-      <div class="modal__header">
-        <div class="modal__icon modal__icon--red"><i class="fa-solid fa-trash"></i></div>
-        <div>
-          <h2 class="modal__title" id="delete-title">Delete Word?</h2>
-          <p class="modal__subtitle" id="delete-subtitle">This cannot be undone.</p>
-        </div>
-      </div>
-      <p class="modal__body-text" id="delete-body">
-        "<span id="delete-word-name"></span>" will be removed from the game.
-      </p>
-      <div class="modal__actions">
-        <button type="button" class="btn-cancel" id="cancel-delete">Cancel</button>
-        <button type="button" class="btn-danger" id="btn-confirm-delete">
-          <i class="fa-solid fa-trash"></i> Delete Word
-        </button>
-      </div>
-    </div>
-  </div>
+  <!-- #modal-delete removed — delete word is now handled by ConfirmManager (js/core/confirm.js) -->
 
   <!-- DUPLICATE WARNING -->
   <div class="modal-overlay" id="modal-duplicate" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="dup-title">
@@ -516,6 +497,7 @@
   <script src="../../js/core/runtime-config.js"></script>
   <script src="../../js/core/config.js"></script>
   <script src="../../js/core/toast.js"></script>
+  <script src="../../js/core/confirm.js"></script>
   <script src="../../js/api/api.js"></script>
   <script src="../../js/api/game-api.js"></script>
   <script src="../../js/api/team-api.js"></script>

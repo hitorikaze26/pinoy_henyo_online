@@ -18,6 +18,8 @@
   <link rel="stylesheet" href="../../css/global.css" />
   <!-- Toast Manager -->
   <link rel="stylesheet" href="../../css/components/toast.css" />
+  <!-- Confirmation Modal -->
+  <link rel="stylesheet" href="../../css/components/confirm.css" />
   <link rel="stylesheet" href="../../css/pages/teams.css" />
 </head>
 <body>
@@ -405,28 +407,7 @@
     </div>
   </div>
 
-  <!-- Modal 5: Remove Team -->
-  <div class="modal-overlay" id="modal-remove-team" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="remove-team-title">
-    <div class="modal">
-      <button class="modal__close" id="close-remove-team" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
-      <div class="modal__header">
-        <div class="modal__icon modal__icon--red"><i class="fa-solid fa-trash"></i></div>
-        <div>
-          <h2 class="modal__title" id="remove-team-title">Remove Team</h2>
-          <p class="modal__subtitle" id="remove-team-subtitle"></p>
-        </div>
-      </div>
-      <p class="modal__body-text">
-        This will permanently remove the team and all its members from the current game.
-      </p>
-      <div class="modal__actions">
-        <button type="button" class="btn-cancel" id="cancel-remove-team">Cancel</button>
-        <button type="button" class="btn-danger" id="btn-confirm-remove">
-          <i class="fa-solid fa-trash"></i> Remove Team
-        </button>
-      </div>
-    </div>
-  </div>
+  <!-- #modal-remove-team removed — remove team is now handled by ConfirmManager (js/core/confirm.js) -->
 
   <!-- Modal 6: Lock Teams -->
   <div class="modal-overlay" id="modal-lock-teams" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="lock-teams-title">
@@ -526,6 +507,7 @@
   <script src="../../js/core/runtime-config.js"></script>
   <script src="../../js/core/config.js"></script>
   <script src="../../js/core/toast.js"></script>
+  <script src="../../js/core/confirm.js"></script>
   <script src="../../js/api/api.js"></script>
   <script src="../../js/api/game-api.js"></script>
   <script src="../../js/api/team-api.js"></script>

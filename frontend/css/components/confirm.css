@@ -1,0 +1,369 @@
+/* ============================================================
+   Pinoy Henyo Online — Confirmation Modal
+   css/components/confirm.css
+
+   Covers the single shared ph-confirm overlay injected by
+   js/core/confirm.js.  Load after global.css.
+
+   BEM:  ph-confirm-overlay (wrapper/backdrop)
+         ph-confirm__card   (the modal card)
+         ph-confirm__*      (elements)
+
+   State classes applied by JS:
+     ph-confirm-overlay--open      visible
+     ph-confirm-overlay--entering  entrance animation start
+     ph-confirm-overlay--leaving   exit animation
+     ph-confirm-overlay--busy      pointer-events off during async
+     ph-confirm__card--entering    card entrance start
+     ph-confirm__card--danger      destructive variant
+   ============================================================ */
+
+/* ============================================================
+   OVERLAY / BACKDROP
+   ============================================================ */
+.ph-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;       /* above toast (900), toast above modals (300) */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+
+  /* Backdrop */
+  background: rgba(8, 14, 26, 0.72);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+
+  /* Hidden by default */
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+
+  transition:
+    opacity  0.22s ease,
+    visibility 0s linear 0.22s;   /* delay hides after fade */
+}
+
+.ph-confirm-overlay--open {
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
+  transition:
+    opacity  0.22s ease,
+    visibility 0s linear 0s;
+}
+
+/* Freeze all interactions while an async action is running */
+.ph-confirm-overlay--busy {
+  pointer-events: none;
+}
+
+/* Leaving: fade out backdrop */
+.ph-confirm-overlay--leaving {
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity  0.25s ease,
+    visibility 0s linear 0.25s;
+}
+
+/* ============================================================
+   CARD
+   ============================================================ */
+.ph-confirm__card {
+  position: relative;
+  width: min(420px, 94vw);
+  background: var(--dash-surface-2, #172033);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--r-xl, 26px);
+  padding: 2rem 1.75rem 1.75rem;
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.55),
+    0 4px  16px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+
+  /* Entrance animation */
+  transform: translateY(18px) scale(0.96);
+  transition:
+    transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity   0.22s ease;
+}
+
+.ph-confirm-overlay--open .ph-confirm__card {
+  transform: translateY(0) scale(1);
+}
+
+/* Entrance: card starts further down */
+.ph-confirm__card--entering {
+  transform: translateY(28px) scale(0.94);
+  opacity: 0;
+}
+
+/* Leaving */
+.ph-confirm-overlay--leaving .ph-confirm__card {
+  transform: translateY(10px) scale(0.96);
+  opacity: 0;
+  transition:
+    transform 0.2s ease-in,
+    opacity   0.2s ease-in;
+}
+
+/* ============================================================
+   DESTRUCTIVE CARD VARIANT
+   Subtle left-edge accent + very slight red tint.
+   Not alarming — just clearly differentiated.
+   ============================================================ */
+.ph-confirm__card--danger {
+  border-left: 3px solid var(--accent-2-500, #B8031E);
+  background: color-mix(
+    in srgb,
+    var(--dash-surface-2, #172033) 92%,
+    #B8031E 8%
+  );
+}
+
+/* Fallback for browsers that don't support color-mix() */
+@supports not (background: color-mix(in srgb, red, blue)) {
+  .ph-confirm__card--danger {
+    background: var(--dash-surface-2, #172033);
+  }
+}
+
+/* ============================================================
+   ICON CONTAINER
+   ============================================================ */
+.ph-confirm__icon-wrap {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--r-lg, 18px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  margin-bottom: 1.1rem;
+  flex-shrink: 0;
+
+  /* Default — neutral blue */
+  background: rgba(49, 154, 251, 0.15);
+  color: var(--primary-400, #5BB0FF);
+  border: 1px solid rgba(49, 154, 251, 0.25);
+}
+
+/* Destructive icon */
+.ph-confirm__icon-wrap--danger {
+  background: rgba(184, 3, 30, 0.18);
+  color: var(--accent-2-400, #F76576);
+  border: 1px solid rgba(184, 3, 30, 0.32);
+}
+
+/* ============================================================
+   TITLE
+   ============================================================ */
+.ph-confirm__title {
+  font-family: var(--font-display, 'Baloo 2', cursive);
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1.2;
+  margin: 0 0 0.55rem;
+  letter-spacing: -0.01em;
+}
+
+/* ============================================================
+   BODY / DESCRIPTION
+   ============================================================ */
+.ph-confirm__body {
+  font-family: var(--font-body, 'Inter', sans-serif);
+  font-size: 0.875rem;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.55);
+  line-height: 1.6;
+  margin: 0 0 1.6rem;
+  max-width: 32ch;   /* keep lines comfortable */
+}
+
+/* ============================================================
+   ACTION ROW
+   ============================================================ */
+.ph-confirm__actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  width: 100%;
+}
+
+/* ============================================================
+   BUTTONS — shared base
+   ============================================================ */
+.ph-confirm__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 44px;
+  padding: 0.65rem 1.4rem;
+  border-radius: var(--r-full, 9999px);
+  font-family: var(--font-display, 'Baloo 2', cursive);
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  outline: none;
+  border: none;
+  transition:
+    background     0.18s ease,
+    transform      0.14s ease,
+    box-shadow     0.18s ease,
+    opacity        0.15s ease;
+  white-space: nowrap;
+  position: relative;
+  overflow: hidden;
+}
+
+.ph-confirm__btn:focus-visible {
+  outline: 2px solid var(--focus-ring, var(--primary-300, #8DCAFF));
+  outline-offset: 3px;
+}
+
+/* Active / pressed */
+.ph-confirm__btn:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+/* Disabled state (shared) */
+.ph-confirm__btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* ── Cancel button ── */
+.ph-confirm__btn--cancel {
+  color: rgba(255, 255, 255, 0.5);
+  background: transparent;
+  flex: 0 0 auto;
+}
+
+.ph-confirm__btn--cancel:hover:not(:disabled) {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* ── Confirm button (normal) ── */
+.ph-confirm__btn--action {
+  background: var(--primary-600, #1883E5);
+  color: #fff;
+  box-shadow: 0 3px 14px rgba(24, 131, 229, 0.40);
+  flex: 1 1 auto;
+  max-width: 200px;
+}
+
+.ph-confirm__btn--action:hover:not(:disabled) {
+  background: var(--primary-500, #319AFB);
+  transform: translateY(-1px);
+  box-shadow: 0 5px 18px rgba(24, 131, 229, 0.52);
+}
+
+/* ── Confirm button (destructive) ── */
+.ph-confirm__btn--danger {
+  background: var(--accent-2-600, #A0031B);
+  box-shadow: 0 3px 14px rgba(160, 3, 27, 0.42);
+}
+
+.ph-confirm__btn--danger:hover:not(:disabled) {
+  background: var(--accent-2-500, #B8031E);
+  transform: translateY(-1px);
+  box-shadow: 0 5px 18px rgba(184, 3, 30, 0.52);
+}
+
+/* ============================================================
+   LOADING / BUSY SPINNER
+   Inside the action button during async work.
+   ============================================================ */
+.ph-confirm-spinner {
+  display: inline-block;
+  animation: ph-confirm-spin 0.7s linear infinite;
+  font-size: 0.85em;
+}
+
+@keyframes ph-confirm-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ============================================================
+   REDUCED MOTION
+   Collapse all transitions to simple opacity fades.
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+
+  .ph-confirm-overlay {
+    transition: opacity 0.1s ease, visibility 0s linear 0.1s;
+  }
+
+  .ph-confirm-overlay--open {
+    transition: opacity 0.1s ease, visibility 0s linear 0s;
+  }
+
+  .ph-confirm-overlay--leaving {
+    transition: opacity 0.1s ease, visibility 0s linear 0.1s;
+  }
+
+  .ph-confirm__card,
+  .ph-confirm__card--entering,
+  .ph-confirm-overlay--open   .ph-confirm__card,
+  .ph-confirm-overlay--leaving .ph-confirm__card {
+    transform: none !important;
+    transition: opacity 0.1s ease;
+  }
+
+  .ph-confirm-spinner {
+    animation: none;
+  }
+}
+
+/* ============================================================
+   RESPONSIVE — Mobile
+   Buttons stack vertically on very narrow screens.
+   Card hugs the edges but never touches them.
+   ============================================================ */
+@media (max-width: 400px) {
+  .ph-confirm__card {
+    padding: 1.75rem 1.25rem 1.5rem;
+    border-radius: var(--r-lg, 18px);
+  }
+
+  .ph-confirm__actions {
+    flex-direction: column-reverse;   /* Cancel on top (thumb-friendly) */
+    gap: 0.5rem;
+  }
+
+  .ph-confirm__btn--action {
+    max-width: 100%;
+    width: 100%;
+  }
+
+  .ph-confirm__btn--cancel {
+    width: 100%;
+  }
+}
+
+/* ============================================================
+   ARIA — screen-reader-only utility (in case global .sr-only
+   is not available before this sheet loads)
+   ============================================================ */
+.ph-confirm-sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
