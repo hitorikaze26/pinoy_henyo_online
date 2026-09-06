@@ -360,7 +360,7 @@ function renderTable() {
         <td><span class="cat-badge">${esc(w.category)}</span></td>
         <td>${esc(teamOf(w))}</td>
         <td>
-          <select class="round-select round-select--r${w.round || 1}" data-id="${w.id}" data-current="${w.round || 1}" ${STATE.locked ? 'disabled' : ''} aria-label="Assign ${esc(w.word)} to a round">
+          <select class="round-select dd round-select--r${w.round || 1}" data-id="${w.id}" data-current="${w.round || 1}" ${STATE.locked ? 'disabled' : ''} aria-label="Assign ${esc(w.word)} to a round">
             <option value="1" ${(w.round || 1) === 1 ? 'selected' : ''}>Round 1</option>
             <option value="2" ${(w.round || 1) === 2 ? 'selected' : ''}>Round 2</option>
           </select>
@@ -420,10 +420,12 @@ function renderTable() {
       const w = STATE.words.find(x => x.id === id);
       if (!w) return;
       const prev = w.round || 1;
+      const wrap = sel.closest('.dd') || sel;
       // Optimistic update, then persist via the API when a host context exists.
       w.round = next;
       sel.dataset.current = next;
-      sel.className = `round-select round-select--r${next}`;
+      wrap.classList.remove('round-select--r1', 'round-select--r2');
+      wrap.classList.add(`round-select--r${next}`);
       renderRoundCards();
       renderSummary();
       if (window.WordAPI && API.getGameId()) {
@@ -436,8 +438,10 @@ function renderTable() {
           console.error('[Pinoy Henyo] set word round failed', err);
           w.round = prev;
           sel.dataset.current = prev;
-          sel.className = `round-select round-select--r${prev}`;
           sel.value = String(prev);
+          wrap.classList.remove('round-select--r1', 'round-select--r2');
+          wrap.classList.add(`round-select--r${prev}`);
+          if (wrap.__api) wrap.__api.renderOptions();
           renderRoundCards();
           renderSummary();
           showToast(err.message || 'Could not change the round.');
