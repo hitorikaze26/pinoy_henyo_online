@@ -814,18 +814,20 @@ function renderWordsTab() {
   const submitted = STATE.words.filter(w => w.submitted).length;
   const cats      = categoriesTouched();
   const cap       = maxWordsPerCategory();
+  const locked    = STATE.wordsLocked;
+  const allReady  = allCategoriesReady();
+  const readyCats = readyCategories().length;
 
-  // Overall progress: submitted words vs total cap across touched categories.
-  const capTotal  = totalCategoryCap();
-  const pct       = capTotal > 0 ? Math.round((submitted / capTotal) * 100) : 0;
+  /* ── Overall progress bar ─────────────────────────────── */
+  const capTotal = totalCategoryCap();
+  const pct      = capTotal > 0 ? Math.round((submitted / capTotal) * 100) : 0;
   $('words-progress-bar').style.width = `${Math.min(100, pct)}%`;
 
-  const readyCats = readyCategories().length;
   $('words-submitted-label').textContent = cats.length
-    ? `${readyCats} / ${cats.length} categories Ready (${submitted} words)`
+    ? `${readyCats} / ${cats.length} categories ready · ${submitted} word${submitted === 1 ? '' : 's'}`
     : `${submitted} word${submitted === 1 ? '' : 's'} added`;
 
-  // Per-category summary — "Ready" once a category reaches the configured cap.
+  /* ── Per-category rows ────────────────────────────────── */
   const summary = $('word-category-summary');
   if (summary) {
     summary.innerHTML = cats.length
@@ -834,106 +836,108 @@ function renderWordsTab() {
           const ready = count >= cap;
           const pctW  = Math.min(100, Math.round((count / cap) * 100));
           return `
-            <div class="word-cat-row${ready ? ' word-cat-row--ready' : ''}" data-cat="${esc(cat)}">
-              <span class="word-cat-row__name">${esc(cat)}</span>
-              <span class="word-cat-row__bar"><span class="word-cat-row__fill" style="width:${pctW}%"></span></span>
-              <span class="word-cat-row__count">${count} / ${cap}</span>
-              <span class="word-cat-row__check">${ready ? '<i class="fa-solid fa-check"></i> Ready' : ''}</span>
+            <div class="w-cat-item${ready ? ' w-cat-item--ready' : ''}" data-cat="${esc(cat)}">
+              <span class="w-cat-item__name">${esc(cat)}</span>
+              <span class="w-cat-item__bar-wrap">
+                <span class="w-cat-item__bar-fill" style="width:${pctW}%"></span>
+              </span>
+              <span class="w-cat-item__count">${count}/${cap}</span>
+              ${ready ? '<span class="w-cat-item__check" aria-label="Ready"><i class="fa-solid fa-check" aria-hidden="true"></i></span>' : ''}
             </div>`;
         }).join('')
-      : `<p class="word-cat-row__empty">No words added yet. Add words to mark a category Ready.</p>`;
+      : `<p class="w-cat-empty">No words added yet — add your first word below.</p>`;
   }
 
-  // Category badge — show most common category
+  /* ── Top-category badge (status bar) ─────────────────── */
   const catCounts = {};
   STATE.words.forEach(w => { catCounts[w.category] = (catCounts[w.category] || 0) + 1; });
-  const topCat = Object.entries(catCounts).sort((a,b) => b[1]-a[1])[0]?.[0] || null;
-  $('words-category-badge').textContent = 'Top: ' + (topCat || '—');
+  const topCat = Object.entries(catCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+  $('words-category-badge').textContent = topCat ? `Top: ${topCat}` : '—';
 
-  // Ready badge
-  const badge    = $('words-ready-badge');
-  const locked   = STATE.wordsLocked;
-  const allReady = allCategoriesReady();
-  const addBtn   = $('btn-add-word');
+  /* ── Status bar lock state ────────────────────────────── */
+  const statusInfo = $('word-status-info');
+  if (statusInfo) {
+    if (locked) {
+      statusInfo.className = 'w-statusbar__state w-statusbar__state--locked';
+      statusInfo.innerHTML = '<i class="fa-solid fa-lock"></i><span>Words Locked</span>';
+    } else {
+      statusInfo.className = 'w-statusbar__state w-statusbar__state--unlocked';
+      statusInfo.innerHTML = '<i class="fa-solid fa-lock-open"></i><span>Words Unlocked</span>';
+    }
+  }
 
+  /* ── Ready badge ──────────────────────────────────────── */
+  const badge = $('words-ready-badge');
   if (locked) {
     badge.className = 'words-ready-badge words-ready-badge--locked';
     badge.innerHTML = '<i class="fa-solid fa-lock"></i> Locked';
-    addBtn.disabled = true;
-    addBtn.innerHTML = '<i class="fa-solid fa-lock"></i> Words Locked';
-    $('words-locked-overlay').hidden = false;
   } else if (allReady) {
     badge.className = 'words-ready-badge words-ready-badge--ready';
-    badge.innerHTML = '<i class="fa-solid fa-check"></i> Ready';
-    addBtn.disabled = false;
-    addBtn.innerHTML = '<i class="fa-solid fa-plus"></i> Add Word';
-    $('words-locked-overlay').hidden = true;
+    badge.innerHTML = '<i class="fa-solid fa-check"></i> All Ready';
   } else {
     badge.className = 'words-ready-badge words-ready-badge--incomplete';
     const needed = Math.max(1, cats.length - readyCats);
-    badge.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> ${needed} more category${needed === 1 ? '' : 'ies'} needed`;
-    addBtn.disabled = false;
-    addBtn.innerHTML = '<i class="fa-solid fa-plus"></i> Add Word';
-    $('words-locked-overlay').hidden = true;
+    badge.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> ${needed} more categor${needed === 1 ? 'y' : 'ies'} needed`;
   }
 
-  // Word chips (read-only when locked: edit/delete actions are hidden)
-  const chips = $('word-chips');
-  chips.innerHTML = STATE.words.length
-    ? STATE.words.map(w => `
-      <div class="word-chip" data-id="${w.id}">
-        <i class="fa-solid fa-check" aria-hidden="true"></i>
-        <span class="word-chip__word">${esc(w.word)}</span>
-        <span class="word-chip__cat">${esc(w.category)}</span>
-        ${!locked ? `<button class="word-chip__edit" data-id="${w.id}" aria-label="Edit ${esc(w.word)}" title="Edit ${esc(w.word)}">
-          <i class="fa-solid fa-pen" aria-hidden="true"></i>
-        </button>` : ''}
-        ${!locked ? `<button class="word-chip__delete" data-id="${w.id}" aria-label="Delete ${esc(w.word)}" title="Delete ${esc(w.word)}">
-          <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
-        </button>` : ''}
-      </div>`).join('')
-    : `<p class="word-chips__empty">No words yet — add your first word.</p>`;
+  /* ── Add-word button state ────────────────────────────── */
+  const addBtn = $('btn-add-word');
+  if (locked) {
+    addBtn.disabled = true;
+    addBtn.innerHTML = `
+      <span class="w-add-btn__icon"><i class="fa-solid fa-lock"></i></span>
+      <span class="w-add-btn__label">Words Locked</span>`;
+  } else {
+    addBtn.disabled = false;
+    addBtn.innerHTML = `
+      <span class="w-add-btn__icon"><i class="fa-solid fa-plus"></i></span>
+      <span class="w-add-btn__label">Add Word</span>`;
+  }
 
-  // Edit word buttons
-  chips.querySelectorAll('.word-chip__edit').forEach(btn => {
+  /* ── Lock banner visibility ───────────────────────────── */
+  $('words-locked-overlay').hidden = !locked;
+
+  /* ── Word list ────────────────────────────────────────── */
+  const list = $('word-chips');
+  list.innerHTML = STATE.words.length
+    ? STATE.words.map(w => `
+        <div class="w-word-item" data-id="${w.id}">
+          <span class="w-word-item__dot" aria-hidden="true"></span>
+          <span class="w-word-item__text">${esc(w.word)}</span>
+          <span class="w-word-item__cat">${esc(w.category)}</span>
+          ${!locked ? `
+          <button class="w-word-item__edit" data-id="${w.id}" aria-label="Edit ${esc(w.word)}">
+            <i class="fa-solid fa-pen" aria-hidden="true"></i>
+          </button>
+          <button class="w-word-item__delete" data-id="${w.id}" aria-label="Delete ${esc(w.word)}">
+            <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+          </button>` : ''}
+        </div>`).join('')
+    : `<div class="w-word-empty">
+         <span class="w-word-empty__icon"><i class="fa-solid fa-list-ul"></i></span>
+         <p class="w-word-empty__title">No words yet</p>
+         <p class="w-word-empty__sub">Tap Add Word to submit your first word for the game.</p>
+       </div>`;
+
+  /* ── Wire edit buttons ────────────────────────────────── */
+  list.querySelectorAll('.w-word-item__edit').forEach(btn => {
     btn.addEventListener('click', e => {
       e.stopPropagation();
       e.preventDefault();
-      const id = +btn.dataset.id;
-      const w  = STATE.words.find(x => x.id === id);
+      const w = STATE.words.find(x => x.id === +btn.dataset.id);
       if (w) openEditWord(w);
     });
   });
 
-  // Delete word buttons
-  chips.querySelectorAll('.word-chip__delete').forEach(btn => {
+  /* ── Wire delete buttons ──────────────────────────────── */
+  list.querySelectorAll('.w-word-item__delete').forEach(btn => {
     btn.addEventListener('click', e => {
       e.stopPropagation();
-      const id = +btn.dataset.id;
-      const w  = STATE.words.find(x => x.id === id);
-      if (!w) return;
       e.preventDefault();
-      deleteWord(w);
+      const w = STATE.words.find(x => x.id === +btn.dataset.id);
+      if (w) deleteWord(w);
     });
   });
-
-  // Word status card
-  const statusInfo = $('word-status-info');
-  if (locked) {
-    statusInfo.innerHTML = `
-      <div class="word-status-row">
-        <i class="fa-solid fa-lock" style="color:var(--primary-400)"></i>
-        <strong>Words Locked</strong>
-      </div>
-      <p class="word-status-desc">Word editing is locked once the game begins.</p>`;
-  } else {
-    statusInfo.innerHTML = `
-      <div class="word-status-row">
-        <i class="fa-solid fa-lock-open" style="color:var(--secondary-400)"></i>
-        <strong>Words Unlocked</strong>
-      </div>
-      <p class="word-status-desc">Add, edit, or remove your team's words before the game starts.</p>`;
-  }
 }
 
 // Delete a word server-side (as a team, not host) and only update the

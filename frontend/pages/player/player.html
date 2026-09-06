@@ -223,59 +223,64 @@
       ==================================================== -->
       <div class="tab-view tab-view--hidden" id="tab-words" role="tabpanel" aria-label="Words">
 
-        <!-- Words Card -->
-        <div class="player-card fade-in">
-          <div class="words-card-header">
-            <h2 class="player-card__title">
-              <i class="fa-solid fa-list-ul"></i> Words
-            </h2>
-            <span class="words-category-badge" id="words-category-badge">Pagkain / Food</span>
+        <!-- ── Status bar: lock state + top category ─────────── -->
+        <div class="w-statusbar fade-in">
+          <div class="w-statusbar__state" id="word-status-info">
+            <!-- populated by JS: locked / unlocked -->
+            <i class="fa-solid fa-lock-open"></i>
+            <span>Words Unlocked</span>
           </div>
-
-          <!-- Progress -->
-          <div class="words-progress" id="words-progress-wrap">
-            <div class="words-progress__bar-wrap">
-              <div class="words-progress__bar" id="words-progress-bar" style="width:0"></div>
-            </div>
-            <div class="words-progress__meta">
-              <span id="words-submitted-label" aria-live="polite">0 words added</span>
-              <span class="words-ready-badge words-ready-badge--incomplete" id="words-ready-badge">
-                <i class="fa-solid fa-triangle-exclamation"></i> Add words to begin
-              </span>
-            </div>
-          </div>
-
-          <!-- Per-category readiness summary -->
-          <div class="word-category-summary" id="word-category-summary" aria-label="Words per category" aria-live="polite"></div>
-
-          <!-- Word list -->
-          <div class="word-chips" id="word-chips" aria-live="polite">
-            <!-- Populated by JS -->
-          </div>
-
-          <!-- Locked overlay -->
-          <div class="words-locked-overlay" id="words-locked-overlay" hidden>
-            <i class="fa-solid fa-lock"></i>
-            <p>Words are locked for the game.</p>
-          </div>
-
-          <button class="player-btn player-btn--primary" id="btn-add-word" style="margin-top:0.85rem">
-            <i class="fa-solid fa-plus"></i> Add Word
-          </button>
+          <span class="w-statusbar__badge" id="words-category-badge">—</span>
         </div>
 
-        <!-- Word Status Card -->
-        <div class="player-card fade-in" style="--fd:0.08s">
-          <h2 class="player-card__title">
-            <i class="fa-solid fa-circle-info"></i> Word Status
-          </h2>
-          <div class="word-status-info" id="word-status-info">
-            <div class="word-status-row">
-              <i class="fa-solid fa-lock-open" style="color:var(--secondary-400)"></i>
-              <strong>Words Unlocked</strong>
-            </div>
-            <p class="word-status-desc">You can add, edit, or delete words until the host locks them.</p>
+        <!-- ── Progress card ──────────────────────────────────── -->
+        <div class="w-card fade-in" style="--fd:0.05s">
+          <div class="w-card__header">
+            <span class="w-card__label">Overall Progress</span>
+            <span class="words-ready-badge words-ready-badge--incomplete" id="words-ready-badge">
+              <i class="fa-solid fa-triangle-exclamation"></i> Add words to begin
+            </span>
           </div>
+
+          <!-- Segmented progress bar -->
+          <div class="w-progress" role="progressbar" aria-label="Words progress">
+            <div class="w-progress__track">
+              <div class="w-progress__fill" id="words-progress-bar" style="width:0%"></div>
+            </div>
+            <span class="w-progress__label" id="words-submitted-label" aria-live="polite">0 words added</span>
+          </div>
+
+          <!-- Per-category rows -->
+          <div class="w-cat-list" id="word-category-summary" aria-label="Words per category" aria-live="polite">
+            <!-- populated by JS -->
+          </div>
+        </div>
+
+        <!-- ── Word list card ─────────────────────────────────── -->
+        <div class="w-card fade-in" style="--fd:0.12s">
+          <div class="w-card__header">
+            <span class="w-card__label">Your Words</span>
+          </div>
+
+          <!-- Locked banner (shown instead of word list when locked) -->
+          <div class="w-lock-banner" id="words-locked-overlay" hidden>
+            <i class="fa-solid fa-lock"></i>
+            <div>
+              <strong>Word Pool Locked</strong>
+              <span>The host has locked all words for this game. No changes can be made.</span>
+            </div>
+          </div>
+
+          <!-- Word list -->
+          <div class="w-word-list" id="word-chips" aria-live="polite">
+            <!-- populated by JS -->
+          </div>
+
+          <!-- Add button -->
+          <button class="w-add-btn" id="btn-add-word">
+            <span class="w-add-btn__icon"><i class="fa-solid fa-plus"></i></span>
+            <span class="w-add-btn__label">Add Word</span>
+          </button>
         </div>
 
       </div><!-- /#tab-words -->

@@ -809,136 +809,433 @@ ul, ol { list-style: none; }
 @keyframes rippleAnim { to { transform: scale(4); opacity: 0; } }
 
 /* ============================================================
-   WORDS TAB
-============================================================ */
-.words-card-header {
+   WORDS TAB — complete redesign
+   Mobile-first. Two surfaces: status bar + cards.
+   ============================================================ */
+
+/* ── Status bar ─────────────────────────────────────────────
+   Thin pill bar that floats above the cards.
+   Left: locked / unlocked state. Right: top category badge.  */
+.w-statusbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 1rem;
-  padding-bottom: 0.65rem;
-  border-bottom: 1px solid var(--border);
-}
-.words-card-header .player-card__title { margin-bottom: 0; padding-bottom: 0; border-bottom: none; }
-
-.words-category-badge {
-  display: inline-flex; align-items: center;
-  padding: 0.2rem 0.65rem; border-radius: var(--r-full);
-  font-size: 0.72rem; font-weight: 700;
-  background: rgba(238,147,38,0.15); color: var(--accent-1-400);
-  border: 1px solid rgba(238,147,38,0.25);
+  gap: 0.5rem;
+  padding: 0.55rem 0.9rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
 }
 
-.words-progress { margin-bottom: 0.85rem; }
-.words-progress__bar-wrap {
-  width: 100%; height: 8px;
-  background: var(--surface-3); border-radius: var(--r-full); overflow: hidden;
-  margin-bottom: 0.5rem;
+.w-statusbar__state {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: rgba(255,255,255,0.75);
 }
-.words-progress__bar {
+.w-statusbar__state i { font-size: 0.82rem; }
+.w-statusbar__state--locked   { color: var(--primary-400); }
+.w-statusbar__state--unlocked { color: var(--secondary-400); }
+
+.w-statusbar__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.65rem;
+  border-radius: var(--r-full);
+  font-size: 0.7rem;
+  font-weight: 700;
+  background: rgba(238,147,38,0.12);
+  color: var(--accent-1-400);
+  border: 1px solid rgba(238,147,38,0.22);
+  white-space: nowrap;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Generic words card ─────────────────────────────────────
+   Shared surface for progress and word-list panels.           */
+.w-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
+  padding: 1rem 1.05rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.w-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.w-card__label {
+  font-family: 'Baloo 2', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.38);
+}
+
+/* ── Progress bar ──────────────────────────────────────────── */
+.w-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.w-progress__track {
+  width: 100%;
+  height: 7px;
+  background: var(--surface-3);
+  border-radius: var(--r-full);
+  overflow: hidden;
+}
+
+.w-progress__fill {
   height: 100%;
   background: linear-gradient(90deg, var(--primary-500), var(--secondary-400));
   border-radius: var(--r-full);
   transition: width 0.55s cubic-bezier(0.22,1,0.36,1);
-  box-shadow: 0 0 8px rgba(49,154,251,0.4);
+  box-shadow: 0 0 10px rgba(49,154,251,0.35);
   will-change: width;
 }
-.words-progress__meta {
-  display: flex; align-items: center; justify-content: space-between;
-  font-size: 0.8rem; font-weight: 600; color: rgba(255,255,255,0.55);
+
+.w-progress__label {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: rgba(255,255,255,0.45);
 }
+
+/* ── Ready badge (progress meta) ─────────────────────────── */
 .words-ready-badge {
-  display: inline-flex; align-items: center; gap: 0.3rem;
-  font-size: 0.72rem; font-weight: 700;
-  padding: 0.18rem 0.55rem; border-radius: var(--r-full);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.2rem 0.6rem;
+  border-radius: var(--r-full);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .words-ready-badge--ready {
-  background: rgba(68,166,51,0.15); color: var(--secondary-400);
-  border: 1px solid rgba(68,166,51,0.25);
-  animation: badgePulse 2.5s ease-in-out infinite;
+  background: rgba(68,166,51,0.15);
+  color: var(--secondary-400);
+  border: 1px solid rgba(68,166,51,0.28);
+  animation: wBadgePulse 2.5s ease-in-out infinite;
 }
 .words-ready-badge--incomplete {
-  background: rgba(238,147,38,0.15); color: var(--accent-1-400);
+  background: rgba(238,147,38,0.12);
+  color: var(--accent-1-400);
   border: 1px solid rgba(238,147,38,0.25);
 }
 .words-ready-badge--locked {
-  background: rgba(49,154,251,0.12); color: var(--primary-400);
-  border: 1px solid rgba(49,154,251,0.2);
+  background: rgba(49,154,251,0.1);
+  color: var(--primary-400);
+  border: 1px solid rgba(49,154,251,0.22);
 }
-@keyframes badgePulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
+@keyframes wBadgePulse { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
 
-/* Word chips */
-.word-chips { display: flex; flex-direction: column; gap: 0.4rem; }
-.word-chip {
-  display: flex; align-items: center; gap: 0.55rem;
-  padding: 0.55rem 0.65rem;
-  background: var(--surface-2); border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  font-size: 0.9rem; font-weight: 600; color: rgba(255,255,255,0.85);
-  transition: background 0.18s;
-  min-height: 44px;
+/* ── Per-category readiness list ────────────────────────────
+   Replaces .word-cat-row grid — each category is a compact
+   list item with an inline progress capsule.                  */
+.w-cat-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.06);
 }
-.word-chip:hover { background: var(--surface-3); }
-.word-chip > i { font-size: 0.7rem; color: var(--secondary-400); flex-shrink: 0; }
-.word-chip__word {
+
+.w-cat-item {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.7rem 0.85rem;
+  background: var(--surface-2);
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  transition: background 0.15s;
+  min-height: 52px;
+}
+.w-cat-item:last-child { border-bottom: none; }
+.w-cat-item--ready { background: rgba(74,222,128,0.06); }
+
+.w-cat-item__name {
+  flex: 1;
   min-width: 0;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.word-chip__cat {
-  margin-left: auto;
-  flex-shrink: 0;
-  font-size: 0.68rem; font-weight: 700;
-  color: var(--accent-1-400);
-  background: rgba(238,147,38,0.12);
-  border: 1px solid rgba(238,147,38,0.22);
-  padding: 0.12rem 0.5rem;
-  border-radius: var(--r-full);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: rgba(255,255,255,0.85);
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
-.word-chip__edit {
-  width: 34px; height: 34px; min-width: 34px;
-  border-radius: var(--r-sm); display: inline-flex; align-items: center; justify-content: center;
-  font-size: 0.78rem; color: rgba(255,255,255,0.35); cursor: pointer;
-  transition: background 0.18s, color 0.18s;
-  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
-}
-.word-chip__edit:hover { background: rgba(49,154,251,0.14); color: var(--primary-300); }
-.word-chip__delete {
-  width: 34px; height: 34px; min-width: 34px;
-  border-radius: var(--r-sm); display: inline-flex; align-items: center; justify-content: center;
-  font-size: 0.7rem; color: rgba(255,255,255,0.25); cursor: pointer;
-  transition: background 0.18s, color 0.18s;
-  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
-}
-.word-chip__delete:hover { background: rgba(184,3,30,0.15); color: var(--accent-2-400); }
-.word-chips__empty {
-  margin: 0; padding: 1.1rem;
-  text-align: center; font-size: 0.85rem; font-weight: 500;
-  color: rgba(255,255,255,0.45);
-  background: rgba(255,255,255,0.03);
-  border: 1px dashed rgba(255,255,255,0.12);
-  border-radius: var(--r-md);
+
+.w-cat-item__bar-wrap {
+  flex: 0 0 72px;
+  height: 5px;
+  background: rgba(255,255,255,0.08);
+  border-radius: var(--r-full);
+  overflow: hidden;
 }
 
-/* Locked overlay */
-.words-locked-overlay {
-  display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
-  padding: 1.25rem;
-  background: rgba(49,154,251,0.08); border: 1px solid rgba(49,154,251,0.2);
-  border-radius: var(--r-md);
+.w-cat-item__bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--r-full);
+  background: linear-gradient(90deg, var(--primary-400), var(--secondary-400));
+  transition: width 0.45s cubic-bezier(0.22,1,0.36,1);
+}
+.w-cat-item--ready .w-cat-item__bar-fill {
+  background: linear-gradient(90deg, var(--secondary-400), #4ade80);
+}
+
+.w-cat-item__count {
+  font-family: 'Chivo Mono', monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: rgba(255,255,255,0.4);
+  white-space: nowrap;
+  min-width: 36px;
+  text-align: right;
+}
+
+.w-cat-item__check {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.62rem;
+  background: rgba(74,222,128,0.18);
+  color: #4ade80;
+  border: 1px solid rgba(74,222,128,0.32);
+}
+
+/* Placeholder when no categories yet */
+.w-cat-empty {
+  padding: 1.1rem;
   text-align: center;
-  font-size: 0.875rem; color: var(--primary-300);
-  margin-bottom: 0.25rem;
+  font-size: 0.8rem;
+  color: rgba(255,255,255,0.35);
+  font-weight: 500;
 }
-.words-locked-overlay i { font-size: 1.5rem; color: var(--primary-400); }
 
-/* Word status info */
-.word-status-row {
-  display: flex; align-items: center; gap: 0.5rem;
-  font-size: 0.9rem; font-weight: 700; color: rgba(255,255,255,0.8);
-  margin-bottom: 0.35rem;
+/* ── Lock banner ─────────────────────────────────────────────
+   Full-width info banner shown when words are locked.         */
+.w-lock-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  padding: 0.95rem 1rem;
+  background: rgba(49,154,251,0.08);
+  border: 1px solid rgba(49,154,251,0.22);
+  border-radius: var(--r-lg);
 }
-.word-status-desc { font-size: 0.82rem; color: rgba(255,255,255,0.45); line-height: 1.5; }
+.w-lock-banner > i {
+  font-size: 1.3rem;
+  color: var(--primary-400);
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+.w-lock-banner > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.w-lock-banner strong {
+  font-size: 0.87rem;
+  font-weight: 700;
+  color: var(--primary-300);
+}
+.w-lock-banner span {
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.42);
+  line-height: 1.45;
+}
+
+/* ── Word list ───────────────────────────────────────────────
+   Replaces .word-chips flat list with a grouped list-style.   */
+.w-word-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+/* Individual word row */
+.w-word-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.75rem 0.9rem;
+  background: var(--surface-2);
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  transition: background 0.15s;
+  min-height: 56px;
+}
+.w-word-item:last-child { border-bottom: none; }
+.w-word-item:active { background: var(--surface-3); }
+
+.w-word-item__dot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--secondary-400);
+  box-shadow: 0 0 6px rgba(68,166,51,0.5);
+}
+
+.w-word-item__text {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: rgba(255,255,255,0.9);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.w-word-item__cat {
+  flex-shrink: 0;
+  font-size: 0.67rem;
+  font-weight: 700;
+  color: var(--accent-1-400);
+  background: rgba(238,147,38,0.1);
+  border: 1px solid rgba(238,147,38,0.2);
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--r-full);
+  white-space: nowrap;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.w-word-item__edit,
+.w-word-item__delete {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  cursor: pointer;
+  border: 1px solid rgba(255,255,255,0.07);
+  background: rgba(255,255,255,0.04);
+  color: rgba(255,255,255,0.3);
+  transition: background 0.18s, color 0.18s, border-color 0.18s;
+}
+.w-word-item__edit:hover {
+  background: rgba(49,154,251,0.14);
+  border-color: rgba(49,154,251,0.3);
+  color: var(--primary-300);
+}
+.w-word-item__delete:hover {
+  background: rgba(184,3,30,0.15);
+  border-color: rgba(184,3,30,0.3);
+  color: var(--accent-2-400);
+}
+
+/* Empty state placeholder */
+.w-word-empty {
+  padding: 2rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  text-align: center;
+}
+.w-word-empty__icon {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-md);
+  background: rgba(255,255,255,0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  color: rgba(255,255,255,0.2);
+}
+.w-word-empty__title {
+  font-size: 0.87rem;
+  font-weight: 700;
+  color: rgba(255,255,255,0.5);
+  margin: 0;
+}
+.w-word-empty__sub {
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.28);
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* ── Add Word button ─────────────────────────────────────────
+   Full-width pill CTA at the bottom of the word-list card.    */
+.w-add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  width: 100%;
+  padding: 0.85rem 1rem;
+  border-radius: var(--r-lg);
+  background: var(--primary-500);
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  transition: background 0.18s, transform 0.14s, box-shadow 0.18s;
+  box-shadow: 0 4px 18px rgba(49,154,251,0.28);
+  letter-spacing: 0.02em;
+}
+.w-add-btn:hover {
+  background: var(--primary-400);
+  box-shadow: 0 6px 24px rgba(49,154,251,0.4);
+}
+.w-add-btn:active { transform: scale(0.97); }
+.w-add-btn:disabled {
+  background: var(--surface-3);
+  box-shadow: none;
+  color: rgba(255,255,255,0.35);
+  cursor: not-allowed;
+}
+
+.w-add-btn__icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+.w-add-btn:disabled .w-add-btn__icon { background: rgba(255,255,255,0.07); }
+
+/* ── Compact mode overrides ─────────────────────────────────── */
+body[data-compact="1"] .w-card      { padding: 0.75rem 0.85rem; gap: 0.65rem; }
+body[data-compact="1"] .w-cat-item  { padding: 0.5rem 0.75rem; min-height: 42px; }
+body[data-compact="1"] .w-word-item { padding: 0.55rem 0.8rem; min-height: 46px; }
+body[data-compact="1"] .w-add-btn   { padding: 0.65rem 0.9rem; }
 
 /* ============================================================
    SETTINGS TAB
