@@ -119,7 +119,6 @@
    Not alarming — just clearly differentiated.
    ============================================================ */
 .ph-confirm__card--danger {
-  border-left: 3px solid var(--accent-2-500, #B8031E);
   background: color-mix(
     in srgb,
     var(--dash-surface-2, #172033) 92%,
