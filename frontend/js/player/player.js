@@ -2347,7 +2347,7 @@ function closeAudioDependentRows() {
   const track = $('pref-music-track');
   const sfxRow = $('row-pref-sfx-vol');
   if (musicRow) musicRow.classList.toggle('set-row--disabled', !PREF.audio.musicOn);
-  if (track) track.disabled = !PREF.audio.musicOn;
+  if (track) { track.disabled = !PREF.audio.musicOn; }
   if (sfxRow) sfxRow.classList.toggle('set-row--disabled', !PREF.audio.sfxOn);
 }
 function reflectPrefControls() {
@@ -2403,7 +2403,7 @@ function reflectPrefControls() {
     const el = $(id);
     if (el) {
       el.disabled = !subEnabled;
-      const row = el.closest('.set-row');
+      const row = el.closest('.s-pref-row');
       if (row) row.classList.toggle('set-row--disabled', !subEnabled);
     }
   });
