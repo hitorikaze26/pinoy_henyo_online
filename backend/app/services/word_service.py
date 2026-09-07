@@ -274,15 +274,35 @@ def category_payload(category):
 # ---------------------------------------------------------------------------
 
 
+def _capitalize_word(text):
+    """Capitalize the first letter when the whole word is lowercase.
+
+    Preserves intentional capitalization: mixed/uppercase terms such as
+    ``Adobo``, ``iPhone``, ``HTML5``, ``ADOB0`` or ``Hello WORLD`` are left
+    untouched. Only fully-lowercase input gets its first letter capitalized
+    (``adobo`` -> ``Adobo``, ``tag-a-ulan`` -> ``Tag-a-ulan``).
+    """
+    if text and text == text.lower():
+        return text[0].upper() + text[1:]
+    return text
+
+
 def _validate_word_text(text):
-    text = " ".join(str(text or "").strip().split())
+    text = str(text or "").strip()
     if not text or len(text) > MAX_WORD_TEXT_LENGTH:
         raise WordTextInvalidError(
             "Word text must be 1-{} characters and not blank.".format(
                 MAX_WORD_TEXT_LENGTH
             )
         )
-    return text
+    if not all(char.isalnum() or char in " -" for char in text):
+        raise WordTextInvalidError(
+            "Words may only contain letters, numbers, spaces, and hyphens."
+        )
+    return _capitalize_word(text)
+
+
+validate_word_text = _validate_word_text
 
 
 def _count_active_words(game_id, category_id, team_id=None):

@@ -4,7 +4,16 @@ from datetime import timedelta
 from sqlalchemy.exc import IntegrityError
 
 from ..extensions import db
-from ..models import DeviceSession, Game, GameEvent, Match, Team, TeamMember, Word  # noqa: F401
+from ..models import (
+    DeviceSession,
+    Game,
+    GameEvent,
+    Match,
+    Team,
+    TeamMember,
+    Word,  # noqa: F401
+    WordChangeRequest,
+)
 from ..utils.codes import generate_team_code
 from ..utils.time import utcnow
 
@@ -325,22 +334,58 @@ def remove_member(member):
 def delete_team(team):
     """Delete a team and cascade to its members, words, scores, etc.
 
-    Connected teams should not be casually deleted during gameplay.
+    A team may only be deleted before it has started playing. Deletion is
+    rejected once the game has begun play (any round active/paused/complete)
+    or once the team owns a match that has moved past PENDING (a turn has
+    been started for it). Pending setup slots created during SETUP do not
+    count as "started playing" so unused teams can still be removed.
     """
     if team.connection_status == Team.CONNECTION_CONNECTED:
         raise TeamServiceError(
             "Cannot delete a connected team during gameplay. Disconnect first."
         )
-    match_ref = Match.query.filter(
+    game = team.game
+    if game.status in (
+        Game.STATUS_ROUND_1,
+        Game.STATUS_ROUND_2,
+        Game.STATUS_TIE_BREAKER,
+        Game.STATUS_PAUSED,
+        Game.STATUS_GAME_COMPLETE,
+        Game.STATUS_CANCELLED,
+        Game.STATUS_EXPIRED,
+    ):
+        raise TeamDeleteBlockedMatchError(
+            "This team has already started playing and cannot be deleted."
+        )
+    played_match = Match.query.filter(
         (Match.team_id == team.id)
         | (Match.opponent_team_id == team.id)
         | (Match.winner_team_id == team.id)
-    ).first()
-    if match_ref is not None:
+    ).filter(Match.status != Match.STATUS_PENDING).first()
+    if played_match is not None:
         raise TeamDeleteBlockedMatchError(
-            "This team is part of a match and cannot be deleted."
+            "This team has already started playing and cannot be deleted."
         )
-    game = team.game
+    # Remove never-played setup match slots so no dangling FK/references to
+    # the team survive the delete (they hold no turn/scores yet).
+    Match.query.filter(
+        (Match.team_id == team.id)
+        | (Match.opponent_team_id == team.id)
+        | (Match.winner_team_id == team.id)
+    ).filter(Match.status == Match.STATUS_PENDING).delete(
+        synchronize_session=False
+    )
+    # Keep historical rows; detach their team/member FKs so the delete does
+    # not violate the DB constraint and does not destroy audit history.
+    GameEvent.query.filter_by(team_id=team.id).update({"team_id": None})
+    member_ids = [member.id for member in team.members]
+    if member_ids:
+        GameEvent.query.filter(GameEvent.member_id.in_(member_ids)).update(
+            {"member_id": None}
+        )
+    WordChangeRequest.query.filter_by(team_id=team.id).update(
+        {"team_id": None}
+    )
     _record_event(
         game,
         "TEAM_DELETED",

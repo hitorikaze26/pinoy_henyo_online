@@ -204,6 +204,10 @@ def update_round_timer(game, round_number, timer_seconds, timer_mode):
     round_obj = get_round(game, round_number)
     if round_obj is None:
         raise RoundNotFoundError("The round has not been set up yet.")
+    if game.status not in (Game.STATUS_LOBBY, Game.STATUS_SETUP):
+        raise RoundTimerLockedError(
+            "The timer can no longer be changed once the game starts."
+        )
     if round_obj.started_at is not None:
         raise RoundTimerLockedError(
             "The timer cannot be changed once the round has started."
@@ -656,7 +660,9 @@ def _round_word_pool(match):
     round_obj = match.round
     query = Word.query.filter(
         Word.game_id == match.game_id,
-        Word.status != Word.STATUS_DISABLED,
+        Word.status.notin_(
+            (Word.STATUS_DISABLED, Word.STATUS_UNDER_REVIEW)
+        ),
     )
     # Rounds 1 and 2 pull only from the words assigned to them. Tie-break and
     # any extra rounds fall back to the full pool.

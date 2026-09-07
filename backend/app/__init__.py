@@ -11,6 +11,7 @@ from .routes.games import games_bp
 from .routes.gameplay import gameplay_bp
 from .routes.health import health_bp
 from .routes.teams import teams_bp
+from .routes.word_requests import word_requests_bp
 from .routes.words import words_bp
 from .utils.response import error_response
 
@@ -20,6 +21,7 @@ def _register_blueprints(app):
     app.register_blueprint(games_bp)
     app.register_blueprint(categories_bp)
     app.register_blueprint(words_bp)
+    app.register_blueprint(word_requests_bp)
     app.register_blueprint(teams_bp)
     app.register_blueprint(devices_bp)
     app.register_blueprint(gameplay_bp)

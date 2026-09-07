@@ -1009,6 +1009,13 @@ function renderRealQr(container, dataUri) {
     scores = (scoreRes && scoreRes.scores) || [];
     matches = (matchRes && matchRes.matches) || [];
     roundsCache = (roundRes && roundRes.rounds) || [];
+    // GET matches runs ensure_game_setup during SETUP, which may have just
+    // created the rounds AFTER the parallel rounds fetch above. Re-fetch once
+    // so the timer/target-round UI sees the real round rows.
+    if (!roundsCache.length && matches.length) {
+      const roundsAgain = await RoundAPI.listRounds(gameId).catch(() => ({ rounds: [] }));
+      roundsCache = (roundsAgain && roundsAgain.rounds) || roundsCache;
+    }
     if (settingsRes) gameSettings = settingsRes;
     renderPenaltyControls();
     (scores || []).forEach((s) => {
@@ -1131,6 +1138,33 @@ function renderRealQr(container, dataUri) {
     return roundsCache.find((r) => r.round_number === num) || null;
   }
 
+  // Persistent "Current Turn" choice: the last match the host selected in the
+  // console dropdown survives a refresh, so a refreshed dashboard does not
+  // silently lose the team the host was about to start.
+  const PERSIST_KEY = 'ph.currentTurn.';
+  function persistCurrentTurn(matchId) {
+    try {
+      const key = PERSIST_KEY + gameId;
+      if (matchId) localStorage.setItem(key, String(matchId));
+      else localStorage.removeItem(key);
+    } catch (e) { /* storage unavailable */ }
+  }
+  function restoreCurrentTurn() {
+    if (activeMatch) return;
+    try {
+      const key = PERSIST_KEY + gameId;
+      const stored = localStorage.getItem(key);
+      if (!stored) return;
+      const m = matches.find((x) => String(x.match_id) === stored) || null;
+      if (m && m.status !== 'COMPLETED') {
+        activeMatch = m;
+        renderAll();
+      } else if (m) {
+        localStorage.removeItem(key);
+      }
+    } catch (e) { /* ignore */ }
+  }
+
   /* ---------- turn helpers ---------- */
   function setActiveTurn(payload) {
     turn = payload;
@@ -1176,7 +1210,15 @@ function renderRealQr(container, dataUri) {
 
   /* ---------- server-authoritative timer display ---------- */
   function tickDisplay() {
-    if (!turn) { setTimerText('0:00'); return; }
+    if (!turn) {
+      // Pre-start: reflect the upcoming round's configured time so the host
+      // can review the value (round_updated keeps it fresh during SETUP).
+      const r = targetRoundNumber();
+      const roundObj = roundByNumber(r);
+      const total = roundObj && roundObj.timer_seconds ? roundObj.timer_seconds : 0;
+      setTimerText(total > 0 ? formatTime(total) : '0:00');
+      return;
+    }
     const p = turn;
     const now = Date.now();
     const secondsSince = (now - timerBase.at) / 1000;
@@ -1864,8 +1906,9 @@ rebind('btn-penalty', (e) => handlePenalty(-penaltySeconds(), e));
   if (teamSelectEl) {
     teamSelectEl.addEventListener('change', () => {
       const mid = parseInt(teamSelectEl.value, 10);
-      if (!mid) { activeMatch = null; setActiveTurn(null); renderAll(); return; }
+      if (!mid) { activeMatch = null; persistCurrentTurn(null); setActiveTurn(null); renderAll(); return; }
       activeMatch = matches.find((m) => m.match_id === mid) || null;
+      persistCurrentTurn(activeMatch ? activeMatch.match_id : null);
       if (!activeMatch) { setActiveTurn(null); return; }
       // load an existing active/pending turn for this match if any
       TurnAPI.listTurns(activeMatch.match_id).then((d) => {
@@ -2138,7 +2181,7 @@ rebind('btn-penalty', (e) => handlePenalty(-penaltySeconds(), e));
       loadData().then(() => { renderAll(); }).catch(() => {});
     }
     if (rt) {
-      ['match_started', 'round_started', 'round_completed',
+      ['match_started', 'round_started', 'round_updated', 'round_completed',
        'game_started', 'game_paused', 'game_resumed',
        'game_completed'].forEach((evt) => {
         rt.on(evt, (payload) => {
@@ -2244,6 +2287,7 @@ rebind('btn-penalty', (e) => handlePenalty(-penaltySeconds(), e));
     await loadRoster();
     renderAll();
     restoreDisplayState();
+    restoreCurrentTurn();
     // Watch for server-driven completion states.
     const completeWatch = setInterval(async () => {
       if (activeMatch) {

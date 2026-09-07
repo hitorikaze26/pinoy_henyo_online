@@ -2958,3 +2958,101 @@ body[data-large-text="1"] .s-pref-row__hint { font-size: 0.8rem; }
   .s-info-grid { grid-template-columns: 1fr; }
   .s-info-item--full { grid-column: 1; }
 }
+
+/* ── Floating Add Word (FAB) ──────────────────────────────── */
+.w-fab {
+  position: fixed;
+  right: 1.2rem;
+  bottom: 76px;
+  z-index: 900;
+  width: 58px;
+  height: 58px;
+  border: none;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.45rem;
+  color: #fff;
+  background: linear-gradient(135deg, var(--accent, #22d3ee), var(--accent-2, #0ea5e9));
+  box-shadow: 0 8px 22px rgba(2, 132, 199, 0.35);
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.w-fab:focus-visible { outline: 3px solid rgba(34, 211, 238, 0.55); outline-offset: 2px; }
+.w-fab:active { transform: scale(0.92); }
+.w-fab.hidden { display: none; }
+
+/* ── Forced Word Change Request modal ─────────────────────── */
+/* Deliberately distinct from .modal-overlay so the global
+   backdrop/Escape close wiring in core/modal.js never touches it. */
+.wcr-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(3, 8, 20, 0.82);
+  backdrop-filter: blur(4px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+}
+.wcr-overlay.is-open { opacity: 1; pointer-events: auto; }
+
+.wcr-card {
+  width: 100%;
+  max-width: 440px;
+  background: var(--panel-bg, #0f1b2d);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 16px;
+  padding: 1.2rem 1.25rem 1.25rem;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+}
+.wcr-card__header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+.wcr-card__icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.05rem;
+  color: #ffe58f;
+  background: rgba(250, 204, 21, 0.14);
+  border: 1px solid rgba(250, 204, 21, 0.35);
+}
+.wcr-card__title { font-size: 1.05rem; margin: 0 0 0.2rem; color: #fff; }
+.wcr-card__subtitle { font-size: 0.82rem; margin: 0; color: var(--text-dim, #93a4b9); }
+.wcr-card__badge {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.28rem 0.55rem;
+  border-radius: 999px;
+  color: #ffd666;
+  background: rgba(250, 204, 21, 0.16);
+  border: 1px solid rgba(250, 204, 21, 0.4);
+}
+.wcr-card__form { display: flex; flex-direction: column; gap: 0.85rem; }
+.wcr-card__notice {
+  font-size: 0.8rem;
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border-left: 3px solid var(--accent, #22d3ee);
+  background: rgba(34, 211, 238, 0.07);
+  border-radius: 0 8px 8px 0;
+  color: #b8c7da;
+}
+.wcr-card__actions { display: flex; justify-content: flex-end; margin-top: 0.15rem; }

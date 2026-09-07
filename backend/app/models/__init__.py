@@ -11,6 +11,7 @@ from .score import Score
 from .team import Team, TeamMember
 from .turn import Turn, TurnWord
 from .word import Word
+from .word_change_request import WordChangeRequest
 
 __all__ = [
     "Category",
@@ -28,4 +29,5 @@ __all__ = [
     "Turn",
     "TurnWord",
     "Word",
+    "WordChangeRequest",
 ]

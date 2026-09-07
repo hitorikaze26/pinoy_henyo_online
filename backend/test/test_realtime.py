@@ -315,7 +315,7 @@ def test_secret_words_only_reach_manghuhula(app, client):
             secret = payload
     assert secret is not None
     texts = [w["word_text"] for w in secret["words"]]
-    assert sorted(texts) == sorted(["b01", "b02", "b03"])
+    assert sorted(texts) == sorted(["B01", "B02", "B03"])
 
     host_sio.disconnect()
     manghuhula_sio.disconnect()

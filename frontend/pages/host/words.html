@@ -487,7 +487,62 @@
     </div>
   </div>
 
-  <!-- Toast Manager handles its own container -->
+<!-- Toast Manager handles its own container -->
+
+  <!-- WORD CHANGE REQUEST widget (host) -->
+  <button class="wc-fab" id="wc-fab" title="Word Change Requests" aria-label="Word Change Requests">
+    <i class="fa-solid fa-pen-to-square"></i>
+    <span class="wc-fab__badge" id="wc-fab-badge" hidden>0</span>
+  </button>
+
+  <div class="wc-overlay" id="wc-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="wc-title">
+    <div class="wc-card">
+      <div class="wc-card__header">
+        <div class="wc-card__title-wrap">
+          <h2 class="wc-card__title" id="wc-title">Word Change Requests</h2>
+          <p class="wc-card__subtitle">Ask a team to correct one of its submitted words.</p>
+        </div>
+        <button class="wc-card__close" id="wc-close" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <form class="wc-card__form" id="wc-form" novalidate>
+        <div class="form-group">
+          <label class="form-label" for="wc-team"><i class="fa-solid fa-users"></i> Team</label>
+          <select id="wc-team" class="form-input" required></select>
+          <span class="form-error" id="wc-error-team"></span>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="wc-word"><i class="fa-solid fa-font"></i> Word</label>
+          <div class="wc-word-row">
+            <select id="wc-word" class="form-input" required></select>
+            <button type="button" class="wc-refresh-btn" id="wc-refresh-words" title="Refresh word list">
+              <i class="fa-solid fa-rotate"></i>
+            </button>
+          </div>
+          <span class="form-error" id="wc-error-word"></span>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="wc-comment"><i class="fa-solid fa-comment"></i> Reason / instruction</label>
+          <textarea id="wc-comment" class="form-textarea" rows="3" maxlength="300"
+            placeholder="e.g. “Monggo” is a spelling issue — please change it to “Munggo”."></textarea>
+          <span class="form-error" id="wc-error-comment"></span>
+        </div>
+        <div class="wc-card__actions">
+          <button type="submit" class="btn-confirm" id="wc-submit">
+            <i class="fa-solid fa-paper-plane"></i> Request Change
+          </button>
+        </div>
+      </form>
+
+      <div class="wc-pending">
+        <div class="wc-pending__head">
+          <span><i class="fa-solid fa-hourglass-half"></i> Awaiting Team</span>
+          <span class="wc-pending__count" id="wc-pending-count">0</span>
+        </div>
+        <ul class="wc-pending__list" id="wc-pending-list"></ul>
+      </div>
+    </div>
+  </div>
 
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
   <script src="../../js/core/runtime-config.js"></script>
@@ -503,6 +558,7 @@
   <script src="../../js/host/leave-game.js"></script>
   <script src="../../js/api/realtime.js"></script>
   <script src="../../js/core/custom-select.js"></script>
-  <script src="../../js/host/words.js"></script>
+<script src="../../js/host/words.js"></script>
+  <script src="../../js/host/word-change.js"></script>
 </body>
 </html>

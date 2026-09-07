@@ -570,8 +570,8 @@ def test_select_categories_bulk_assigns_words(client):
         headers={HOST_TOKEN_HEADER: s.host},
     ).get_json()["data"]["words"]
     rounds = {w["word_text"]: w["assigned_round"] for w in words}
-    assert rounds["a0"] == 1
-    assert rounds["a1"] == 2
+    assert rounds["A0"] == 1
+    assert rounds["A1"] == 2
 
 
 def test_word_round_drives_round2_pool(client):
@@ -1164,6 +1164,45 @@ def test_update_round_timer_locked_after_start(app, client):
     )
     assert response.status_code == 409
     assert response.get_json()["error"]["code"] == "ROUND_TIMER_LOCKED"
+
+
+def test_update_round_timer_locked_once_game_ready(app, client):
+    """The timer freezes once the game moves past SETUP, even before any turn."""
+    s = _full_setup(client)
+    with app.app_context():
+        game = db.session.get(Game, s.game_id)
+        game.status = Game.STATUS_READY
+        db.session.commit()
+    response = client.post(
+        "/api/games/{}/rounds/1/timer".format(s.game_id),
+        json={"timer_seconds": 90},
+        headers={HOST_TOKEN_HEADER: s.host},
+    )
+    assert response.status_code == 409
+    assert response.get_json()["error"]["code"] == "ROUND_TIMER_LOCKED"
+
+
+def test_list_matches_during_setup_auto_creates_slots(app, client):
+    """GET matches during SETUP runs the idempotent setup so the dashboard
+    can pick the first team without manual match creation."""
+    s = _basic_setup(client)
+    with app.app_context():
+        game = db.session.get(Game, s.game_id)
+        game.status = Game.STATUS_SETUP
+        db.session.commit()
+        assert Round.query.filter_by(game_id=s.game_id).count() == 0
+
+    response = client.get(
+        "/api/games/{}/matches".format(s.game_id),
+        headers={HOST_TOKEN_HEADER: s.host},
+    )
+    assert response.status_code == 200
+    body = response.get_json()["data"]["matches"]
+    assert len(body) == 4  # Round 1 + Round 2, one slot per team
+
+    with app.app_context():
+        assert Round.query.filter_by(game_id=s.game_id).count() == 2
+        assert Match.query.filter_by(game_id=s.game_id).count() == 4
 
 
 def test_update_round_timer_requires_host(client):

@@ -266,7 +266,7 @@ def test_start_turn_activates_turn(client):
     assert data["status"] == Turn.STATUS_ACTIVE
     assert data["starting_seconds"] == 60
     assert 0 < data["remaining_seconds"] <= 60
-    assert data["current_word_text"] == "b01"
+    assert data["current_word_text"] == "B01"
     assert data["correct_words"] == 0
     assert data["match_status"] == Match.STATUS_ACTIVE
 
@@ -360,7 +360,7 @@ def test_correct_moves_to_next_word_and_scores(client):
     assert response.status_code == 200
     data = response.get_json()["data"]
     assert data["status"] == Turn.STATUS_ACTIVE
-    assert data["current_word_text"] == "b02"
+    assert data["current_word_text"] == "B02"
     assert data["correct_words"] == 1
     assert data["words"][0]["result"] == CORRECT
     assert data["outcome"]["won"] is False
@@ -510,7 +510,7 @@ def test_pass_moves_to_next_word_zero_points(app, client):
     assert response.status_code == 200
     data = response.get_json()["data"]
     assert data["status"] == Turn.STATUS_ACTIVE
-    assert data["current_word_text"] == "b02"
+    assert data["current_word_text"] == "B02"
     assert data["passed_words"] == 1
     assert data["correct_words"] == 0
     assert data["words"][0]["result"] == PASSED

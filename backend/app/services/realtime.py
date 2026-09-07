@@ -499,6 +499,33 @@ def emit_word_pool_updated(game, team=None):
     _emit(game_room(game.id), "word_pool_updated", data)
 
 
+def _word_change_request_payload(req):
+    from ..services.word_change_request_service import request_payload
+
+    return request_payload(req)
+
+
+def emit_word_change_request(req):
+    """A host asked a team to change one of its words (modal opens on team)."""
+    data = _word_change_request_payload(req)
+    _emit(team_room(req.team_id), "word_change_request", data)
+    _emit(game_room(req.game_id), "word_change_request", data)
+
+
+def emit_word_change_resolved(req):
+    """The team corrected the word; the modal closes and the pool refreshes."""
+    data = _word_change_request_payload(req)
+    _emit(team_room(req.team_id), "word_change_resolved", data)
+    _emit(game_room(req.game_id), "word_change_resolved", data)
+
+
+def emit_word_change_cancelled(req):
+    """The host cancelled a change request; the modal closes."""
+    data = _word_change_request_payload(req)
+    _emit(team_room(req.team_id), "word_change_cancelled", data)
+    _emit(game_room(req.game_id), "word_change_cancelled", data)
+
+
 def _connection_event_data(team):
     from ..services import team_service
 

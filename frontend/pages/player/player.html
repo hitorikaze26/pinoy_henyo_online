@@ -285,6 +285,11 @@
 
       </div><!-- /#tab-words -->
 
+      <!-- Floating Add Word stays visible across tabs -->
+      <button class="w-fab" id="btn-add-word-fab" aria-label="Add a new word" title="Add Word">
+        <i class="fa-solid fa-plus"></i>
+      </button>
+
       <!-- ====================================================
            TAB: SETTINGS
       ==================================================== -->
@@ -1179,6 +1184,50 @@
     </div>
   </div>
 
+  <!-- Forced Word Change Request (host-initiated; has no close/dismiss controls) -->
+  <div class="wcr-overlay" id="wcr-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="wcr-title">
+    <div class="wcr-card">
+      <div class="wcr-card__header">
+        <div class="wcr-card__icon"><i class="fa-solid fa-pen-to-square"></i></div>
+        <div>
+          <h2 class="wcr-card__title" id="wcr-title">Word Change Request</h2>
+          <p class="wcr-card__subtitle">The host asked your team to correct a submitted word.</p>
+        </div>
+        <span class="wcr-card__badge">Required</span>
+      </div>
+      <form class="wcr-card__form" id="wcr-form" novalidate>
+        <div class="form-group">
+          <label class="form-label" for="wcr-word">
+            <i class="fa-solid fa-font"></i> Corrected Word
+          </label>
+          <input type="text" id="wcr-word" class="form-input" maxlength="40"
+            placeholder="Enter the corrected word" autocomplete="off" required />
+          <span class="form-error" id="wcr-error-word"></span>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="wcr-category">
+            <i class="fa-solid fa-tag"></i> Category
+          </label>
+          <input type="text" id="wcr-category" class="form-input" readonly />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="wcr-comment">
+            <i class="fa-solid fa-comment"></i> Host remark
+          </label>
+          <textarea id="wcr-comment" class="form-textarea" readonly rows="2"></textarea>
+        </div>
+        <p class="wcr-card__notice" id="wcr-notice">
+          Your team must send a corrected word before this request is closed.
+        </p>
+        <div class="wcr-card__actions">
+          <button type="submit" class="btn-confirm" id="wcr-submit">
+            <i class="fa-solid fa-check"></i> Send Correction
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Confirm Manager handles its own container (js/core/confirm.js) -->
 
   <!-- Toast Manager handles its own container -->
@@ -1199,5 +1248,6 @@
   <script src="../../js/api/realtime.js"></script>
   <script src="../../js/qr/scanner.js"></script>
   <script src="../../js/player/player.js"></script>
+  <script src="../../js/player/word-change.js"></script>
 </body>
 </html>

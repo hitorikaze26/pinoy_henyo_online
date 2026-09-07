@@ -2,7 +2,8 @@ from flask import Blueprint, request
 
 from ..extensions import db
 from ..models import Word
-from ..services import word_service
+from ..services import realtime, word_service
+from ..services import word_change_request_service
 from ..services.game_service import get_game
 from ..services.realtime import emit_word_pool_updated
 from ..utils.auth import host_authorized, host_token_from_request
@@ -192,8 +193,13 @@ def delete_word(word_id):
         return error
     try:
         owner_team = word.submitting_team
+        cancelled = word_change_request_service.cancel_and_detach_for_word_deleted(
+            word
+        )
         word_service.delete_word(word, word.game, actor)
         db.session.commit()
+        for req in cancelled:
+            realtime.emit_word_change_cancelled(req)
         emit_word_pool_updated(word.game, owner_team)
     except word_service.WordServiceError as exc:
         db.session.rollback()

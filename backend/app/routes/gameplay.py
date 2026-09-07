@@ -328,6 +328,23 @@ def create_matches(game):
 @gameplay_bp.get("/games/<int:game_id>/matches")
 @require_host
 def list_matches(game):
+    from ..models import Team
+
+    # During SETUP the dashboard's Current Turn dropdown needs a play slot per
+    # team even before the host manually creates matches. Running the setup
+    # (idempotently) here mirrors what starting the game does, so the host can
+    # pick the first team right away.
+    if game.status == Game.STATUS_SETUP:
+        has_teams = (
+            db.session.query(Team.id).filter_by(game_id=game.id).first()
+            is not None
+        )
+        if has_teams:
+            try:
+                gameplay_service.ensure_game_setup(game)
+                db.session.commit()
+            except gameplay_service.GameplayServiceError:
+                db.session.rollback()
     matches = gameplay_service.list_game_matches(game)
     return success_response(
         data={

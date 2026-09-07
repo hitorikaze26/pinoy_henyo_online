@@ -351,7 +351,7 @@ def test_delete_connected_team_rejected(client, app):
     assert response.status_code == 400
 
 
-def test_delete_team_referenced_by_match_rejected(client, app):
+def test_delete_team_with_pending_match_slot_succeeds(client, app):
     g = _create_game(client)
     team_x = _create_team(client, g["game_id"], team_name="Team X")
     team_y = _create_team(client, g["game_id"], team_name="Team Y")
@@ -375,7 +375,52 @@ def test_delete_team_referenced_by_match_rejected(client, app):
     )
     assert resp.status_code == 201
 
-    # Deleting a team referenced by a match must fail cleanly (no raw FK error).
+    # A PENDING (never-played) setup slot does not block deletion: the team
+    # has not started playing yet.
+    response = client.delete(
+        "/api/teams/{}".format(team_x_id),
+        headers={HOST_TOKEN_HEADER: g["host_session_token"]},
+    )
+    assert response.status_code == 200
+
+    with app.app_context():
+        assert db.session.get(Team, team_x_id) is None
+        # The pending match slot referencing the deleted team is removed.
+        assert Match.query.filter_by(opponent_team_id=team_x_id).count() == 0
+
+
+def test_delete_started_team_rejected(client, app):
+    g = _create_game(client)
+    team_x = _create_team(client, g["game_id"], team_name="Team X")
+    team_y = _create_team(client, g["game_id"], team_name="Team Y")
+    team_x_id = team_x["team_id"]
+
+    assert client.post(
+        "/api/games/{}/rounds".format(g["game_id"]),
+        json={"round_number": 1},
+        headers={HOST_TOKEN_HEADER: g["host_session_token"]},
+    ).status_code == 201
+    resp = client.post(
+        "/api/games/{}/matches".format(g["game_id"]),
+        json={
+            "round_number": 1,
+            "matches": [
+                {"team_id": team_y["team_id"],
+                 "opponent_team_id": team_x_id}
+            ],
+        },
+        headers={HOST_TOKEN_HEADER: g["host_session_token"]},
+    )
+    assert resp.status_code == 201
+
+    # Simulate the game having started play: the match is ACTIVE.
+    with app.app_context():
+        game = db.session.get(Game, g["game_id"])
+        game.status = Game.STATUS_READY
+        match = Match.query.filter_by(opponent_team_id=team_x_id).first()
+        match.status = Match.STATUS_ACTIVE
+        db.session.commit()
+
     response = client.delete(
         "/api/teams/{}".format(team_x_id),
         headers={HOST_TOKEN_HEADER: g["host_session_token"]},
@@ -384,11 +429,44 @@ def test_delete_team_referenced_by_match_rejected(client, app):
     body = response.get_json()["error"]
     assert body["code"] == "TEAM_DELETE_BLOCKED_MATCH_REFERENCE"
 
-    # The team and the match remain untouched.
     with app.app_context():
         assert db.session.get(Team, team_x_id) is not None
-        assert Team.query.filter_by(id=team_x_id).count() == 1
         assert Match.query.filter_by(opponent_team_id=team_x_id).count() == 1
+
+
+def test_delete_team_detaches_historic_events(client, app):
+    g = _create_game(client)
+    team = _create_team(client, g["game_id"])
+    team_id = team["team_id"]
+    member = _add_member(client, team_id)
+    member_id = member["member_id"]
+
+    with app.app_context():
+        db.session.add(
+            GameEvent(
+                game_id=g["game_id"],
+                team_id=team_id,
+                member_id=member_id,
+                event_type="ROLE_CHANGED",
+                event_data={"role": "MANGHUHULA"},
+            )
+        )
+        db.session.commit()
+
+    response = client.delete(
+        "/api/teams/{}".format(team_id),
+        headers={HOST_TOKEN_HEADER: g["host_session_token"]},
+    )
+    assert response.status_code == 200
+
+    with app.app_context():
+        # Historical event rows are preserved, with FKs detached.
+        events = GameEvent.query.filter_by(game_id=g["game_id"]).all()
+        assert len(events) >= 1
+        for event in events:
+            assert event.team_id != team_id
+            assert event.member_id != member_id
+        assert db.session.get(Team, team_id) is None
 
 
 # ---------------------------------------------------------------------------

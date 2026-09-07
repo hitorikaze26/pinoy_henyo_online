@@ -99,7 +99,7 @@ const Realtime = (() => {
   function deliver() {
     const KNOWN = new Set([
       'game_started', 'game_paused', 'game_resumed', 'game_completed',
-      'round_started', 'round_completed', 'match_started',
+      'round_started', 'round_updated', 'round_completed', 'match_started',
       'turn_started', 'turn_state', 'turn_completed',
       'display_armed', 'display_go', 'display_cancelled',
       'word_correct', 'word_passed',
@@ -111,6 +111,7 @@ const Realtime = (() => {
       'connection_declined', 'connection_disconnected',
       'settings_updated',
       'word_pool_updated',
+      'word_change_request', 'word_change_resolved', 'word_change_cancelled',
       'error',
     ]);
     KNOWN.forEach((name) => {
@@ -204,7 +205,7 @@ const Realtime = (() => {
   function unsupportedReport() {
     const KNOWN = [
       'game_started', 'game_paused', 'game_resumed', 'game_completed',
-      'round_started', 'round_completed', 'match_started',
+      'round_started', 'round_updated', 'round_completed', 'match_started',
       'turn_started', 'turn_state', 'turn_completed',
       'display_armed', 'display_go', 'display_cancelled',
       'word_correct', 'word_passed',
@@ -216,6 +217,7 @@ const Realtime = (() => {
       'connection_declined', 'connection_disconnected',
       'settings_updated',
       'word_pool_updated',
+      'word_change_request', 'word_change_resolved', 'word_change_cancelled',
     ];
     return KNOWN.filter((name) => !(handlers.has(name) && handlers.get(name).size));
   }

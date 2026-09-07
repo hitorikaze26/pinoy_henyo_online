@@ -1,4 +1,5 @@
 from flask import Blueprint, request
+from sqlalchemy.exc import IntegrityError
 
 from ..extensions import db, socketio
 from ..models import DeviceSession, Team, TeamMember
@@ -258,6 +259,14 @@ def delete_team(team_id):
     except team_service.TeamServiceError as exc:
         db.session.rollback()
         return _handle(exc)
+    except IntegrityError:
+        db.session.rollback()
+        return error_response(
+            "The team could not be deleted because it is still referenced by "
+            "game data.",
+            code="TEAM_DELETE_CONFLICT",
+            status=409,
+        )
     return success_response(data={"team_id": team_id, "deleted": True})
 
 
