@@ -17,9 +17,10 @@ class GameSettings(db.Model):
     ALLOWED_PENALTY_SECONDS = (0, 3, 5, 10)
     ALLOWED_MAX_TEAMS = (4, 6, 8, 10)
     ALLOWED_MAX_MEMBERS = (4, 6, 8)
+    ALLOWED_MIN_WORDS = (5, 10, 15, 20, 25)
 
     # Fields frozen once the game leaves LOBBY/SETUP (mirrors word_pool_locked).
-    LOCKED_FIELDS = ("max_words_per_category", "max_teams", "max_members")
+    LOCKED_FIELDS = ("max_words_per_category", "max_teams", "max_members", "min_words_to_start")
 
     game_id = db.Column(
         db.Integer, db.ForeignKey("games.id"), primary_key=True
@@ -89,6 +90,12 @@ class GameSettings(db.Model):
         nullable=False,
         default=True,
         server_default=db.text("true"),
+    )
+    min_words_to_start = db.Column(
+        db.Integer,
+        nullable=False,
+        default=15,
+        server_default="15",
     )
     created_at = db.Column(
         db.DateTime, nullable=False, server_default=db.text("CURRENT_TIMESTAMP")

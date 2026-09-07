@@ -27,7 +27,6 @@ from ..utils.time import utcnow
 logger = logging.getLogger(__name__)
 
 COUNTDOWN_SECONDS = 3
-MIN_WORDS_POOL = 25
 
 DISPLAY_IDLE = Game.DISPLAY_IDLE
 DISPLAY_ARMED = Game.DISPLAY_ARMED
@@ -162,10 +161,13 @@ def start_readiness(game, match):
             Word.status != Word.STATUS_DISABLED,
         ).count()
     )
-    if pool < MIN_WORDS_POOL:
+    min_words = 15
+    if game.settings and game.settings.min_words_to_start:
+        min_words = game.settings.min_words_to_start
+    if pool < min_words:
         issues.append(
             "At least {} enabled words are required in the word pool "
-            "(currently {}).".format(MIN_WORDS_POOL, pool)
+            "(currently {}).".format(min_words, pool)
         )
 
     if match is None:

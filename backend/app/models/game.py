@@ -127,6 +127,11 @@ class Game(db.Model):
         uselist=False,
         cascade="all, delete-orphan",
     )
+    word_change_requests = db.relationship(
+        "WordChangeRequest",
+        back_populates="game",
+        cascade="all, delete-orphan",
+    )
 
     def __repr__(self):
         return "<Game code={} status={}>".format(self.game_code, self.status)

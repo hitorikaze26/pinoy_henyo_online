@@ -196,7 +196,15 @@ def delete_game(game):
         return error_response(str(exc), code="INVALID_OPERATION", status=409)
     except game_service.GameFrozenError as exc:
         return error_response(str(exc), code="GAME_FROZEN", status=409)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return error_response(
+            "Could not delete the game. Some data may still reference it.",
+            code="DELETE_FAILED",
+            status=409,
+        )
     return success_response(data={"game_id": game.id, "deleted": True})
 
 

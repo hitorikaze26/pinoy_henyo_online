@@ -25,6 +25,7 @@ _RULES = {
     "penalty_seconds": (GameSettings.ALLOWED_PENALTY_SECONDS,),
     "max_teams": (GameSettings.ALLOWED_MAX_TEAMS,),
     "max_members": (GameSettings.ALLOWED_MAX_MEMBERS,),
+    "min_words_to_start": (GameSettings.ALLOWED_MIN_WORDS,),
 }
 
 _LOCKED_FIELDS = GameSettings.LOCKED_FIELDS
@@ -76,6 +77,7 @@ def get_payload(game, include_game_id=True):
         "show_scores": bool(settings.show_scores),
         "show_qr_code": bool(settings.show_qr_code),
         "show_round_category": bool(settings.show_round_category),
+        "min_words_to_start": settings.min_words_to_start,
     }
     if include_game_id:
         data["game_id"] = game.id

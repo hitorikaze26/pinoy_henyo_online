@@ -963,6 +963,18 @@ ul, ol { list-style: none; }
 .form-input.error { border-color: var(--accent-2-500); }
 .form-error { font-size: 0.78rem; color: var(--accent-2-400); min-height: 1rem; }
 
+.form-textarea {
+  width: 100%; padding: 0.65rem 0.9rem;
+  border-radius: var(--r-md); border: 1.5px solid rgba(255,255,255,0.1);
+  background: var(--dash-surface-2); color: #fff;
+  font-family: 'Inter', sans-serif; font-size: 0.9rem;
+  outline: none; resize: vertical; min-height: 4.5rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.form-textarea::placeholder { color: rgba(255,255,255,0.25); }
+.form-textarea:focus { border-color: var(--primary-500); box-shadow: 0 0 0 3px rgba(49,154,251,0.15); }
+.form-textarea.error { border-color: var(--accent-2-500); }
+
 .form-select {
   appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.35)' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");

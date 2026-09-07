@@ -287,7 +287,49 @@ def test_ready_blocks_small_word_pool(client):
     response = _ready(client, s, s.match_a)
     assert response.status_code == 400
     issues = response.get_json()["error"]["issues"]
-    assert any("25 enabled words" in issue for issue in issues)
+    assert any("15 enabled words" in issue for issue in issues)
+
+
+def test_ready_uses_configured_minimum_word_pool(client):
+    s = _big_setup(client)
+    # Lower the start gate to 5 words, then leave only 4 enabled.
+    response = client.put(
+        "/api/games/{}/settings".format(s.game_id),
+        json={"min_words_to_start": 5},
+        headers={HOST_TOKEN_HEADER: s.host},
+    )
+    assert response.status_code == 200
+    assert (
+        response.get_json()["data"]["min_words_to_start"] == 5
+    )
+    with client.application.app_context():
+        from app.models import Word
+
+        pool = Word.query.filter_by(game_id=s.game_id).all()
+        for index, word in enumerate(pool):
+            if index >= 4:
+                word.status = Word.STATUS_DISABLED
+        db.session.commit()
+    response = _ready(client, s, s.match_a)
+    assert response.status_code == 400
+    issues = response.get_json()["error"]["issues"]
+    assert any("5 enabled words" in issue for issue in issues)
+
+    # Enable 5 words spread across all 3 categories (2/2/1): the 5-word floor is
+    # met, so the pool gate clears. _big_setup's words are ordered 10 per
+    # category, so index // 10 picks the category.
+    with client.application.app_context():
+        from app.models import Word
+
+        enabled = {0, 1, 10, 11, 20}
+        for index, word in enumerate(Word.query.filter_by(game_id=s.game_id).all()):
+            word.status = (
+                Word.STATUS_AVAILABLE if index in enabled else Word.STATUS_DISABLED
+            )
+        db.session.commit()
+    response = _ready(client, s, s.match_a)
+    assert response.status_code == 200, response.get_json()
+    assert response.get_json()["data"]["status"] == Game.DISPLAY_ARMED
 
 
 def test_ready_blocks_zero_timer(client):

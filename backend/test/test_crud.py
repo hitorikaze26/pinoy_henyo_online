@@ -19,6 +19,7 @@ from app.models import (
     Turn,
     TurnWord,
     Word,
+    WordChangeRequest,
 )
 
 HOST_TOKEN_HEADER = "X-Host-Token"
@@ -303,6 +304,41 @@ def test_delete_full_game_no_orphans(client, app):
                 assert db.session.get(
                     {"score": Score, "event": GameEvent,
                      "device": DeviceSession}[key], cid) is None
+
+
+def test_delete_expired_game_with_word_change_requests(client, app):
+    """Deleting an expired game that has word_change_requests must cascade
+    successfully — no FK violation / 500."""
+    g = _create_game(client)
+    game_id = g["game_id"]
+
+    with app.app_context():
+        game = db.session.get(Game, game_id)
+        game.status = Game.STATUS_EXPIRED
+
+        team = Team(game_id=game_id, team_name="Alpha", team_code="AAA",
+                     connection_status=Team.CONNECTION_CONNECTED)
+        db.session.add(team)
+        db.session.flush()
+
+        wcr = WordChangeRequest(
+            game_id=game_id, team_id=team.id,
+            word_id=1, comment="Please fix",
+        )
+        db.session.add(wcr)
+        wcr_id = wcr.id
+        db.session.commit()
+
+    response = client.delete(
+        "/api/games/{}".format(game_id),
+        json={"confirm": True},
+        headers={HOST_TOKEN_HEADER: g["host_session_token"]},
+    )
+    assert response.status_code == 200
+
+    with app.app_context():
+        assert db.session.get(Game, game_id) is None
+        assert db.session.get(WordChangeRequest, wcr_id) is None
 
 
 # ---------------------------------------------------------------------------

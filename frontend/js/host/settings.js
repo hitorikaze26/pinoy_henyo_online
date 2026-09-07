@@ -37,6 +37,7 @@
   // Control id -> server-backed settings key (snake_case payload).
   const CONTROL_KEYS = {
     'set-game-maxwords': 'max_words_per_category',
+    'set-game-minwords': 'min_words_to_start',
     'set-game-penalty': 'penalty_seconds',
     'set-teams-allow-new': 'allow_new_teams',
     'set-teams-autoapprove': 'auto_approve_connections',
@@ -48,7 +49,7 @@
     'set-display-qr': 'show_qr_code',
     'set-display-round': 'show_round_category',
   };
-  const LOCKED_KEYS = ['max_words_per_category', 'max_teams', 'max_members'];
+  const LOCKED_KEYS = ['max_words_per_category', 'min_words_to_start', 'max_teams', 'max_members'];
 
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => Array.from(document.querySelectorAll(sel));
@@ -313,10 +314,12 @@
 
     const gameLock = $('#game-maxwords-lock');
     if (gameLock) gameLock.hidden = !locked;
+    const minWordsLock = $('#game-minwords-lock');
+    if (minWordsLock) minWordsLock.hidden = !locked;
     const teamsLock = $('#teams-lock-badge');
     if (teamsLock) teamsLock.hidden = !locked;
 
-    ['set-game-maxwords', 'set-teams-maxteams', 'set-teams-maxmembers'].forEach((id) => {
+    ['set-game-maxwords', 'set-game-minwords', 'set-teams-maxteams', 'set-teams-maxmembers'].forEach((id) => {
       const el = document.getElementById(id);
       if (el) el.disabled = locked;
     });

@@ -192,6 +192,24 @@
 
           <div class="setting-row">
             <div class="setting-row__info">
+              <p class="setting-row__title">Minimum Words to Start</p>
+              <p class="setting-row__sub">Fewer enabled words than this and the host cannot start the game. Locked once the game starts.</p>
+            </div>
+            <div class="setting-row__control setting-row__control--stacked">
+              <select class="controls-filter dd dd--pill" id="set-game-minwords" aria-label="Minimum words to start">
+                <option value="5">5 words</option>
+                <option value="10">10 words</option>
+                <option value="15">15 words</option>
+                <option value="20">20 words</option>
+                <option value="25">25 words</option>
+              </select>
+              <span class="settings-card__badge" id="game-minwords-lock" hidden>Locked while playing</span>
+              <span class="setting-row__status" role="status" aria-live="polite"></span>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-row__info">
               <p class="setting-row__title">Points per Correct Word <span class="chip chip--rule">Fixed rule</span></p>
               <p class="setting-row__sub">Scoring is fixed at one point for every correct answer.</p>
             </div>

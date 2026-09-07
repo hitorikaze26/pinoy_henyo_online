@@ -1206,24 +1206,8 @@ ul, ol { list-style: none; }
   background: linear-gradient(135deg, var(--primary-600) 0%, var(--primary-500) 60%, #5BB0FF 100%);
   color: #fff;
   font-size: 1.4rem;
-  box-shadow: 0 6px 24px rgba(49,154,251,0.45), 0 1px 0 rgba(255,255,255,0.14) inset;
-  transition: filter 0.18s, transform 0.14s, box-shadow 0.18s;
-}
-.w-fab::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: linear-gradient(105deg, transparent 35%, rgba(255,255,255,0.14) 50%, transparent 65%);
-  transform: translateX(-110%);
-  transition: transform 0.45s ease;
-  pointer-events: none;
-}
-.w-fab:hover::before { transform: translateX(110%); }
-.w-fab:hover {
-  filter: brightness(1.1);
-  transform: translateY(-2px);
-  box-shadow: 0 10px 30px rgba(49,154,251,0.55), 0 1px 0 rgba(255,255,255,0.16) inset;
+  box-shadow: 0 6px 24px rgba(49,154,251,0.45);
+  transition: transform 0.14s, box-shadow 0.18s;
 }
 .w-fab:active { transform: scale(0.94); }
 .w-fab:focus-visible {
@@ -3050,6 +3034,15 @@ body[data-large-text="1"] .s-pref-row__hint { font-size: 0.8rem; }
 }
 
 .wcr-card__form { display: flex; flex-direction: column; gap: 0.9rem; }
+
+.wcr-card__form .form-textarea {
+  width: 100%; padding: 0.65rem 0.9rem;
+  border-radius: var(--r-md); border: 1.5px solid rgba(255,255,255,0.1);
+  background: var(--dash-surface-2, rgba(255,255,255,0.05)); color: #fff;
+  font-family: 'Inter', sans-serif; font-size: 0.9rem;
+  outline: none; resize: none; min-height: 3rem;
+  opacity: 0.85; cursor: default;
+}
 
 .wcr-card__notice {
   font-size: 0.78rem;

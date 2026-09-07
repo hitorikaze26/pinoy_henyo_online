@@ -174,10 +174,11 @@ def mark_game_expired(game):
         Game.STATUS_EXPIRED,
     ):
         return False
+    from_status = game.status
     game.status = Game.STATUS_EXPIRED
     if game.ended_at is None:
         game.ended_at = utcnow()
-    _record_event(game, "GAME_EXPIRED", {"from_status": game.status})
+    _record_event(game, "GAME_EXPIRED", {"from_status": from_status})
     return True
 
 
