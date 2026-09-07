@@ -195,16 +195,21 @@ def leave_game(game):
     mid-play, the game is paused so it cannot advance while unattended. The
     game, teams, members, words and scores all remain intact and the session
     token stays valid so the host (or a returning device) can reconnect.
+
+    Finished games (COMPLETE/CANCELLED/EXPIRED) can also be left: nothing is
+    paused (the game is terminal already), the terminal status is kept intact
+    and only the host session teardown + a HOST_LEFT event are recorded.
     """
     from_status = game.status
-    if from_status in (
+    terminal = from_status in (
         Game.STATUS_GAME_COMPLETE,
         Game.STATUS_CANCELLED,
         Game.STATUS_EXPIRED,
-    ):
-        raise GameStateError("A finished game cannot be left.")
+    )
     game.host_last_seen_at = None
-    if from_status in (
+    if terminal:
+        to_status = from_status
+    elif from_status in (
         Game.STATUS_ROUND_1,
         Game.STATUS_ROUND_2,
         Game.STATUS_TIE_BREAKER,

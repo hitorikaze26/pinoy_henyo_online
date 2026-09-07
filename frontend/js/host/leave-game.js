@@ -55,7 +55,13 @@
     } catch (e) {
       console.warn('[host-leave] leave failed', e && e.message);
       window.Confirm.close();
-      window.showToast('Could not leave right now. Check the connection.');
+      const reason =
+        (API.messageForStatus && e && e.status
+          ? API.messageForStatus(e.status, e.message)
+          : null) ||
+        (e && e.message) ||
+        'Could not leave right now. Check the connection.';
+      window.showToast(reason);
       return;
     }
 

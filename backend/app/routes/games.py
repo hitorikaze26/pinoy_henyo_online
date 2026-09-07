@@ -1,6 +1,7 @@
 from flask import Blueprint, request
 
 from ..extensions import db
+from ..models import Game
 from ..services import game_service, game_settings_service, realtime, report_service
 from ..services.game_settings_service import (
     SettingsInvalidError,
@@ -165,12 +166,12 @@ def game_state(game):
 @require_host
 def leave_game(game):
     """Host ends its device session and steps away; game stays available."""
-    try:
-        data = game_service.leave_game(game)
-    except game_service.GameStateError as exc:
-        return error_response(str(exc), code="INVALID_OPERATION", status=409)
+    data = game_service.leave_game(game)
     db.session.commit()
-    realtime.emit_game_paused(game)
+    if data.get("status") == Game.STATUS_PAUSED:
+        # Only mid-play leaves pause the game; finished games keep their
+        # terminal status and must not broadcast a misleading "paused".
+        realtime.emit_game_paused(game)
     return success_response(data=data)
 
 

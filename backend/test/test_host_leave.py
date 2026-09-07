@@ -105,19 +105,42 @@ def test_leave_game_pauses_active_round(client, app):
         assert db.session.get(Game, game_id).status == Game.STATUS_PAUSED
 
 
-def test_leave_completed_game_rejected(client, app):
+@pytest.mark.parametrize(
+    "status",
+    [
+        Game.STATUS_GAME_COMPLETE,
+        Game.STATUS_CANCELLED,
+        Game.STATUS_EXPIRED,
+    ],
+)
+def test_leave_finished_game_allowed(client, app, status):
+    """Hosts can leave finished games: terminal status stays intact and a
+    HOST_LEFT event is recorded (no misleading pause)."""
     g = _create_game(client)
     host = g["host_session_token"]
     game_id = g["game_id"]
 
     with app.app_context():
         game = db.session.get(Game, game_id)
-        game.status = Game.STATUS_GAME_COMPLETE
-        game.ended_at = utcnow()
+        game.status = status
+        if status == Game.STATUS_GAME_COMPLETE:
+            game.ended_at = utcnow()
         db.session.commit()
 
     response = _leave(client, game_id, host)
-    assert response.status_code == 409
+    assert response.status_code == 200
+    assert response.get_json()["data"]["status"] == status
+
+    with app.app_context():
+        game = db.session.get(Game, game_id)
+        assert game.status == status
+        assert game.host_last_seen_at is None
+        assert (
+            GameEvent.query.filter_by(
+                game_id=game_id, event_type="HOST_LEFT"
+            ).count()
+            == 1
+        )
 
 
 def test_leave_then_reconnect_host_session(client, app):
