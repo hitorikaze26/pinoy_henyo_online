@@ -2971,65 +2971,100 @@ body[data-large-text="1"] .s-pref-row__hint { font-size: 0.8rem; }
   align-items: center;
   justify-content: center;
   padding: 1rem;
-  background: rgba(3, 8, 20, 0.82);
-  backdrop-filter: blur(4px);
+  background: rgba(3, 8, 20, 0.84);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.18s ease;
+  transition: opacity 0.2s ease;
 }
 .wcr-overlay.is-open { opacity: 1; pointer-events: auto; }
 
 .wcr-card {
   width: 100%;
   max-width: 440px;
-  background: var(--panel-bg, #0f1b2d);
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 16px;
-  padding: 1.2rem 1.25rem 1.25rem;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+  background: var(--surface, #111c2e);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 1.25rem 1.3rem 1.3rem;
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.6),
+    0 1px 0 rgba(255, 255, 255, 0.06) inset;
+  transform: translateY(16px) scale(0.97);
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
+.wcr-overlay.is-open .wcr-card {
+  transform: translateY(0) scale(1);
+}
+
 .wcr-card__header {
   display: flex;
   align-items: flex-start;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
+  gap: 0.85rem;
+  margin-bottom: 1.1rem;
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
+
 .wcr-card__icon {
+  flex-shrink: 0;
   width: 42px;
   height: 42px;
   border-radius: 12px;
-  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.05rem;
-  color: #ffe58f;
-  background: rgba(250, 204, 21, 0.14);
-  border: 1px solid rgba(250, 204, 21, 0.35);
+  font-size: 1.1rem;
+  color: #fde047;
+  background: rgba(253, 224, 71, 0.12);
+  border: 1px solid rgba(253, 224, 71, 0.3);
 }
-.wcr-card__title { font-size: 1.05rem; margin: 0 0 0.2rem; color: #fff; }
-.wcr-card__subtitle { font-size: 0.82rem; margin: 0; color: var(--text-dim, #93a4b9); }
+
+.wcr-card__title {
+  font-family: 'Baloo 2', sans-serif;
+  font-size: 1.05rem;
+  font-weight: 800;
+  margin: 0 0 0.15rem;
+  color: #fff;
+  line-height: 1.2;
+}
+.wcr-card__subtitle {
+  font-size: 0.78rem;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.42);
+  line-height: 1.4;
+}
+
 .wcr-card__badge {
   margin-left: auto;
   flex-shrink: 0;
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  padding: 0.28rem 0.55rem;
+  padding: 0.25rem 0.55rem;
   border-radius: 999px;
-  color: #ffd666;
-  background: rgba(250, 204, 21, 0.16);
-  border: 1px solid rgba(250, 204, 21, 0.4);
+  color: #fde047;
+  background: rgba(253, 224, 71, 0.14);
+  border: 1px solid rgba(253, 224, 71, 0.32);
 }
-.wcr-card__form { display: flex; flex-direction: column; gap: 0.85rem; }
+
+.wcr-card__form { display: flex; flex-direction: column; gap: 0.9rem; }
+
 .wcr-card__notice {
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   margin: 0;
-  padding: 0.6rem 0.75rem;
-  border-left: 3px solid var(--accent, #22d3ee);
-  background: rgba(34, 211, 238, 0.07);
-  border-radius: 0 8px 8px 0;
-  color: #b8c7da;
+  padding: 0.6rem 0.8rem;
+  border-left: 3px solid var(--primary-400, #5BB0FF);
+  background: rgba(49, 154, 251, 0.08);
+  border-radius: 0 10px 10px 0;
+  color: rgba(255, 255, 255, 0.55);
+  line-height: 1.5;
 }
-.wcr-card__actions { display: flex; justify-content: flex-end; margin-top: 0.15rem; }
+
+.wcr-card__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.15rem;
+}
