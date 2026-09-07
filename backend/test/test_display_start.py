@@ -1,4 +1,5 @@
 import time
+from datetime import timedelta
 
 import pytest
 from flask_socketio.test_client import SocketIOTestClient
@@ -315,13 +316,14 @@ def test_ready_uses_configured_minimum_word_pool(client):
     issues = response.get_json()["error"]["issues"]
     assert any("5 enabled words" in issue for issue in issues)
 
-    # Enable 5 words spread across all 3 categories (2/2/1): the 5-word floor is
-    # met, so the pool gate clears. _big_setup's words are ordered 10 per
-    # category, so index // 10 picks the category.
+    # Enable 5 words spread across all 3 categories (2/2/1) held by TEAM B:
+    # match_a (Team A) can play them, but its own submissions are excluded.
+    # _big_setup's words are ordered 10 per category (A first, then B), so
+    # index // 10 picks the category and B owns indices 5-9/15-19/25-29.
     with client.application.app_context():
         from app.models import Word
 
-        enabled = {0, 1, 10, 11, 20}
+        enabled = {5, 9, 15, 19, 25}
         for index, word in enumerate(Word.query.filter_by(game_id=s.game_id).all()):
             word.status = (
                 Word.STATUS_AVAILABLE if index in enabled else Word.STATUS_DISABLED
@@ -330,6 +332,56 @@ def test_ready_uses_configured_minimum_word_pool(client):
     response = _ready(client, s, s.match_a)
     assert response.status_code == 200, response.get_json()
     assert response.get_json()["data"]["status"] == Game.DISPLAY_ARMED
+
+
+def test_ready_blocks_match_without_eligible_words(client):
+    s = _big_setup(client)
+    # Team A's own 15 words are excluded from its own match, so disabling
+    # Team B's words leaves the armed match nothing it can play.
+    with client.application.app_context():
+        from app.models import Word
+
+        Word.query.filter_by(
+            game_id=s.game_id, submitted_by_team_id=s.team_b["team_id"]
+        ).update({Word.status: Word.STATUS_DISABLED})
+        db.session.commit()
+    response = _ready(client, s, s.match_a)
+    assert response.status_code == 400
+    issues = response.get_json()["error"]["issues"]
+    assert any("Not enough words remain" in issue for issue in issues)
+
+
+def test_worker_go_failure_resets_display_and_emits_cancelled(app, client):
+    from unittest.mock import patch
+
+    from app.models import Word
+
+    s = _big_setup(client)
+    with app.app_context():
+        Word.query.filter_by(
+            game_id=s.game_id, submitted_by_team_id=s.team_b["team_id"]
+        ).update({Word.status: Word.STATUS_DISABLED})
+        game = db.session.get(Game, s.game_id)
+        game.display_status = Game.DISPLAY_COUNTDOWN
+        game.display_go_at = utcnow() - timedelta(seconds=1)
+        game.display_go_match_id = s.match_a["match_id"]
+        db.session.commit()
+
+    from app.services import display_service
+
+    with patch(
+        "app.services.display_service.realtime.emit_display_cancelled"
+    ) as emit:
+        with app.app_context():
+            display_service._go_worker(s.game_id, s.match_a["match_id"])
+        assert emit.call_count == 1
+        reason = emit.call_args.kwargs.get("reason", "")
+        assert "Not enough eligible words" in reason
+    with app.app_context():
+        game = db.session.get(Game, s.game_id)
+        assert game.display_status == Game.DISPLAY_IDLE
+        assert game.display_go_at is None
+        assert game.display_go_match_id is None
 
 
 def test_ready_blocks_zero_timer(client):

@@ -2210,7 +2210,19 @@ rebind('btn-penalty', (e) => handlePenalty(-penaltySeconds(), e));
         if (!rtForThisGame(p)) return;
         syncDisplay(null);
         renderAll();
-        toast('Start cancelled — the game is no longer ready.');
+        toast(p && p.reason
+          ? '<i class="fa-solid fa-triangle-exclamation"></i> ' + p.reason
+          : 'Start cancelled — the game is no longer ready.');
+      });
+      // If turn_started beats the 4s /display/state reconcile and we have no
+      // active turn yet, adopt the live turn immediately from the socket.
+      rt.on('turn_started', (payload) => {
+        if (!rtForThisGame(payload) || !payload || !payload.turn_id) return;
+        if (turn && isTurnRunning(turn)) return;
+        if (displayState.status !== 'COUNTDOWN' && displayState.status !== 'RUNNING') return;
+        hostTurn(payload.turn_id)
+          .then((p) => { if (p) setActiveTurn(p); })
+          .catch(() => {});
       });
     // Settings change (penalty step etc.) → apply live without a reload.
     rt.on('settings_updated', (payload) => {

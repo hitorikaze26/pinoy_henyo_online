@@ -688,6 +688,18 @@ def _round_word_pool(match):
     ]
 
 
+def match_eligible_word_count(match):
+    """Count the words currently assignable to this match's next turn.
+
+    Mirrors ``assign_turn_words`` exactly: round-scoped, excluding words the
+    team itself submitted and words already used in earlier turns. Lets the
+    two-stage display flow reject a match that cannot actually play before it
+    is ever armed.
+    """
+    used = _used_word_ids(match)
+    return sum(1 for word in _round_word_pool(match) if word.id not in used)
+
+
 def _used_word_ids(match):
     used = set()
     for turn in match.turns:

@@ -354,13 +354,15 @@ def emit_display_go(game, match):
         )
 
 
-def emit_display_cancelled(game, match):
+def emit_display_cancelled(game, match, reason=None):
     data = {
         "game_id": game.id,
         "match_id": match.id,
         "team_id": match.team_id,
         "status": "IDLE",
     }
+    if reason:
+        data["reason"] = str(reason)
     _emit(game_room(game.id), "display_cancelled", data)
     resolution = _display_target_sids(game.id, match.team_id)
     if resolution.get("sids"):

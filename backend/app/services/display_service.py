@@ -98,9 +98,10 @@ def start_readiness(game, match):
 
     Reuses the existing team/role/match requirements (mirroring
     ``gameplay_service.readiness``) plus the two-stage flow's own gates:
-    a positive timer, at least 25 enabled words in the pool, and a selected
-    pending match. Match/turn word assignment happens at GO so it is NOT
-    required here.
+    a positive timer, at least ``min_words_to_start`` enabled words in the
+    pool, enough words that the selected match can actually play (its own
+    team submissions are excluded), and a selected pending match. Match/turn
+    word assignment happens at GO so it is NOT required here.
     """
     issues = []
 
@@ -169,6 +170,18 @@ def start_readiness(game, match):
             "At least {} enabled words are required in the word pool "
             "(currently {}).".format(min_words, pool)
         )
+
+    # A match may only be armed if it has enough words it can actually play:
+    # its own team's submissions are excluded from the pool.
+    if match is not None and match.game_id == game.id:
+        match_words = gameplay_service.match_eligible_word_count(match)
+        if match_words < gameplay_service.MAX_WORDS_PER_TURN:
+            issues.append(
+                "Not enough words remain for this team's turn "
+                "({} available — {} needed).".format(
+                    match_words, gameplay_service.MAX_WORDS_PER_TURN
+                )
+            )
 
     if match is None:
         issues.append("Select a match to start.")
@@ -348,6 +361,9 @@ def _start_turn_for_display(game, match):
         assert_game_mutable(game)
     except GameFrozenError:
         reset_display(game)
+        realtime.emit_display_cancelled(
+            game, match, reason="The game is no longer mutable."
+        )
         return False
 
     round_obj = match.round
@@ -377,6 +393,7 @@ def _start_turn_for_display(game, match):
         game.display_go_at = None
         game.display_go_match_id = None
         db.session.commit()
+        realtime.emit_display_cancelled(game, match, reason=str(exc))
         return False
 
     if round_starts_now:
