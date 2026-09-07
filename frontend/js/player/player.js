@@ -519,10 +519,6 @@ function renderTeamsTab() {
     if (btn) btn.disabled = false;
   }
 
-  // Floating Add Word button only appears for a connected member.
-  const fab = $('btn-add-word-fab');
-  if (fab) fab.hidden = !connected;
-
   // Member feedback when the team is pending/declined.
   const pendingBox = $('team-conn-pending-box');
   if (pendingBox) {
@@ -1042,7 +1038,6 @@ function normalizeForCompare(s) {
 }
 
 $('btn-add-word').addEventListener('click', openAddWord);
-$('btn-add-word-fab').addEventListener('click', openAddWord);
 $('add-word-category').addEventListener('change', updateCapHint);
 $('close-add-word').addEventListener('click',  () => { resetAddWordModal(); closeModal('modal-add-word'); });
 $('cancel-add-word').addEventListener('click', () => { resetAddWordModal(); closeModal('modal-add-word'); });
