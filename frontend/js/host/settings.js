@@ -384,24 +384,8 @@
   }
 
   function onLeaveGame() {
-    if (!STATE.gameId) return;
-    openModal($('#modal-confirm-leave'));
-  }
-  async function onConfirmLeave() {
-    closeModal($('#modal-confirm-leave'));
-    const btn = $('#confirm-leave-btn');
-    setBtnBusy(btn, true);
-    try {
-      await GameAPI.leave(STATE.gameId);
-      if (API && typeof API.setGameId === 'function') API.setGameId(null);
-      if (API && typeof API.setHostGameId === 'function') API.setHostGameId(null);
-      showToast('You left the game. Your game stays on the server.');
-      setTimeout(() => { window.location.href = '../../index.html'; }, 800);
-    } catch (e) {
-      console.warn('[settings] leave failed', e && e.message);
-      setBtnBusy(btn, false);
-      showToast('Could not leave right now. Check the connection.');
-    }
+    if (!window.HostLeaveGame) return;
+    window.HostLeaveGame.confirmAndLeave();
   }
   function onDeleteSaved() {
     if (!STATE.gameId) return;
@@ -660,7 +644,6 @@
 
   $('#btn-nosession-goto').addEventListener('click', () => { window.location.href = 'host_dashboard.html'; });
   $('#btn-leave-game').addEventListener('click', onLeaveGame);
-  $('#confirm-leave-btn').addEventListener('click', onConfirmLeave);
   $('#btn-delete-saved').addEventListener('click', onDeleteSaved);
   $('#input-delete-code').addEventListener('input', onDeleteInput);
   $('#confirm-delete-btn').addEventListener('click', onConfirmDelete);

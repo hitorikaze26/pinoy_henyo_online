@@ -335,6 +335,31 @@ ol, ul { list-style: none; }
   color: rgba(255,255,255,0.88);
 }
 
+/* Sidebar footer — Leave Game */
+.sidebar__leave-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  margin-bottom: 0.5rem;
+  padding: 0.65rem 0.9rem;
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  font-family: 'Baloo 2', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--danger);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s;
+}
+.sidebar__leave-btn i { font-size: 0.85rem; width: 18px; text-align: center; }
+.sidebar__leave-btn:hover {
+  background: rgba(248,113,113,0.12);
+  color: rgba(255,255,255,0.92);
+}
+
 /* ============================================================
    MAIN CONTENT AREA
 ============================================================ */
