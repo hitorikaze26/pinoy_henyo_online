@@ -28,6 +28,19 @@ class Game(db.Model):
         STATUS_TIE_BREAKER,
     )
 
+    # Two-stage display start flow (host START → ARM → GO → countdown →
+    # turn). Server-authoritative so any device socket can rebuild state.
+    DISPLAY_IDLE = "IDLE"
+    DISPLAY_ARMED = "ARMED"
+    DISPLAY_COUNTDOWN = "COUNTDOWN"
+    DISPLAY_RUNNING = "RUNNING"
+    DISPLAY_STATUSES = (
+        DISPLAY_IDLE,
+        DISPLAY_ARMED,
+        DISPLAY_COUNTDOWN,
+        DISPLAY_RUNNING,
+    )
+
     id = db.Column(db.Integer, primary_key=True)
     game_code = db.Column(db.String(16), nullable=False, unique=True, index=True)
     host_session_token = db.Column(db.String(64), nullable=False, index=True)
@@ -48,6 +61,16 @@ class Game(db.Model):
         nullable=True,
         index=True,
     )
+    # Display-start lifecycle state (IDLE/ARMED/COUNTDOWN/RUNNING) plus the
+    # deadline + match used for the server-authoritative 3-2-1 GO! countdown.
+    display_status = db.Column(
+        db.String(20),
+        nullable=False,
+        default=DISPLAY_IDLE,
+        server_default=DISPLAY_IDLE,
+    )
+    display_go_match_id = db.Column(db.Integer, nullable=True, index=True)
+    display_go_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(
         db.DateTime, nullable=False, server_default=db.text("CURRENT_TIMESTAMP")
     )

@@ -842,11 +842,19 @@ ol, ul { list-style: none; }
   font-weight: 800;
 }
 .ctrl-btn--pause:hover { box-shadow: 0 7px 28px rgba(68,166,51,0.65); }
-.ctrl-btn--pause.playing {
-  background: var(--accent-1-500);
-  box-shadow: 0 5px 22px rgba(238,147,38,0.55);
-}
+.ctrl-btn--pause.playing { background: var(--accent-1-500); box-shadow: 0 5px 22px rgba(238,147,38,0.55); }
 .ctrl-btn--pause.playing:hover { box-shadow: 0 7px 28px rgba(238,147,38,0.7); }
+/* GO — armed (two-stage start) stands out from plain Start */
+.ctrl-btn--pause.go-armed {
+  background: var(--primary-500);
+  box-shadow: 0 5px 22px rgba(24,131,229,0.5);
+  animation: goPulse 1.1s ease-in-out infinite;
+}
+.ctrl-btn--pause.go-armed:hover { box-shadow: 0 7px 28px rgba(24,131,229,0.65); }
+@keyframes goPulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.045); }
+}
 /* Label text inside the primary button */
 .ctrl-btn--pause__label {
   font-size: 1rem;
@@ -1562,6 +1570,27 @@ ol, ul { list-style: none; }
   margin-top: 1.25rem;
   justify-content: flex-end;
 }
+
+/* Two-stage start checklist (not-ready blockers) */
+.start-checklist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+.start-checklist li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  font-size: 0.88rem;
+  color: var(--accent-2-300);
+  background: rgba(184,3,30,0.08);
+  border: 1px solid rgba(184,3,30,0.25);
+  border-radius: 12px;
+  padding: 0.6rem 0.8rem;
+}
+.start-checklist li i { margin-top: 0.15rem; }
 
 .dash-modal__confirm {
   display: inline-flex;

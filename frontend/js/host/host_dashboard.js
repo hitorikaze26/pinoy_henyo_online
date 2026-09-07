@@ -962,7 +962,6 @@ function renderRealQr(container, dataUri) {
   window.__PH_LIVE = true; // demo handlers defer to this live layer
 
   const MIN_CORRECT = 3; // turn completes at 3 correct words
-  const AUTO_WORDS  = 5; // MAX_WORDS_PER_TURN (backend caps at 5)
   const POLL_MS     = 1000; // light re-auth polling while a turn is active
   const TICK_MS     = 250;  // smooth local ticking between server payloads
 
@@ -995,6 +994,7 @@ function renderRealQr(container, dataUri) {
   let tickId = null;
   let pollId = null;
   let gameSettings = null;  // server-backed /api/games/<id>/settings payload
+  let displayState = { status: 'IDLE', matchId: null }; // two-stage start lifecycle
 
   const $ = (id) => document.getElementById(id);
 
@@ -1134,6 +1134,8 @@ function renderRealQr(container, dataUri) {
   /* ---------- turn helpers ---------- */
   function setActiveTurn(payload) {
     turn = payload;
+    // A terminal turn means the server reset the display lifecycle to IDLE.
+    if (payload && payload.turn_id && !isTurnRunning(payload)) syncDisplay(null);
     timerBase = {
       at: Date.now(),
       remaining: payload ? payload.remaining_seconds : 0,
@@ -1406,6 +1408,117 @@ function renderRealQr(container, dataUri) {
       nextBadge.textContent = 'Round ' + (r + 1);
     }
     tickDisplay();
+    renderStartControl();
+  }
+
+  /* ---------- two-stage display start (START -> GO -> countdown) ---------- */
+  // The pause/play button is a multi-state control driven by server truth:
+  //   No running turn  → START (validate + arm) → GO (3-2-1) → disabled
+  //   Running/paused   → Pause / Play (existing turn controls)
+  function renderStartControl() {
+    const btn = $('btn-pause-play');
+    const icon = $('pause-icon');
+    const label = $('btn-pause-play-label');
+    if (!btn || !label) return;
+    if (turn && isTurnRunning(turn)) {
+      const paused = turn.status === 'PAUSED';
+      if (icon) icon.className = paused ? 'fa-solid fa-play' : 'fa-solid fa-pause';
+      label.textContent = paused ? 'Play' : 'Pause';
+      btn.classList.add('playing');
+      btn.disabled = false;
+      return;
+    }
+    btn.classList.remove('playing');
+    if (displayState.status === 'ARMED' && displayState.matchId === (activeMatch && activeMatch.match_id)) {
+      if (icon) icon.className = 'fa-solid fa-flag';
+      label.textContent = 'GO';
+      btn.disabled = false;
+      btn.classList.add('go-armed');
+    } else if (displayState.status === 'COUNTDOWN' || displayState.status === 'RUNNING') {
+      if (icon) icon.className = 'fa-solid fa-hourglass-half';
+      label.textContent = 'Starting…';
+      btn.disabled = true;
+      btn.classList.remove('go-armed');
+    } else {
+      if (icon) icon.className = 'fa-solid fa-play';
+      label.textContent = 'Start';
+      btn.disabled = false;
+      btn.classList.remove('go-armed');
+    }
+  }
+
+  // Server-side display state (armed/starting) — restore after page load,
+  // a socket reconnect, or when a previous host tab armed the game.
+  async function restoreDisplayState() {
+    try {
+      const s = await API.request('/games/' + gameId + '/display/state', { host: true });
+      if (!s || !s.status) return;
+      // A RUNNING display means a turn is live — recover it fully.
+      if (s.status === 'RUNNING' && s.turn_id) {
+        const m = s.match_id != null ? (matches.find((x) => x.match_id === s.match_id) || null) : null;
+        if (m) activeMatch = m;
+        const p = await hostTurn(s.turn_id).catch(() => null);
+        if (p) { setActiveTurn(p); return; }
+      }
+      displayState = (s.status === 'ARMED' || s.status === 'COUNTDOWN' || s.status === 'RUNNING')
+        ? { status: s.status, matchId: s.match_id }
+        : { status: 'IDLE', matchId: null };
+      if (s.match_id != null && !(activeMatch && activeMatch.match_id === s.match_id)) {
+        const m = matches.find((x) => x.match_id === s.match_id) || null;
+        if (m) activeMatch = m;
+      }
+      renderAll();
+    } catch (err) { /* not ready / no host token yet — keep current state */ }
+  }
+
+  function openStartChecklist(issues) {
+    const list = $('start-checklist-items');
+    if (!list) return;
+    list.innerHTML = (issues && issues.length ? issues : ['The game is not ready to start.'])
+      .map((i) => '<li><i class="fa-solid fa-circle-exclamation"></i> ' + escHtml(i) + '</li>')
+      .join('');
+    const modal = $('modal-start-checklist');
+    if (modal) openModal(modal);
+  }
+
+  // Persist the armed/starting match the backend is holding, or clear it.
+  function syncDisplay(next) {
+    displayState = next || { status: 'IDLE', matchId: null };
+  }
+
+  async function displayStart() {
+    const payload = await API.request('/games/' + gameId + '/display/ready', {
+      method: 'POST',
+      host: true,
+      body: { match_id: activeMatch.match_id },
+    });
+    syncDisplay({ status: payload.status || 'IDLE', matchId: payload.match_id || null });
+    renderAll();
+    if (payload.display_target == null) {
+      toast('<i class="fa-solid fa-triangle-exclamation"></i> No phone is connected to show the secret — connect a player device.');
+    } else {
+      toast('<i class="fa-solid fa-check"></i> Ready — tap GO to start the 3… 2… 1… countdown.');
+    }
+  }
+
+  async function displayGo() {
+    const payload = await API.request('/games/' + gameId + '/display/go', {
+      method: 'POST',
+      host: true,
+      body: { match_id: activeMatch.match_id },
+    });
+    syncDisplay({ status: payload.status || 'COUNTDOWN', matchId: payload.match_id || null });
+    renderAll();
+    toast('<i class="fa-solid fa-flag"></i> GO! 3… 2… 1…');
+    // Fallback recovery in case the turn_started socket event is missed
+    // (brief reconnect blip): reconcile with /display/state after the
+    // server-side countdown deadline.
+    const countdownMs = (Number(payload.countdown_seconds) || 3) * 1000 + 1000;
+    setTimeout(() => {
+      if (displayState.status === 'COUNTDOWN' || displayState.status === 'RUNNING') {
+        restoreDisplayState();
+      }
+    }, countdownMs);
   }
 
   /* ---------- statefulness / busy guards ---------- */
@@ -1435,26 +1548,23 @@ function renderRealQr(container, dataUri) {
           : await TurnAPI.resume(turn.turn_id);
         setActiveTurn(p);
         renderAll();
-        const icon = $('pause-icon');
-        if (icon) icon.className = p.status === 'PAUSED' ? 'fa-solid fa-play' : 'fa-solid fa-pause';
-        const btn = $('btn-pause-play');
-        if (btn) btn.classList.toggle('playing', p.status === 'ACTIVE');
+      } else if (displayState.status === 'ARMED' && displayState.matchId === activeMatch.match_id) {
+        await displayGo();
       } else {
-        // auto-assign words + start the turn
-        await TurnAPI.createTurn(activeMatch.match_id, { count: AUTO_WORDS });
-        const p = await TurnAPI.startTurn(activeMatch.match_id);
-        setActiveTurn(p);
-        renderAll();
-        const icon = $('pause-icon');
-        if (icon) icon.className = 'fa-solid fa-pause';
-        const btn = $('btn-pause-play');
-        if (btn) btn.classList.add('playing');
-        toast('Turn started - <b>' + (p.current_word_text || '...') + '</b>');
+        await displayStart();
       }
     } catch (err) {
-      toast(API.messageForStatus && err && err.status ? API.messageForStatus(err.status, err.message) : (err && err.message ? err.message : 'Could not start turn.'));
+      const issues = err && err.raw && err.raw.error && err.raw.error.issues;
+      if (issues && issues.length) {
+        syncDisplay(null); // the backend reverted to IDLE
+        renderAll();
+        openStartChecklist(issues);
+      } else {
+        toast(API.messageForStatus && err && err.status ? API.messageForStatus(err.status, err.message) : (err && err.message ? err.message : 'Could not start the turn.'));
+      }
     } finally {
       busyAll(false);
+      renderStartControl(); // re-assert label + disabled state after busy guard
     }
   }
 
@@ -1739,6 +1849,10 @@ function renderRealQr(container, dataUri) {
 
   /* ---------- button wiring (replaces demo handlers) ---------- */
   rebind('btn-pause-play', handleStartPause);
+  ['close-start-checklist', 'btn-close-start-checklist'].forEach((id) => {
+    const el = $(id);
+    if (el) el.addEventListener('click', () => closeModal($('modal-start-checklist')));
+  });
   rebind('btn-correct', (e) => handleAction('correct', e));
   rebind('btn-pass', (e) => handleAction('pass', e));
   rebind('btn-stop', (e) => handleAction('timeout', e));
@@ -2019,19 +2133,37 @@ rebind('btn-penalty', (e) => handlePenalty(-penaltySeconds(), e));
     });
   });
 
-  // Server-originated match/game lifecycle → reload + re-render.
-  function rtReload() {
-    loadData().then(() => { renderAll(); }).catch(() => {});
-  }
-  if (rt) {
-    ['match_started', 'round_started', 'round_completed',
-     'game_started', 'game_paused', 'game_resumed',
-     'game_completed'].forEach((evt) => {
-      rt.on(evt, (payload) => {
-        if (!rtForThisGame(payload)) return;
-        rtReload();
+// Server-originated match/game lifecycle → reload + re-render.
+    function rtReload() {
+      loadData().then(() => { renderAll(); }).catch(() => {});
+    }
+    if (rt) {
+      ['match_started', 'round_started', 'round_completed',
+       'game_started', 'game_paused', 'game_resumed',
+       'game_completed'].forEach((evt) => {
+        rt.on(evt, (payload) => {
+          if (!rtForThisGame(payload)) return;
+          rtReload();
+        });
       });
-    });
+      // Two-stage display start events → mirror the server's display state
+      // without a full reload (the countdown is only 3s wide).
+      rt.on('display_armed', (p) => {
+        if (!rtForThisGame(p)) return;
+        syncDisplay({ status: p.status || 'ARMED', matchId: p.match_id || null });
+        renderAll();
+      });
+      rt.on('display_go', (p) => {
+        if (!rtForThisGame(p)) return;
+        syncDisplay({ status: p.status || 'COUNTDOWN', matchId: p.match_id || null });
+        renderAll();
+      });
+      rt.on('display_cancelled', (p) => {
+        if (!rtForThisGame(p)) return;
+        syncDisplay(null);
+        renderAll();
+        toast('Start cancelled — the game is no longer ready.');
+      });
     // Settings change (penalty step etc.) → apply live without a reload.
     rt.on('settings_updated', (payload) => {
       if (!rtForThisGame(payload)) return;
@@ -2083,11 +2215,13 @@ rebind('btn-penalty', (e) => handlePenalty(-penaltySeconds(), e));
     rt.onConnect(() => {
       if (activeMatch && turn && activeTurnId()) rt.joinTurn(turn.turn_id);
       rtReload();
+      restoreDisplayState();
       rtRosterRefresh();
     });
     rt.onReconnect(() => {
       if (activeMatch && turn && activeTurnId()) rt.joinTurn(turn.turn_id);
       rtReload();
+      restoreDisplayState();
       rtRosterRefresh();
     });
     rt.onDisconnect(() => { /* connection banner handled by pages */ });
@@ -2109,6 +2243,7 @@ rebind('btn-penalty', (e) => handlePenalty(-penaltySeconds(), e));
     await loadData();
     await loadRoster();
     renderAll();
+    restoreDisplayState();
     // Watch for server-driven completion states.
     const completeWatch = setInterval(async () => {
       if (activeMatch) {

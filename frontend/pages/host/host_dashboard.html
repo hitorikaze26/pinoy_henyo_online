@@ -215,9 +215,9 @@
                   <i class="fa-solid fa-minus"></i>
                   <span>3s</span>
                 </button>
-                <button class="ctrl-btn ctrl-btn--pause" id="btn-pause-play" aria-label="Start/Pause timer">
+<button class="ctrl-btn ctrl-btn--pause" id="btn-pause-play" aria-label="Start/Pause timer">
                   <i class="fa-solid fa-play" id="pause-icon"></i>
-                  <span class="ctrl-btn--pause__label">Start</span>
+                  <span class="ctrl-btn--pause__label" id="btn-pause-play-label">Start</span>
                 </button>
                 <button class="ctrl-btn ctrl-btn--bonus" id="btn-bonus" aria-label="Add 3 seconds" title="+3 seconds">
                   <i class="fa-solid fa-plus"></i>
@@ -598,7 +598,24 @@
             <i class="fa-solid fa-trash"></i> Delete Forever
           </button>
         </div>
-        <p class="gameover-delete__error" id="game-over-delete-error"></p>
+<p class="gameover-delete__error" id="game-over-delete-error"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Two-stage start checklist: shown when the game is not ready to start -->
+  <div class="dash-modal-overlay" id="modal-start-checklist" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="start-checklist-title">
+    <div class="dash-modal">
+      <button class="dash-modal__close" id="close-start-checklist" aria-label="Close">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+      <h2 class="dash-modal__title" id="start-checklist-title">
+        <i class="fa-solid fa-list-check"></i> Not Ready to Start
+      </h2>
+      <p class="dash-modal__subtitle">Fix everything below, then tap START again.</p>
+      <ul class="start-checklist" id="start-checklist-items"></ul>
+      <div class="dash-modal__actions">
+        <button class="dash-modal__confirm" id="btn-close-start-checklist">Got it</button>
       </div>
     </div>
   </div>

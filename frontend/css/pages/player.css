@@ -1391,6 +1391,151 @@ body[data-compact="1"] .w-add-btn   { padding: 0.65rem 0.9rem; }
 }
 
 /* ============================================================
+   DISPLAY VIEW (Manghuhula / target phone)
+   Two-stage start countdown + live secret word ticker.
+   ============================================================ */
+.fullscreen-view--display {
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgba(49,154,251,0.22), transparent 60%),
+    radial-gradient(120% 90% at 50% 110%, rgba(114,196,101,0.18), transparent 60%),
+    var(--app-bg);
+  padding: env(safe-area-inset-top, 0px) 1.5rem calc(env(safe-area-inset-bottom, 0px) + 1.5rem);
+}
+.display-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  width: 100%;
+  max-width: 520px;
+  text-align: center;
+  position: relative;
+}
+.display-kicker {
+  font-family: 'Baloo 2', sans-serif;
+  font-size: 0.82rem; font-weight: 800;
+  letter-spacing: 0.22em; text-transform: uppercase;
+  color: rgba(255,255,255,0.45);
+  margin-bottom: 0.5rem;
+}
+.display-stage { display: flex; flex-direction: column; align-items: center; gap: 1rem; }
+.display-stage[hidden] { display: none; }
+
+/* Countdown stage */
+.display-countdown-number {
+  font-family: 'Orbitron', monospace;
+  font-size: clamp(7rem, 34vw, 14rem);
+  font-weight: 900;
+  line-height: 1;
+  color: #fff;
+  text-shadow: 0 0 80px rgba(49,154,251,0.85);
+  animation: countPop 0.5s cubic-bezier(0.34,1.56,0.64,1) both;
+}
+.display-countdown-number--go {
+  color: var(--secondary-400);
+  text-shadow: 0 0 90px rgba(114,196,101,0.9);
+  animation: goFlash 0.9s ease both;
+}
+.display-countdown-label {
+  font-family: 'Baloo 2', sans-serif;
+  font-size: 1.25rem; font-weight: 800;
+  color: var(--primary-300);
+  letter-spacing: 0.1em;
+}
+@keyframes goFlash {
+  0%   { transform: scale(1.6);  opacity: 0; }
+  30%  { opacity: 1; }
+  100% { transform: scale(1);    opacity: 1; }
+}
+
+/* Secret word stage */
+.display-secret-eyebrow {
+  font-family: 'Baloo 2', sans-serif;
+  font-size: 0.82rem; font-weight: 800;
+  letter-spacing: 0.18em; text-transform: uppercase;
+  color: rgba(255,255,255,0.55);
+}
+.display-secret-word {
+  font-family: 'Orbitron', monospace;
+  font-size: clamp(2.6rem, 11vw, 4.8rem);
+  font-weight: 800;
+  line-height: 1.15;
+  color: #fff;
+  text-shadow: 0 0 60px rgba(49,154,251,0.75);
+  word-break: break-word;
+  animation: wordReveal 0.4s cubic-bezier(0.34,1.56,0.64,1) both;
+}
+@keyframes wordReveal {
+  from { transform: scale(0.9); opacity: 0; filter: blur(8px); }
+  to   { transform: scale(1);   opacity: 1; filter: blur(0); }
+}
+.display-secret-count {
+  font-family: 'Baloo 2', sans-serif;
+  font-size: 0.95rem; font-weight: 700;
+  color: rgba(255,255,255,0.5);
+}
+.display-ticker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  justify-content: center;
+  margin-top: 0.6rem;
+}
+.display-ticker__dot {
+  width: 34px; height: 8px;
+  border-radius: var(--r-full);
+  background: rgba(255,255,255,0.12);
+  transition: background 0.3s, box-shadow 0.3s;
+}
+.display-ticker__dot--current { background: #fff; box-shadow: 0 0 12px rgba(255,255,255,0.7); }
+.display-ticker__dot--done    { background: var(--secondary-400); box-shadow: 0 0 10px rgba(114,196,101,0.7); }
+.display-ticker__dot--missed  { background: var(--accent-2-400);  box-shadow: 0 0 10px rgba(247,101,118,0.7); }
+
+/* Waiting stage */
+.display-idle-icon {
+  width: 84px; height: 84px;
+  border-radius: var(--r-full);
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  font-size: 2rem;
+  color: var(--primary-400);
+  animation: idleBreath 2s ease-in-out infinite;
+}
+.display-idle-title {
+  font-family: 'Baloo 2', sans-serif;
+  font-size: 1.4rem; font-weight: 800; color: #fff;
+}
+.display-idle-sub {
+  font-family: 'Baloo 2', sans-serif;
+  font-size: 0.92rem; color: rgba(255,255,255,0.5);
+}
+@keyframes idleBreath {
+  0%, 100% { transform: scale(1);    opacity: 0.85; }
+  50%      { transform: scale(1.08); opacity: 1; }
+}
+
+/* Paused overlay */
+.display-paused {
+  position: fixed;
+  left: 50%;
+  bottom: calc(2rem + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  display: flex; align-items: center; gap: 0.55rem;
+  padding: 0.6rem 1.4rem;
+  border-radius: var(--r-full);
+  background: rgba(0,0,0,0.55);
+  border: 1px solid rgba(255,255,255,0.18);
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 800; letter-spacing: 0.14em;
+  color: var(--accent-1-400);
+  animation: pauseBlink 1.4s ease-in-out infinite;
+}
+.display-paused[hidden] { display: none; }
+@keyframes pauseBlink { 50% { opacity: 0.55; } }
+
+/* ============================================================
    TAGASAGOT GAME VIEW
 ============================================================ */
 .fullscreen-view--game {

@@ -46,6 +46,12 @@ def drop_peer(sid):
         return SOCKET_PEERS.pop(sid, None)
 
 
+def snapshot_peers():
+    """Read-only snapshot of all registered peers (sid, data) pairs."""
+    with _PEERS_LOCK:
+        return list(SOCKET_PEERS.items())
+
+
 def reset_peers():
     with _PEERS_LOCK:
         SOCKET_PEERS.clear()
@@ -179,11 +185,32 @@ def emit_match_started(match):
 # ---------------------------------------------------------------------------
 
 
+def _emit_secret_to_targets(event, turn):
+    """Deliver the secret turn payload to the resolved display target only.
+
+    The secret lives only on the current display device (Manghuhula phone
+    when connected, otherwise the team-leader phone). Resolved dynamically
+    so a mid-turn disconnect/reconnect re-targets correctly.
+    """
+    from ..services.display_service import display_target_resolution
+
+    payload = _serializable(secret_turn_payload(turn))
+    try:
+        resolution = display_target_resolution(
+            turn.match.game_id, turn.team_id
+        )
+    except Exception:  # noqa: BLE001 - never break the turn feed
+        resolution = {"sids": []}
+    sids = resolution.get("sids") or []
+    if sids:
+        socketio.emit(event, payload, room=sids)
+
+
 def emit_turn_started(turn):
     public = public_turn_payload(turn)
     _emit(game_room(turn.match.game_id), "turn_started", public)
     _emit(turn_room(turn.id), "turn_started", public)
-    _emit(manghuhula_room(turn.team_id), "turn_started", secret_turn_payload(turn))
+    _emit_secret_to_targets("turn_started", turn)
     _emit(game_room(turn.match.game_id), "timer_updated", timer_payload(turn))
     _emit(turn_room(turn.id), "timer_updated", timer_payload(turn))
 
@@ -273,11 +300,73 @@ def emit_turn_completed(turn, outcome=None):
         public["outcome"] = outcome
     _emit(game_room(turn.match.game_id), "turn_completed", public)
     _emit(turn_room(turn.id), "turn_completed", public)
-    _emit(
-        manghuhula_room(turn.team_id),
-        "turn_completed",
-        secret_turn_payload(turn),
-    )
+    _emit_secret_to_targets("turn_completed", turn)
+
+
+# ---------------------------------------------------------------------------
+# Two-stage display start events (host START/GO + countdown)
+# ---------------------------------------------------------------------------
+
+
+def _display_target_sids(game_id, team_id):
+    from ..services.display_service import display_target_resolution
+
+    try:
+        resolution = display_target_resolution(game_id, team_id)
+    except Exception:  # noqa: BLE001
+        resolution = {"sids": []}
+    return resolution
+
+
+def emit_display_armed(game, match):
+    data = {
+        "game_id": game.id,
+        "match_id": match.id,
+        "team_id": match.team_id,
+        "status": game.display_status,
+    }
+    _emit(game_room(game.id), "display_armed", data)
+    resolution = _display_target_sids(game.id, match.team_id)
+    if resolution.get("sids"):
+        socketio.emit(
+            "display_armed", _serializable(data), room=resolution["sids"]
+        )
+
+
+def emit_display_go(game, match):
+    from ..services.display_service import COUNTDOWN_SECONDS
+
+    data = {
+        "game_id": game.id,
+        "match_id": match.id,
+        "team_id": match.team_id,
+        "status": game.display_status,
+        "countdown_seconds": COUNTDOWN_SECONDS,
+        "go_at": (
+            game.display_go_at.isoformat() if game.display_go_at else None
+        ),
+    }
+    _emit(game_room(game.id), "display_go", data)
+    resolution = _display_target_sids(game.id, match.team_id)
+    if resolution.get("sids"):
+        socketio.emit(
+            "display_go", _serializable(data), room=resolution["sids"]
+        )
+
+
+def emit_display_cancelled(game, match):
+    data = {
+        "game_id": game.id,
+        "match_id": match.id,
+        "team_id": match.team_id,
+        "status": "IDLE",
+    }
+    _emit(game_room(game.id), "display_cancelled", data)
+    resolution = _display_target_sids(game.id, match.team_id)
+    if resolution.get("sids"):
+        socketio.emit(
+            "display_cancelled", _serializable(data), room=resolution["sids"]
+        )
 
 
 def mark_round_completed_if_done(match):

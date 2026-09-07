@@ -2720,6 +2720,165 @@ init();
     return String(role || '').toUpperCase() === 'MANGHUHULA' ? 'Manghuhula' : 'Tagasagot';
   }
 
+  /* ---------- display (two-stage start) view ----------
+     The target device (connected Manghuhula, else the team leader)
+     shows the start countdown and the live secret word ticker. */
+  let displayStatus = 'IDLE';
+  let displayGoAt = null;
+  let displayTimer = null;
+  let displayWords = [];
+  let displayIndex = 0;
+
+  function isDisplayOpen() { return STATE.fullscreenView === 'display'; }
+  function openDisplayView() {
+    if (isDisplayOpen()) return;
+    openFullscreen('view-display');
+  }
+  function closeDisplayView() {
+    setPausedOverlay(false);
+    clearDisplayTimer();
+    if (isDisplayOpen()) closeFullscreen();
+  }
+  function displayStage(name) { return $('display-stage-' + name); }
+  function showDisplayStage(name) {
+    ['countdown', 'secret', 'idle'].forEach((s) => {
+      const el = displayStage(s);
+      if (el) el.hidden = (s !== name);
+    });
+  }
+  function setPausedOverlay(show) {
+    const el = $('display-paused');
+    if (el) el.hidden = !show;
+  }
+  function clearDisplayTimer() {
+    if (displayTimer) { clearInterval(displayTimer); displayTimer = null; }
+  }
+  function tickerClass(res) {
+    if (res === 'CORRECT' || res === 'PASSED') return 'display-ticker__dot--done';
+    if (res === 'FAILED') return 'display-ticker__dot--missed';
+    return '';
+  }
+  function renderDisplayTicker() {
+    const ticker = $('display-ticker');
+    if (!ticker) return;
+    ticker.innerHTML = displayWords.map((w, i) => {
+      const cls = i === displayIndex
+        ? 'display-ticker__dot--current'
+        : tickerClass(w.result);
+      return '<span class="display-ticker__dot ' + cls + '"></span>';
+    }).join('');
+  }
+  function showSecretWord(wordText, index, total) {
+    const wordEl = $('display-secret-word');
+    if (wordEl && wordText) {
+      wordEl.style.animation = 'none';
+      void wordEl.offsetWidth;
+      wordEl.style.animation = '';
+      wordEl.textContent = wordText;
+    }
+    const countEl = $('display-secret-count');
+    if (countEl) countEl.textContent = 'Word ' + (index + 1) + ' of ' + Math.max(1, total);
+  }
+  function paintSecretFromTurn(p) {
+    displayWords = Array.isArray(p && p.words) ? p.words : displayWords;
+    let idx = 0;
+    if (p && p.current_word_id != null && displayWords.length) {
+      const found = displayWords.findIndex((w) => w.word_id === p.current_word_id);
+      idx = found < 0 ? 0 : found;
+    }
+    displayIndex = idx;
+    showSecretWord(p.current_word_text, idx, p.total_words || displayWords.length);
+    renderDisplayTicker();
+  }
+  function startDisplayCountdown(seconds, goAtISO) {
+    const total = Math.max(1, Number(seconds) || 3);
+    displayGoAt = goAtISO ? new Date(goAtISO).getTime() : null;
+    showDisplayStage('countdown');
+    const numEl = $('display-countdown-number');
+    const labelEl = $('display-countdown-label');
+    if (numEl) {
+      numEl.classList.remove('display-countdown-number--go');
+      numEl.style.animation = 'none';
+      void numEl.offsetWidth;
+      numEl.style.animation = '';
+      numEl.textContent = String(total);
+    }
+    if (labelEl) labelEl.textContent = 'Get ready…';
+    clearDisplayTimer();
+    displayTimer = setInterval(() => {
+      if (!isDisplayOpen()) { clearDisplayTimer(); return; }
+      const remain = displayGoAt
+        ? Math.max(0, Math.ceil((displayGoAt - Date.now()) / 1000))
+        : (total - Math.floor((Date.now() - displayTimerStart) / 1000));
+      if (remain <= 0) {
+        clearDisplayTimer();
+        if (numEl) { numEl.classList.add('display-countdown-number--go'); numEl.textContent = 'GO!'; }
+        if (labelEl) labelEl.textContent = 'Pass the phone to the Manghuhula!';
+        return;
+      }
+      if (numEl) {
+        numEl.style.animation = 'none';
+        void numEl.offsetWidth;
+        numEl.style.animation = '';
+        numEl.textContent = String(remain);
+      }
+    }, 250);
+    let displayTimerStart = Date.now(); // local-clock fallback when no go_at
+  }
+  function advanceDisplayWord(p) {
+    if (!isDisplayOpen()) return;
+    if (displayWords.length && p && p.result && displayIndex >= 0 && displayIndex < displayWords.length) {
+      displayWords[displayIndex].result = p.result;
+    }
+    let idx = displayIndex + 1;
+    if (p && p.current_word_id != null && displayWords.length) {
+      const found = displayWords.findIndex((w) => w.word_id === p.current_word_id);
+      if (found >= 0) idx = found;
+    }
+    displayIndex = idx;
+    const w = displayWords[idx];
+    showSecretWord(w && w.word_text ? w.word_text : '—', idx, displayWords.length);
+    renderDisplayTicker();
+  }
+  function fetchDisplayState() {
+    return API.request('/games/' + API.getGameId() + '/display/state', { session: true }).catch(() => null);
+  }
+  function applyDisplayState(s) {
+    if (!s || !s.status) return;
+    displayStatus = s.status;
+    if (!s.is_target) { closeDisplayView(); return; }
+    if (displayStatus === 'ARMED') {
+      openDisplayView();
+      showDisplayStage('idle');
+      const msg = $('display-status-msg');
+      if (msg) msg.textContent = 'Ready — the host will start in a moment!';
+    } else if (displayStatus === 'COUNTDOWN') {
+      openDisplayView();
+      startDisplayCountdown(s.countdown_seconds, s.go_at);
+    } else if (displayStatus === 'RUNNING') {
+      openDisplayView();
+      if (s.turn_id) {
+        API.request('/turns/' + s.turn_id, { session: true })
+          .then((p) => {
+            if (p) setPausedOverlay(p.status === 'PAUSED');
+            if (p && p.current_word_text != null) {
+              showDisplayStage('secret');
+              paintSecretFromTurn(p);
+            } else {
+              showDisplayStage('idle');
+            }
+          })
+          .catch(() => { showDisplayStage('idle'); });
+      } else {
+        showDisplayStage('idle');
+      }
+    }
+  }
+  function recoverDisplay() {
+    if (!API.getGameId() || !API.getSessionToken()) return;
+    fetchDisplayState().then((s) => { if (s) applyDisplayState(s); }).catch(() => {});
+  }
+
   /* ---------- server-authoritative timer mirror ---------- */
   function applyTimer(p) {
     if (!p) return;
@@ -2780,10 +2939,13 @@ init();
     if (p.turn_id != null) knownTurnId = p.turn_id;
     applyTimer(p);
     try { renderTagasagotView(); } catch (e) {}
-    // Secret (Manghuhula room) payload: current_word_text is only present there.
-    if (p.current_word_text && API.getGameplayRole() === 'MANGHUHULA') {
+    // Secret (display-target payload): current_word_text is only present there.
+    if (p.current_word_text != null) {
       STATE.currentSecretWord = p.current_word_text;
-      showToast('Manghuhula: ' + p.current_word_text);
+      displayStatus = 'RUNNING';
+      openDisplayView();
+      showDisplayStage('secret');
+      paintSecretFromTurn(p);
     }
     if (rt.getSocket()) rt.joinTurn(p.turn_id);
   });
@@ -2798,11 +2960,18 @@ init();
     try { renderTagasagotView(); } catch (e) {}
   });
 
-  // Word results update progress + timer.
+  // Two-stage start lifecycle. Only the resolved display target device
+  // opens the fullscreen view (server-authoritative via /display/state).
+  rt.on('display_armed', (p) => { if (!forMyTeam(p)) return; fetchDisplayState().then((s) => { if (s) applyDisplayState(s); }).catch(() => {}); });
+  rt.on('display_go', (p) => { if (!forMyTeam(p)) return; fetchDisplayState().then((s) => { if (s) applyDisplayState(s); }).catch(() => {}); });
+  rt.on('display_cancelled', (p) => { if (!forMyTeam(p)) return; closeDisplayView(); });
+
+  // Word results update progress + timer (and advance the display ticker).
   rt.on('word_correct', (p) => {
     if (!forMyTeam(p)) return;
     if (typeof p.correct_words === 'number') STATE.wordsGuessed = p.correct_words;
     applyTimer(p);
+    advanceDisplayWord(p);
     try { haptic('correct'); } catch (e) {}
     try { updateGameProgress(); } catch (e) {}
   });
@@ -2810,6 +2979,7 @@ init();
     if (!forMyTeam(p)) return;
     if (typeof p.passed_words === 'number') STATE.score = p.passed_words;
     applyTimer(p);
+    advanceDisplayWord(p);
     try { haptic('pass'); } catch (e) {}
     try { updateGameProgress(); } catch (e) {}
   });
@@ -2818,11 +2988,16 @@ init();
   ['timer_updated', 'timer_paused', 'timer_resumed', 'time_added', 'time_removed', 'penalty_applied']
     .forEach((evt) => {
       rt.on(evt, (p) => {
-        if (p && p.turn_id != null && p.turn_id !== knownTurnId) return; // not our turn
-        if (!forMyTeam(p)) return;
+        // Timer payloads carry turn_id (not team_id) — scope by our turn.
+        if (p && p.turn_id != null) {
+          if (p.turn_id !== knownTurnId) return;
+        } else if (!forMyTeam(p)) {
+          return;
+        }
         if (evt === 'penalty_applied') { try { haptic('wrong'); } catch (e) {} }
         if (p.status === 'PAUSED') { stopTimerTicker(); }
         else applyTimer(p);
+        if (isDisplayOpen()) setPausedOverlay(p.status === 'PAUSED');
         try { renderTagasagotView(); } catch (e) {}
       });
     });
@@ -2831,6 +3006,9 @@ init();
   rt.on('turn_completed', (p) => {
     if (!forMyTeam(p)) return;
     STATE.currentSecretWord = null;
+    displayWords = [];
+    displayStatus = 'IDLE';
+    closeDisplayView();
     stopTimerTicker();
     try { renderHeader(); renderTeamsTab(); } catch (e) {}
   });
@@ -2895,12 +3073,14 @@ init();
     STATE.isConnected = true;
     if (knownTurnId) rt.joinTurn(knownTurnId);
     refreshPlayerConnectionStatus();
+    recoverDisplay();
     try { renderHeader(); } catch (e) {}
   });
   rt.onReconnect(() => {
     STATE.isConnected = true;
     if (knownTurnId) rt.joinTurn(knownTurnId);
     refreshPlayerConnectionStatus();
+    recoverDisplay();
     try { renderHeader(); } catch (e) {}
     notifyIf('connection', () => showToast('Reconnected'));
   });

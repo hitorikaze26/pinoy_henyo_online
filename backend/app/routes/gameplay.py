@@ -1,8 +1,16 @@
 from flask import Blueprint, request
 
 from ..extensions import db
-from ..models import GameEvent, Match, Penalty, Turn, TurnWord
-from ..services import gameplay_service, realtime, turn_service
+from ..models import (
+    DeviceSession,
+    Game,
+    GameEvent,
+    Match,
+    Penalty,
+    Turn,
+    TurnWord,
+)
+from ..services import display_service, gameplay_service, realtime, turn_service
 from ..utils.auth import host_authorized, host_token_from_request, require_host
 from ..utils.response import error_response, success_response
 from ..utils.time import utcnow
@@ -125,6 +133,7 @@ def _emit_word_changes(turn, before):
 
 
 def _emit_turn_finished(turn, outcome=None):
+    display_service.finish_display(turn.match.game)
     realtime.emit_turn_completed(turn, outcome=outcome)
     if realtime.mark_round_completed_if_done(turn.match):
         _record_event(
@@ -412,6 +421,119 @@ def game_readiness(game):
 
 
 # ---------------------------------------------------------------------------
+# Two-stage display start (host START -> ARM -> GO -> countdown -> turn)
+# ---------------------------------------------------------------------------
+
+
+def _display_not_ready(issues):
+    return error_response(
+        "The game is not ready to start this turn.",
+        code="DISPLAY_NOT_READY",
+        status=400,
+        issues=issues,
+    )
+
+
+def _display_match_for(game, body):
+    match_id = body.get("match_id")
+    if not match_id:
+        return None
+    match = db.session.get(Match, match_id)
+    if match is None or match.game_id != game.id:
+        return None
+    return match
+
+
+@gameplay_bp.post("/games/<int:game_id>/display/ready")
+@require_host
+def display_ready(game):
+    body = request.get_json(silent=True) or {}
+    frozen = _ensure_mutable(game)
+    if frozen is not None:
+        return frozen
+    match = _display_match_for(game, body)
+    issues = display_service.start_readiness(game, match)
+    if issues:
+        # Invalid START keeps the game un-armed; the host gets the checklist.
+        game.display_status = display_service.DISPLAY_IDLE
+        db.session.commit()
+        return _display_not_ready(issues)
+    payload = display_service.arm(game, match)
+    realtime.emit_display_armed(game, match)
+    return success_response(data=payload)
+
+
+@gameplay_bp.post("/games/<int:game_id>/display/go")
+@require_host
+def display_go(game):
+    body = request.get_json(silent=True) or {}
+    if game.display_status != display_service.DISPLAY_ARMED:
+        return error_response(
+            "Nothing is armed — click START first.",
+            code="DISPLAY_NOT_ARMED",
+            status=409,
+        )
+    match = _display_match_for(game, body)
+    if match is None or match.id != game.display_go_match_id:
+        return error_response(
+            "The armed match is no longer valid.",
+            code="DISPLAY_NOT_READY",
+            status=409,
+        )
+    frozen = _ensure_mutable(game)
+    if frozen is not None:
+        display_service.reset_display(game)
+        realtime.emit_display_cancelled(game, match)
+        return frozen
+    # GO re-validates: if the game became un-startable, revert to IDLE.
+    issues = display_service.start_readiness(game, match)
+    if issues:
+        display_service.reset_display(game)
+        realtime.emit_display_cancelled(game, match)
+        return _display_not_ready(issues)
+    payload = display_service.set_countdown(game, match)
+    realtime.emit_display_go(game, match)
+    return success_response(data=payload)
+
+
+@gameplay_bp.get("/games/<int:game_id>/display/state")
+def display_state(game_id):
+    game = db.session.get(Game, game_id)
+    if game is None:
+        return error_response(
+            "Game not found.", code="GAME_NOT_FOUND", status=404
+        )
+    token = host_token_from_request()
+    member_id = None
+    if token is None or not host_authorized(game):
+        session_token = request.headers.get(SESSION_TOKEN_HEADER)
+        session = (
+            DeviceSession.query.filter_by(
+                session_token=session_token, disconnected_at=None
+            ).first()
+            if session_token
+            else None
+        )
+        if (
+            session is None
+            or session.game_id != game.id
+            or session.member_id is None
+        ):
+            return error_response(
+                "Host token or an active device session is required.",
+                code="UNAUTHORIZED",
+                status=401,
+            )
+        member_id = session.member_id
+    # A delayed read recovers a countdown whose deferred task was lost
+    # (process restart) — server-authoritative, idempotent.
+    display_service.start_pending_go_if_ready(game)
+    return success_response(
+        data=display_service.state_payload(game, member_id=member_id)
+    )
+
+
+# ---------------------------------------------------------------------------
 # Turn gameplay
 # ---------------------------------------------------------------------------
 
@@ -564,12 +686,12 @@ def get_turn(turn_id):
     if token is not None and host_authorized(turn.match.game):
         return success_response(data=turn_service.turn_play_payload(turn))
     session_token = request.headers.get(SESSION_TOKEN_HEADER)
-    if _session_is_manghuhula(turn.match, session_token):
+    if _session_can_see_secret(turn.match, session_token):
         return success_response(data=turn_service.turn_play_payload(turn))
     return success_response(data=turn_service.public_turn_payload(turn))
 
 
-def _session_is_manghuhula(match, session_token):
+def _session_can_see_secret(match, session_token):
     from ..models import TeamMember
 
     if not session_token:
@@ -580,10 +702,18 @@ def _session_is_manghuhula(match, session_token):
     if session is None or session.member_id is None:
         return False
     member = db.session.get(TeamMember, session.member_id)
-    return (
+    if (
         member is not None
         and member.gameplay_role == TeamMember.GAMEPLAY_ROLE_MANGHUHULA
+    ):
+        return True
+    # A team-leader phone acting as the fallback display target may also
+    # recover the full (secret) turn on reconnect. Resolution is dynamic:
+    # only used while that device is the current resolved target.
+    resolution = display_service.display_target_resolution(
+        match.game_id, match.team_id
     )
+    return member is not None and member.id in resolution["member_ids"]
 
 
 @gameplay_bp.get("/games/<int:game_id>/scores")

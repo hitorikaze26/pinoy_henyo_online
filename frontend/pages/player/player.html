@@ -14,7 +14,7 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Chivo+Mono:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Chivo+Mono:wght@600;700;800&family=Inter:wght@400;500;600;700&family=Orbitron:wght@600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
 
   <!-- Global CSS (must load first) -->
@@ -897,6 +897,45 @@
       <p class="countdown-round" id="countdown-round-label">Round 1</p>
       <p class="countdown-label">GET READY!</p>
       <div class="countdown-number" id="countdown-number">3</div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       FULLSCREEN: DISPLAY (the Manghuhula / target phone shows the
+       secret; two-stage start countdown + word ticker live here)
+  ============================================================ -->
+  <div class="fullscreen-view fullscreen-view--display" id="view-display" hidden aria-label="Display">
+    <div class="display-inner">
+
+      <p class="display-kicker" id="display-kicker">YOUR TEAM'S TURN</p>
+
+      <!-- Countdown stage (display_armed -> display_go -> GO!) -->
+      <div class="display-stage" id="display-stage-countdown" hidden>
+        <div class="display-countdown-number" id="display-countdown-number">3</div>
+        <p class="display-countdown-label" id="display-countdown-label">Get ready…</p>
+      </div>
+
+      <!-- Secret word stage (only on the display target device) -->
+      <div class="display-stage" id="display-stage-secret" hidden>
+        <p class="display-secret-eyebrow"><i class="fa-solid fa-arrow-down"></i> SHOW THIS TO YOUR TEAM</p>
+        <p class="display-secret-word" id="display-secret-word">—</p>
+        <p class="display-secret-count" id="display-secret-count">Word 1 of 1</p>
+        <div class="display-ticker" id="display-ticker" aria-hidden="true"></div>
+      </div>
+
+      <!-- Waiting stage (no active start) -->
+      <div class="display-stage" id="display-stage-idle" hidden>
+        <div class="display-idle-icon"><i class="fa-solid fa-hourglass-half"></i></div>
+        <p class="display-idle-title" id="display-status-msg">Waiting for the host…</p>
+        <p class="display-idle-sub">Keep this screen on your team's phone.</p>
+      </div>
+
+      <!-- Paused overlay -->
+      <div class="display-paused" id="display-paused" hidden>
+        <i class="fa-solid fa-circle-pause"></i>
+        <span>PAUSED</span>
+      </div>
+
     </div>
   </div>
 
