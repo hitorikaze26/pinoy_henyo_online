@@ -155,6 +155,7 @@ function setConnectionStatus(status) {
   STATE.hostConnected = status === 'CONNECTED';
   try { renderHeader(); } catch (e) {}
   try { renderTeamsTab(); } catch (e) {}
+  syncAddWordFab();
   return prev !== status;
 }
 
@@ -403,6 +404,20 @@ function switchTab(tabKey) {
     btn.classList.toggle('bottom-nav__item--active', isActive);
     btn.setAttribute('aria-selected', String(isActive));
   });
+
+  syncAddWordFab();
+}
+
+/* Floating "Add Word" button: visible only while the Words tab is active,
+   the device is connected to the host, and the word pool is unlocked. */
+function syncAddWordFab() {
+  const fab = $('btn-add-word-fab');
+  if (!fab) return;
+  fab.hidden = !(
+    STATE.activeTab === 'words'
+    && STATE.connectionStatus === 'CONNECTED'
+    && !STATE.wordsLocked
+  );
 }
 
 // Wire up all nav buttons (bottom nav + game view nav)
@@ -845,7 +860,7 @@ function renderWordsTab() {
               ${ready ? '<span class="w-cat-item__check" aria-label="Ready"><i class="fa-solid fa-check" aria-hidden="true"></i></span>' : ''}
             </div>`;
         }).join('')
-      : `<p class="w-cat-empty">No words added yet — add your first word below.</p>`;
+      : `<p class="w-cat-empty">No words added yet — tap the + button to add your first word.</p>`;
   }
 
   /* ── Top-category badge (status bar) ─────────────────── */
@@ -880,19 +895,8 @@ function renderWordsTab() {
     badge.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> ${needed} more categor${needed === 1 ? 'y' : 'ies'} needed`;
   }
 
-  /* ── Add-word button state ────────────────────────────── */
-  const addBtn = $('btn-add-word');
-  if (locked) {
-    addBtn.disabled = true;
-    addBtn.innerHTML = `
-      <span class="w-add-btn__icon"><i class="fa-solid fa-lock"></i></span>
-      <span class="w-add-btn__label">Words Locked</span>`;
-  } else {
-    addBtn.disabled = false;
-    addBtn.innerHTML = `
-      <span class="w-add-btn__icon"><i class="fa-solid fa-plus"></i></span>
-      <span class="w-add-btn__label">Add Word</span>`;
-  }
+  /* ── Floating Add Word button state ─────────────────── */
+  syncAddWordFab();
 
   /* ── Lock banner visibility ───────────────────────────── */
   $('words-locked-overlay').hidden = !locked;
@@ -1037,7 +1041,7 @@ function normalizeForCompare(s) {
   return String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
-$('btn-add-word').addEventListener('click', openAddWord);
+$('btn-add-word-fab').addEventListener('click', openAddWord);
 $('add-word-category').addEventListener('change', updateCapHint);
 $('close-add-word').addEventListener('click',  () => { resetAddWordModal(); closeModal('modal-add-word'); });
 $('cancel-add-word').addEventListener('click', () => { resetAddWordModal(); closeModal('modal-add-word'); });

@@ -90,10 +90,15 @@
   const STATUS_CONCURRENCY = 4;
 
   async function refreshStatuses(list) {
-    const jobs = list.filter((g) => !TERMINAL_STATUSES.has(g.status));
-    if (!jobs.length) return list;
+    if (!list.length) return list;
+
+    // Every game is checked (not just live ones) so server-side deletions —
+    // expiry cleanup on the host, deletion from another device, etc. — prune
+    // stale cards even when the registry still remembers a terminal status.
+    const jobs = list.slice();
 
     const changed = [];
+    const gone = []; // game ids that no longer exist on the server
     let idx = 0;
     async function worker() {
       while (idx < jobs.length) {
@@ -108,7 +113,15 @@
             if (!g.created_at && fresh.created_at) g.created_at = fresh.created_at;
             if (prev !== fresh.status) changed.push(g);
           }
-        } catch (e) { /* 404/network: keep the stored entry as-is */ }
+        } catch (e) {
+          // 404 (GAME_NOT_FOUND) means the row was deleted server-side; drop
+          // it from the registry so the card stops rendering. Network or other
+          // transient errors keep the stored entry as-is.
+          if (e && (e.status === 404 || e.code === 'GAME_NOT_FOUND')) {
+            gone.push(String(g.game_id));
+            API.removeMyGame(g.game_id);
+          }
+        }
       }
     }
 
@@ -118,7 +131,9 @@
     changed.forEach((g) => API.updateMyGame({
       game_id: g.game_id, status: g.status, ended_at: g.ended_at || undefined,
     }));
-    return list;
+    return gone.length
+      ? list.filter((g) => !gone.includes(String(g.game_id)))
+      : list;
   }
 
   /* ---------- spinner / message helpers ---------- */

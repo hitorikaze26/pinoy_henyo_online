@@ -275,12 +275,6 @@
           <div class="w-word-list" id="word-chips" aria-live="polite">
             <!-- populated by JS -->
           </div>
-
-          <!-- Add button -->
-          <button class="w-add-btn" id="btn-add-word">
-            <span class="w-add-btn__icon"><i class="fa-solid fa-plus"></i></span>
-            <span class="w-add-btn__label">Add Word</span>
-          </button>
         </div>
 
       </div><!-- /#tab-words -->
@@ -886,6 +880,11 @@
         <span>Settings</span>
       </button>
     </nav>
+
+    <!-- Floating "Add Word" button — Words tab only (visibility managed by JS) -->
+    <button class="w-fab" id="btn-add-word-fab" type="button" title="Add a word" aria-label="Add a word" hidden>
+      <i class="fa-solid fa-plus"></i>
+    </button>
 
   </div><!-- /#app-shell -->
 

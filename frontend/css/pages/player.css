@@ -1187,77 +1187,56 @@ ul, ol { list-style: none; }
 
 /* ── Add Word button ─────────────────────────────────────────
    Full-width CTA at the bottom of the word-list card.
-   Prominent primary action; locked state grays it out.        */
-.w-add-btn {
+   Floating action button. Fixed to the bottom-right corner of the app
+   shell (above the bottom nav) and only shown while the Words tab is
+   active (visibility is driven by JS via the hidden attribute).        */
+.w-fab {
+  position: fixed;
+  right: 1.25rem;
+  bottom: calc(var(--bottom-nav-h) + 1rem + var(--safe-bottom));
+  z-index: 60;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.6rem;
-  width: 100%;
-  padding: 0.95rem 1.25rem;
-  border-radius: var(--r-lg);
   background: linear-gradient(135deg, var(--primary-600) 0%, var(--primary-500) 60%, #5BB0FF 100%);
   color: #fff;
-  font-family: inherit;
-  font-size: 0.95rem;
-  font-weight: 700;
-  border: none;
-  cursor: pointer;
-  letter-spacing: 0.025em;
-  position: relative;
-  overflow: hidden;
-  transition: filter 0.18s, transform 0.14s, box-shadow 0.18s, background 0.18s;
-  box-shadow: 0 4px 20px rgba(49,154,251,0.32), 0 1px 0 rgba(255,255,255,0.12) inset;
+  font-size: 1.4rem;
+  box-shadow: 0 6px 24px rgba(49,154,251,0.45), 0 1px 0 rgba(255,255,255,0.14) inset;
+  transition: filter 0.18s, transform 0.14s, box-shadow 0.18s;
 }
-/* Shine sweep on hover */
-.w-add-btn::before {
+.w-fab::before {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(105deg, transparent 35%, rgba(255,255,255,0.12) 50%, transparent 65%);
-  transform: translateX(-100%);
+  border-radius: 50%;
+  background: linear-gradient(105deg, transparent 35%, rgba(255,255,255,0.14) 50%, transparent 65%);
+  transform: translateX(-110%);
   transition: transform 0.45s ease;
   pointer-events: none;
 }
-.w-add-btn:hover::before { transform: translateX(100%); }
-.w-add-btn:hover {
+.w-fab:hover::before { transform: translateX(110%); }
+.w-fab:hover {
   filter: brightness(1.1);
-  box-shadow: 0 6px 28px rgba(49,154,251,0.45), 0 1px 0 rgba(255,255,255,0.14) inset;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px rgba(49,154,251,0.55), 0 1px 0 rgba(255,255,255,0.16) inset;
 }
-.w-add-btn:active { transform: scale(0.975); }
-.w-add-btn:focus-visible {
+.w-fab:active { transform: scale(0.94); }
+.w-fab:focus-visible {
   outline: 3px solid rgba(91,176,255,0.6);
-  outline-offset: 2px;
+  outline-offset: 3px;
 }
-.w-add-btn:disabled {
-  background: var(--surface-3);
-  box-shadow: none;
-  color: rgba(255,255,255,0.32);
-  cursor: not-allowed;
-  filter: none;
-}
-.w-add-btn:disabled::before { display: none; }
-
-.w-add-btn__icon {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: rgba(255,255,255,0.2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.82rem;
-  flex-shrink: 0;
-  transition: background 0.18s;
-}
-.w-add-btn:hover .w-add-btn__icon  { background: rgba(255,255,255,0.28); }
-.w-add-btn:disabled .w-add-btn__icon { background: rgba(255,255,255,0.07); }
+.w-fab[hidden] { display: none; }
 
 /* ── Compact mode overrides ─────────────────────────────────── */
 body[data-compact="1"] .w-card      { padding: 0.75rem 0.85rem; gap: 0.65rem; }
 body[data-compact="1"] .w-cat-item  { padding: 0.5rem 0.75rem; min-height: 42px; }
 body[data-compact="1"] .w-word-item { padding: 0.55rem 0.8rem; min-height: 46px; }
-body[data-compact="1"] .w-add-btn   { padding: 0.75rem 1rem; }
+body[data-compact="1"] .w-fab { width: 52px; height: 52px; bottom: calc(var(--bottom-nav-h) + 0.75rem + var(--safe-bottom)); }
 
 /* ============================================================
    SETTINGS TAB
