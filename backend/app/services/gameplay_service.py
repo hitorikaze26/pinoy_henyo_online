@@ -555,17 +555,26 @@ def ensure_round_matches(game, round_obj):
 
     In this model a match is simply a team's turn slot (no opposing team).
     Slots are ordered by team join order and appended after any matches that
-    were already defined so a manual order survives.
+    were already defined so a manual order survives. A team is considered to
+    already have its slot when it appears in the round as a slot owner OR as
+    an opponent of a defined match, so legacy paired matches are respected.
     """
-    matched_team_ids = {
+    covered_team_ids = {
         team_id
         for (team_id,) in db.session.query(Match.team_id)
         .filter_by(round_id=round_obj.id)
         .all()
     }
+    covered_team_ids |= {
+        opponent_team_id
+        for (opponent_team_id,) in db.session.query(Match.opponent_team_id)
+        .filter_by(round_id=round_obj.id)
+        .all()
+        if opponent_team_id is not None
+    }
     query = Team.query.filter_by(game_id=game.id)
-    if matched_team_ids:
-        query = query.filter(~Team.id.in_(matched_team_ids))
+    if covered_team_ids:
+        query = query.filter(~Team.id.in_(covered_team_ids))
     missing = query.order_by(Team.id).all()
     if not missing:
         return []
@@ -589,14 +598,18 @@ def ensure_round_matches(game, round_obj):
     return matches
 
 
-def ensure_game_setup(game):
+def ensure_game_setup(game, round_numbers=None):
     """Create Round 1/2 and each team's play slot for both rounds.
 
     Runs when the host starts the game so the dashboard can immediately pick
     the playing team from the Current Turn dropdown with no manual setup.
+    ``round_numbers`` may restrict which rounds are prepared (the LOBBY path
+    only needs Round 1 slots for the dropdown; Round 2 is created on start).
     """
+    if round_numbers is None:
+        round_numbers = (ROUND_1, ROUND_2)
     created = {"rounds": [], "matches": []}
-    for round_number in (ROUND_1, ROUND_2):
+    for round_number in round_numbers:
         round_obj = get_round(game, round_number)
         if round_obj is None:
             round_obj = Round(

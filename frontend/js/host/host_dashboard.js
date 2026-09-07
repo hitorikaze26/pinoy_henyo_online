@@ -1037,6 +1037,11 @@ function renderRealQr(container, dataUri) {
     try {
       const res = await TeamAPI.listTeams(gameId);
       roster = (res && res.teams) || [];
+      // Keep names resolvable for the Current Turn dropdown even when the
+      // shared team registry (`getKnownTeams`) was not seeded for this page.
+      (roster || []).forEach((t) => {
+        if (t && t.team_id && t.team_name) teamNameOf.register(t.team_id, t.team_name);
+      });
       // Pending teams whose live ``connection_requested`` event was missed
       // still need an approve/decline affordance.
       maybePromptPendingApprovals();
@@ -2214,8 +2219,15 @@ rebind('btn-penalty', (e) => handlePenalty(-penaltySeconds(), e));
       renderPenaltyControls();
     });
     // Presence of teams is useful context on the host dashboard.
+    const presenceRefreshTimer = {};
     const refreshPresence = () => {
       loadRoster().then(renderConnections).catch(() => {});
+      // A team joining/leaving also moves the Current Turn slots (one play
+      // slot per team is created on the server while the game is in
+      // LOBBY/SETUP). Re-prime matches so the dropdown lists new teams as
+      // soon as they join, without a page reload.
+      if (presenceRefreshTimer.matches) clearTimeout(presenceRefreshTimer.matches);
+      presenceRefreshTimer.matches = setTimeout(() => rtReload(), 150);
     };
     rt.on('team_connected', (p) => { if (p && p.member && p.member.team_id && p.member.username) teamNameOf.register(p.member.team_id, p.member.username); refreshPresence(); });
     rt.on('member_joined', (p) => { if (p && p.member && p.member.team_id && p.member.username) teamNameOf.register(p.member.team_id, p.member.username); refreshPresence(); });

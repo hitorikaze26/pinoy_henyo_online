@@ -267,6 +267,46 @@ def test_assign_roles_requires_auth(client):
     assert response.status_code == 401
 
 
+def test_list_matches_auto_sets_up_slots_as_soon_as_teams_join(client):
+    """The dashboard's Current Turn dropdown lists teams the moment they
+    join, so GET /games/<id>/matches must create the Round 1 play slots per
+    team while the game is still in LOBBY (not only at SETUP/game start)."""
+    game_id, host_token = _create_game(client)
+
+    def _matches():
+        response = client.get(
+            "/api/games/{}/matches".format(game_id),
+            headers={HOST_TOKEN_HEADER: host_token},
+        )
+        assert response.status_code == 200
+        return response.get_json()["data"]["matches"]
+
+    # A single team joining the LOBBY produces a Round-1 slot for it.
+    team_a = _create_team(client, game_id, name="Alpha")
+    matches = _matches()
+    assert len(matches) == 1
+    assert {m["team_id"] for m in matches} == {team_a["team_id"]}
+    assert {m["round_number"] for m in matches} == {1}
+    assert all(m["match_order"] >= 1 for m in matches)
+
+    # A second team joining appends a slot for it too, and re-fetching is
+    # idempotent (no duplicate slots accumulate across GETs).
+    team_b = _create_team(client, game_id, name="Bravo")
+    matches = _matches()
+    assert len(matches) == 2
+    assert {m["team_id"] for m in matches} == {
+        team_a["team_id"],
+        team_b["team_id"],
+    }
+    assert _matches() == matches
+
+    # The auto-setup must not bump the game out of LOBBY.
+    status = client.get(
+        "/api/games/{}/status".format(game_id)
+    ).get_json()["data"]["status"]
+    assert status == Game.STATUS_LOBBY
+
+
 def test_host_assigns_roles(client):
     s = _basic_setup(client)
     s.member_a = _add_member(client, s.team_a["team_id"], "Maria")

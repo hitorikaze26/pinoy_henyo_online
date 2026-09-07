@@ -330,18 +330,25 @@ def create_matches(game):
 def list_matches(game):
     from ..models import Team
 
-    # During SETUP the dashboard's Current Turn dropdown needs a play slot per
-    # team even before the host manually creates matches. Running the setup
-    # (idempotently) here mirrors what starting the game does, so the host can
-    # pick the first team right away.
-    if game.status == Game.STATUS_SETUP:
+    # During LOBBY/SETUP the dashboard's Current Turn dropdown needs a play
+    # slot per team even before the host manually creates matches. Running the
+    # setup (idempotently) here mirrors what starting the game does, so the
+    # host can pick the first team the moment one joins. The LOBBY path only
+    # prepares Round 1 (the dropdown's current round); Round 2 is created when
+    # the game actually starts.
+    if game.status in (Game.STATUS_LOBBY, Game.STATUS_SETUP):
         has_teams = (
             db.session.query(Team.id).filter_by(game_id=game.id).first()
             is not None
         )
         if has_teams:
             try:
-                gameplay_service.ensure_game_setup(game)
+                if game.status == Game.STATUS_LOBBY:
+                    gameplay_service.ensure_game_setup(
+                        game, round_numbers=(gameplay_service.ROUND_1,)
+                    )
+                else:
+                    gameplay_service.ensure_game_setup(game)
                 db.session.commit()
             except gameplay_service.GameplayServiceError:
                 db.session.rollback()
