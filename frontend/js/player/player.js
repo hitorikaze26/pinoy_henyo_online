@@ -1240,27 +1240,28 @@ $('btn-leave-game').addEventListener('click', async () => {
   const confirmed = await openConfirm({
     title: 'Leave the game?',
     subtitle: '',
-    body: 'You will be disconnected from the host. You can rejoin anytime with your team code or the host’s QR.',
+    body: 'You will be disconnected from the host and return to the landing page. You can rejoin anytime with your team code or the host’s QR.',
     confirmLabel: 'Leave Game',
     icon: 'leave',
     requestKey: 'leave-game',
   });
   if (!confirmed) return;
   setConfirmBusy(true, 'Leaving game…');
-  const submit = () => {
+  try {
+    if (window.DeviceAPI && API.getSessionToken()) {
+      await DeviceAPI.disconnect().catch(() => {});
+    }
     stopHeartbeat();
+    API.clearTokens();
     STATE.isConnected   = false;
     STATE.hostConnected = false;
     STATE.gameStatus    = 'waiting';
-    STATE.connectionStatus = 'NOT_CONNECTED';
+    setConnectionStatus('NOT_CONNECTED');
+    applySessionGating();
     try { renderHeader(); renderTeamsTab(); renderSettingsTab(); } catch (err) {}
+    window.location.href = '../../index.html';
+  } finally {
     closeConfirm();
-    showToast('Left the game');
-  };
-  if (window.DeviceAPI && API.getSessionToken()) {
-    DeviceAPI.disconnect().catch(() => {}).finally(() => submit());
-  } else {
-    submit();
   }
 });
 
