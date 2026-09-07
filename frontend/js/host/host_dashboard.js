@@ -138,7 +138,6 @@ const DOM = {
   closeApproveConnection: $('close-approve-connection'),
 
   // Sidebar nav
-  btnBackLobby: $('btn-back-lobby'),
 };
 
 /* ============================================================

@@ -66,8 +66,7 @@
   /* -- sidebar footer injection (all host pages) -- */
   function injectSidebarButton() {
     const footer = document.querySelector('.sidebar__footer');
-    const lobbyBtn = footer && footer.querySelector('.sidebar__lobby-btn');
-    if (!footer || !lobbyBtn || footer.querySelector('.sidebar__leave-btn')) return;
+    if (!footer || footer.querySelector('.sidebar__leave-btn')) return;
 
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -77,7 +76,7 @@
     btn.innerHTML = '<i class="fa-solid fa-right-from-bracket"></i><span>Leave Game</span>';
     btn.addEventListener('click', confirmAndLeave);
 
-    footer.insertBefore(btn, lobbyBtn);
+    footer.appendChild(btn);
   }
 
   if (document.readyState === 'loading') {

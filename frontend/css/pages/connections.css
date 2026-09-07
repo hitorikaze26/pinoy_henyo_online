@@ -197,14 +197,18 @@ ol, ul { list-style: none; }
 .sidebar__nav-item--active:hover { background: var(--primary-500); }
 
 .sidebar__footer { padding: 0.75rem; border-top: 1px solid var(--dash-border); }
-.sidebar__lobby-btn {
+
+/* Sidebar footer — Leave Game */
+.sidebar__leave-btn {
   display: flex; align-items: center; gap: 0.65rem;
-  padding: 0.6rem 0.9rem; border-radius: var(--r-md);
-  font-family: 'Baloo 2', sans-serif; font-size: 0.9rem; font-weight: 600;
-  color: rgba(255,255,255,0.55);
-  transition: background 0.18s, color 0.18s; cursor: pointer;
+  width: 100%; padding: 0.65rem 0.9rem; border: 0; border-radius: var(--r-md);
+  background: none;
+  font-family: 'Baloo 2', sans-serif; font-size: 0.9rem; font-weight: 700;
+  color: var(--danger); text-align: left; cursor: pointer;
+  transition: background 0.18s, color 0.18s;
 }
-.sidebar__lobby-btn:hover { background: rgba(255,255,255,0.06); color: #fff; }
+.sidebar__leave-btn i { font-size: 0.85rem; width: 18px; text-align: center; }
+.sidebar__leave-btn:hover { background: rgba(248,113,113,0.12); color: rgba(255,255,255,0.92); }
 
 /* ============================================================
    MAIN

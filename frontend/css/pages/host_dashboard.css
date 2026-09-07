@@ -314,34 +314,12 @@ ol, ul { list-style: none; }
   border-top: 1px solid var(--dash-border);
 }
 
-/* Sidebar footer — Back to Lobby */
-.sidebar__lobby-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  width: 100%;
-  padding: 0.65rem 0.9rem;
-  border-radius: var(--r-md);
-  font-family: 'Baloo 2', sans-serif;
-  font-size: 0.9rem;
-  font-weight: 700;
-  color: rgba(255,255,255,0.5);
-  text-decoration: none;
-  transition: background 0.18s, color 0.18s;
-}
-.sidebar__lobby-btn i { font-size: 0.85rem; width: 18px; text-align: center; }
-.sidebar__lobby-btn:hover {
-  background: rgba(255,255,255,0.07);
-  color: rgba(255,255,255,0.88);
-}
-
 /* Sidebar footer — Leave Game */
 .sidebar__leave-btn {
   display: flex;
   align-items: center;
   gap: 0.65rem;
   width: 100%;
-  margin-bottom: 0.5rem;
   padding: 0.65rem 0.9rem;
   border: 0;
   border-radius: var(--r-md);
