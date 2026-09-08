@@ -393,6 +393,40 @@ def list_matches(game):
                 db.session.commit()
             except gameplay_service.GameplayServiceError:
                 db.session.rollback()
+    elif game.status not in (
+        Game.STATUS_GAME_COMPLETE,
+        Game.STATUS_CANCELLED,
+        Game.STATUS_EXPIRED,
+    ):
+        # A started game may still accept teams (READY / ROUND_1 / ROUND_2 /
+        # PAUSED / TIE_BREAKER). The start-time setup only created slots for
+        # the teams that existed then, so give late joiners a slot in the
+        # round currently being played — otherwise the dashboard's Current
+        # Turn dropdown stays on "No playing teams yet" forever. A started
+        # game with no rounds at all (started before any team joined) needs
+        # the full setup so Round 2 exists when the host advances.
+        rounds = gameplay_service.list_game_rounds(game)
+        try:
+            if not rounds:
+                gameplay_service.ensure_game_setup(game)
+            else:
+                playable_number = game.current_round
+                if playable_number is None:
+                    uncompleted = [
+                        r.round_number
+                        for r in rounds
+                        if any(
+                            m.status != Match.STATUS_COMPLETED
+                            for m in r.matches
+                        )
+                    ]
+                    playable_number = uncompleted[0] if uncompleted else 1
+                gameplay_service.ensure_game_setup(
+                    game, round_numbers=(playable_number,)
+                )
+            db.session.commit()
+        except gameplay_service.GameplayServiceError:
+            db.session.rollback()
     matches = gameplay_service.list_game_matches(game)
     return success_response(
         data={

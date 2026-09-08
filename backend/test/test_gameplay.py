@@ -307,6 +307,43 @@ def test_list_matches_auto_sets_up_slots_as_soon_as_teams_join(client):
     assert status == Game.STATUS_LOBBY
 
 
+def test_list_matches_after_start_creates_slot_for_late_team(client):
+    """Teams that join AFTER the game starts must still get a play slot in
+    the round being played, or the dashboard's Current Turn dropdown shows
+    'No playing teams yet' with no way to pick them."""
+    game_id, host_token = _create_game(client)
+
+    # Start BEFORE any teams exist (no rounds created by start_game yet).
+    started = client.post(
+        "/api/games/{}/start".format(game_id),
+        headers={HOST_TOKEN_HEADER: host_token},
+    )
+    assert started.status_code == 200, started.get_json()
+    status = client.get(
+        "/api/games/{}/status".format(game_id)
+    ).get_json()["data"]["status"]
+    assert status == Game.STATUS_READY
+
+    # A late team gets a Round-1 slot once the dashboard lists matches.
+    team_late = _create_team(client, game_id, name="Late Join")
+    response = client.get(
+        "/api/games/{}/matches".format(game_id),
+        headers={HOST_TOKEN_HEADER: host_token},
+    )
+    assert response.status_code == 200
+    matches = response.get_json()["data"]["matches"]
+    assert {m["team_id"] for m in matches} == {team_late["team_id"]}
+    assert {m["round_number"] for m in matches} == {1}
+    assert all(m["status"] == Match.STATUS_PENDING for m in matches)
+
+    # Idempotent: a second fetch does not duplicate the slot.
+    again = client.get(
+        "/api/games/{}/matches".format(game_id),
+        headers={HOST_TOKEN_HEADER: host_token},
+    )
+    assert again.get_json()["data"]["matches"] == matches
+
+
 def test_host_assigns_roles(client):
     s = _basic_setup(client)
     s.member_a = _add_member(client, s.team_a["team_id"], "Maria")

@@ -25,14 +25,14 @@ const TeamAPI = (() => {
   }
 
   // POST /api/teams/<team_id>/members  { username }
-  // Returns member_payload. Records the (new or existing) member identity.
+  // Returns member_payload. The caller's identity is NOT changed: adding a
+  // teammate never makes the calling device "become" the new member (which
+  // would clobber a team leader's session into a plain team member).
   async function addMember(teamId, username) {
-    const data = await API.request(`/teams/${teamId}/members`, {
+    return API.request(`/teams/${teamId}/members`, {
       method: 'POST',
       body: { username },
     });
-    API.setMemberIdentity(data);
-    return data;
   }
 
   // POST /api/games/<game_id>/join  { username, team_name | team_code }

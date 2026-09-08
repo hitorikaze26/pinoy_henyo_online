@@ -995,20 +995,26 @@ function renderRealQr(container, dataUri) {
   let pollId = null;
   let gameSettings = null;  // server-backed /api/games/<id>/settings payload
   let displayState = { status: 'IDLE', matchId: null }; // two-stage start lifecycle
+  let liveLeaderboard = null; // server-ranked standings (leaderboard_updated / GET leaderboard)
 
   const $ = (id) => document.getElementById(id);
 
   /* ---------- data loading ---------- */
   async function loadData() {
-    const [scoreRes, matchRes, roundRes, settingsRes] = await Promise.all([
+    const [scoreRes, matchRes, roundRes, settingsRes, lbRes] = await Promise.all([
       GameAPI.scores(gameId).catch(() => ({ scores: [] })),
       MatchAPI.listMatches(gameId).catch(() => ({ matches: [] })),
       RoundAPI.listRounds(gameId).catch(() => ({ rounds: [] })),
       GameAPI.getSettings(gameId).catch(() => null),
+      GameAPI.leaderboard(gameId).catch(() => null),
     ]);
     scores = (scoreRes && scoreRes.scores) || [];
     matches = (matchRes && matchRes.matches) || [];
     roundsCache = (roundRes && roundRes.rounds) || [];
+    // Server-authoritative standings (includes the first-correct-word
+    // tie-break the scores list cannot express). Falls back to scores-based
+    // aggregation only if this fetch is unavailable.
+    if (lbRes && Array.isArray(lbRes.leaderboard)) liveLeaderboard = lbRes.leaderboard;
     // GET matches runs ensure_game_setup during SETUP, which may have just
     // created the rounds AFTER the parallel rounds fetch above. Re-fetch once
     // so the timer/target-round UI sees the real round rows.
@@ -1096,6 +1102,24 @@ function renderRealQr(container, dataUri) {
       .sort((a, b) => (b.points - a.points) || (a.team_id - b.team_id));
   }
 
+  // Rows for the standings boards. When a server-ranked leaderboard is known
+  // (live event or initial fetch) it wins: the backend already applies the
+  // points -> correct-words -> earliest-first-correct-word -> penalties order
+  // that a points-only sort here cannot reproduce. Falls back to the local
+  // scores aggregation only before the first leaderboard payload arrives.
+  function leaderboardRows() {
+    if (Array.isArray(liveLeaderboard) && liveLeaderboard.length) {
+      return liveLeaderboard.map((e) => ({
+        team_id: e.team_id,
+        team_name: e.team_name || teamNameOf(e.team_id),
+        points: e.points || 0,
+        penalties: e.penalty_seconds || 0,
+        passes: e.passed_words || 0,
+      }));
+    }
+    return rankedTeams();
+  }
+
   // True when the team has at least one COMPLETED match (status-chip dot).
   function teamHasCompletedMatch(teamId) {
     return matches.some((m) => m.team_id === teamId && m.status === 'COMPLETED');
@@ -1115,8 +1139,7 @@ function renderRealQr(container, dataUri) {
 
   function currentRoundLabel() {
     if (!matches.length) return 'Round';
-    const r = orderedMatches()[0].round_number;
-    return 'Round ' + r;
+    return 'Round ' + currentRoundFromMatches();
   }
 
   // The round a "Set Time" change should apply to: the lowest round number
@@ -1133,9 +1156,16 @@ function renderRealQr(container, dataUri) {
     return currentRoundFromMatches();
   }
 
+  // The current playable round is the lowest round that still has unfinished
+  // matches — NOT the lowest round that happens to have rows. Picking the
+  // lowest would keep the Current Turn dropdown stuck on "No playing teams
+  // yet" once an earlier round (e.g. Round 1) is fully completed while the
+  // next round already has PENDING slots.
   function currentRoundFromMatches() {
     if (!matches.length) return 1;
-    return orderedMatches()[0].round_number;
+    const sorted = orderedMatches();
+    const playable = sorted.find((m) => m.status !== 'COMPLETED');
+    return playable ? playable.round_number : sorted[0].round_number;
   }
 
   function roundByNumber(num) {
@@ -1264,22 +1294,46 @@ function renderRealQr(container, dataUri) {
 
   /* ---------- UI rendering ---------- */
   // "Current Turn" — a dropdown of the teams still playing in the current
-  // round (one option per pending match slot). Selecting an option targets
-  // that match/turn in the console below (custom-select enhanced).
+  // round (one option per pending match slot), filtered to teams CONNECTED to
+  // the host screen. The host only ever picks from teams actually present.
+  // Selecting an option targets that match/turn in the console below
+  // (custom-select enhanced).
   function renderTeamSelect() {
     const sel = $('team-select');
     if (!sel) return;
     const empty = $('team-select-empty');
-    const pending = currentRoundMatches().filter((m) => m.status !== 'COMPLETED');
+    const allPending = currentRoundMatches().filter((m) => m.status !== 'COMPLETED');
+    const pending = allPending.filter((m) => teamConnected(m.team_id));
     const keep = activeMatch ? String(activeMatch.match_id) : '';
+    // The match currently targeted in the console stays listed even if its
+    // team drops offline — dropping it mid-setup would orphan the console.
+    const activeIsPending = allPending.some((m) => String(m.match_id) === keep);
     const opts = pending.map((m) => {
       return '<option value="' + m.match_id + '"' +
         (String(m.match_id) === keep ? ' selected' : '') + '>' +
         escHtml(teamNameOf(m.team_id)) + '</option>';
     });
-    const placeholder = pending.length ? 'Select team…' : 'No playing teams yet';
+    if (activeIsPending && !pending.some((m) => String(m.match_id) === keep)) {
+      const m = allPending.find((x) => String(x.match_id) === keep);
+      opts.push('<option value="' + m.match_id + '" selected>' +
+        escHtml(teamNameOf(m.team_id)) + '</option>');
+    }
+    let placeholder = 'Select team…';
+    let emptyMsg = null;
+    if (!pending.length) {
+      if (!allPending.length) {
+        placeholder = 'No playing teams yet';
+        emptyMsg = 'No current-round match yet. Advance the round or start it from the Lobby.';
+      } else {
+        placeholder = 'No connected teams yet';
+        emptyMsg = 'No connected teams yet — teams must connect to the host screen first.';
+      }
+    }
     sel.innerHTML = '<option value="">' + escHtml(placeholder) + '</option>' + opts.join('');
-    if (empty) empty.hidden = pending.length > 0;
+    if (empty) {
+      empty.hidden = pending.length > 0;
+      if (!empty.hidden && emptyMsg) empty.textContent = emptyMsg;
+    }
     const wrapper = sel.closest('.dd');
     const api = wrapper && wrapper.__api;
     if (api && api.renderOptions) api.renderOptions();
@@ -1380,7 +1434,7 @@ function renderRealQr(container, dataUri) {
   function renderLeaderboard() {
     const list = $('leaderboard-list');
     if (!list) return;
-    const ranked = rankedTeams().sort((a, b) => b.points - a.points);
+    const ranked = leaderboardRows();
 
     const medals = ['gold', 'silver', 'bronze'];
     list.innerHTML = ranked.map((t, i) => {
@@ -1400,7 +1454,7 @@ function renderRealQr(container, dataUri) {
   function renderAllTeams() {
     const tbody = $('all-teams-tbody');
     if (!tbody) return;
-    const rows = rankedTeams();
+    const rows = leaderboardRows();
     tbody.innerHTML = rows.map((t, idx) => {
       const online = teamConnected(t.team_id);
       return '<tr><td>' + (idx + 1) + '</td>' +
@@ -1707,7 +1761,7 @@ function renderRealQr(container, dataUri) {
   /* ---------- round / game completion checks ---------- */
   function currentRoundMatches() {
     if (!matches.length) return [];
-    const r = orderedMatches()[0].round_number;
+    const r = currentRoundFromMatches();
     return matches.filter((m) => m.round_number === r);
   }
   let lastRoundToastR = null;
@@ -2194,6 +2248,14 @@ rebind('btn-penalty', (e) => handlePenalty(-penaltySeconds(), e));
           rtReload();
         });
       });
+      // Standings change (word result / penalty / time adjust / turn /
+      // round) → repaint the board with the server's authoritative order,
+      // which includes the earliest-first-correct-word tie-break.
+      rt.on('leaderboard_updated', (p) => {
+        if (!rtForThisGame(p)) return;
+        if (Array.isArray(p.leaderboard)) liveLeaderboard = p.leaderboard;
+        renderAll();
+      });
       // Two-stage display start events → mirror the server's display state
       // without a full reload (the countdown is only 3s wide).
       rt.on('display_armed', (p) => {
@@ -2233,7 +2295,12 @@ rebind('btn-penalty', (e) => handlePenalty(-penaltySeconds(), e));
     // Presence of teams is useful context on the host dashboard.
     const presenceRefreshTimer = {};
     const refreshPresence = () => {
-      loadRoster().then(renderConnections).catch(() => {});
+      // Re-render with a fresh roster so the Current Turn dropdown (which
+      // now lists only CONNECTED teams) reflects connect/join/leave changes
+      // immediately, not on the next unrelated render.
+      loadRoster()
+        .then(() => { renderConnections(); renderAll(); })
+        .catch(() => {});
       // A team joining/leaving also moves the Current Turn slots (one play
       // slot per team is created on the server while the game is in
       // LOBBY/SETUP). Re-prime matches so the dropdown lists new teams as
