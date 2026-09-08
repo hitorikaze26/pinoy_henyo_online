@@ -50,6 +50,12 @@ class BaseConfig:
     QR_BASE_URL = os.environ.get("QR_BASE_URL", "")
     DEPLOY_MODE = _deploy_mode()
     RATE_LIMIT_MULTIPLIER = int(os.environ.get("RATE_LIMIT_MULTIPLIER", "1"))
+    # --- AI word generator (Google Gemini, backend-only) ---
+    GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+    GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+    AI_MAX_WORDS_PER_REQUEST = int(os.environ.get("AI_MAX_WORDS_PER_REQUEST", "20"))
+    AI_REQUEST_COOLDOWN_SECONDS = int(os.environ.get("AI_REQUEST_COOLDOWN_SECONDS", "5"))
+    AI_MAX_REQUESTS_PER_MINUTE = int(os.environ.get("AI_MAX_REQUESTS_PER_MINUTE", "5"))
 
 
 class DevelopmentConfig(BaseConfig):
@@ -69,6 +75,12 @@ class TestingConfig(BaseConfig):
     HOST_INACTIVITY_TIMEOUT = 900
     DEVICE_HEARTBEAT_TIMEOUT = 60
     DEVICE_HEARTBEAT_GRACE_MULTIPLIER = 3
+    # No live AI calls in tests — tests monkeypatch the word generator instead.
+    GEMINI_API_KEY = ""
+    GEMINI_MODEL = "gemini-2.0-flash"
+    AI_MAX_WORDS_PER_REQUEST = 20
+    AI_REQUEST_COOLDOWN_SECONDS = 5
+    AI_MAX_REQUESTS_PER_MINUTE = 5
 
 
 class ProductionConfig(BaseConfig):

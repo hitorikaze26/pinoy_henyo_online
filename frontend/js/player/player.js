@@ -143,6 +143,14 @@ function applyTeamRoster(team) {
     if (me.device_role === 'TEAM_LEADER' && team.leader && team.leader.connection_token) {
       STATE.connectionToken = team.leader.connection_token;
     }
+    // Re-authorize the current device's identity from the server roster so a
+    // teammate add or re-connect can never leave the leader downgraded to a
+    // plain member in the local session (roles would otherwise stay locked).
+    if (API.setMemberId) API.setMemberId(me.member_id);
+    if (me.device_role && API.setDeviceRole) {
+      API.setDeviceRole(me.device_role);
+      if (API.setRole) API.setRole(me.device_role === 'TEAM_LEADER' ? 'team-leader' : 'team-member');
+    }
   }
   (team.members || []).forEach(m => {
     if (m.member_id >= STATE.nextMemberId) STATE.nextMemberId = m.member_id + 1;
@@ -417,12 +425,14 @@ function switchTab(tabKey) {
    the device is connected to the host, and the word pool is unlocked. */
 function syncAddWordFab() {
   const fab = $('btn-add-word-fab');
-  if (!fab) return;
-  fab.hidden = !(
+  const aiFab = $('btn-ai-word-fab');
+  const visible = (
     STATE.activeTab === 'words'
     && STATE.connectionStatus === 'CONNECTED'
     && !STATE.wordsLocked
   );
+  if (fab) fab.hidden = !visible;
+  if (aiFab) aiFab.hidden = !visible;
 }
 
 // Wire up all nav buttons (bottom nav + game view nav)
@@ -1113,6 +1123,45 @@ $('btn-add-word-fab').addEventListener('click', openAddWord);
 $('add-word-category').addEventListener('change', updateCapHint);
 $('close-add-word').addEventListener('click',  () => { resetAddWordModal(); closeModal('modal-add-word'); });
 $('cancel-add-word').addEventListener('click', () => { resetAddWordModal(); closeModal('modal-add-word'); });
+
+/* ============================================================
+   AI WORD GENERATOR — shared modal (js/ai/ai-word-generator.js)
+   ============================================================ */
+function openAIGenerator() {
+  if (STATE.wordsLocked) { showToast('Words are locked.'); return; }
+  if (!(window.AIWordGenerator && window.AIAPI)) { showToast('AI Word Generator is not available here.'); return; }
+  const gameId = API.getGameId();
+  if (!gameId || !API.getSessionToken()) { showToast('AI Word Generator needs an active game connection.'); return; }
+  const map = window.PLAYER_CATEGORY_TO_ID;
+  const cats = map
+    ? Object.keys(map).map(name => ({ id: Number(map[name]), name })).filter(c => c.id)
+    : [];
+  if (!cats.length) { showToast('No categories available yet — ask the host to add some.'); return; }
+
+  AIWordGenerator.open({
+    gameId,
+    mode: 'player',
+    locked: STATE.wordsLocked,
+    categories: cats,
+    capacityFor(categoryName) {
+      return Math.max(0, maxWordsPerCategory() - countForCategory(categoryName));
+    },
+    existingWordsFor(categoryName) {
+      return STATE.words.filter(w => w.category === categoryName).map(w => w.word);
+    },
+    addWord: async (wordText, categoryName, categoryId) => {
+      const created = await WordAPI.createWord(gameId, { categoryId, wordText, asHost: false });
+      if (!created) throw new Error('No word_id returned.');
+      return created;
+    },
+    onWordsChanged: async () => {
+      await refreshWordsFromServer();
+    },
+  });
+}
+
+const aiFab = $('btn-ai-word-fab');
+if (aiFab) aiFab.addEventListener('click', openAIGenerator);
 
 $('form-add-word').addEventListener('submit', async e => {
   e.preventDefault();

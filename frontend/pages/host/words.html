@@ -91,9 +91,12 @@
             <p class="page-header__sub">Manage the word pool and categories.</p>
           </div>
         </div>
-        <div class="page-header__actions">
+<div class="page-header__actions">
           <button class="hdr-btn hdr-btn--primary" id="btn-add-word">
             <i class="fa-solid fa-plus"></i> Add Word
+          </button>
+          <button class="hdr-btn hdr-btn--ai" id="btn-ai-generate" title="Generate word suggestions with AI">
+            <i class="fa-solid fa-wand-magic-sparkles"></i> AI Generate
           </button>
           <button class="hdr-btn hdr-btn--secondary" id="btn-assign-words">
             <i class="fa-solid fa-clipboard-list"></i> Word Status
@@ -292,11 +295,16 @@
           <div class="empty-state__icon">
             <i class="fa-solid fa-inbox"></i>
           </div>
-          <h2 class="empty-state__title">No Words Yet</h2>
+<h2 class="empty-state__title">No Words Yet</h2>
           <p class="empty-state__sub">Add words or wait for teams to submit their words.</p>
-          <button class="hdr-btn hdr-btn--primary empty-state__btn" id="btn-add-word-empty">
-            <i class="fa-solid fa-plus"></i> Add Word
-          </button>
+          <div class="empty-state__actions">
+            <button class="hdr-btn hdr-btn--primary empty-state__btn" id="btn-add-word-empty">
+              <i class="fa-solid fa-plus"></i> Add Word
+            </button>
+            <button class="hdr-btn hdr-btn--ai empty-state__btn" id="btn-ai-generate-empty" title="Generate word suggestions with AI">
+              <i class="fa-solid fa-wand-magic-sparkles"></i> AI Generate
+            </button>
+          </div>
         </div>
 
       </div>
@@ -551,7 +559,9 @@
   <script src="../../js/api/game-api.js"></script>
   <script src="../../js/api/team-api.js"></script>
   <script src="../../js/api/word-api.js"></script>
-  <script src="../../js/api/round-api.js"></script>
+<script src="../../js/api/round-api.js"></script>
+  <script src="../../js/api/ai-api.js"></script>
+  <script src="../../js/ai/ai-word-generator.js"></script>
   <script src="../../js/api/connect.js"></script>
   <script src="../../js/host/leave-game.js"></script>
   <script src="../../js/api/realtime.js"></script>

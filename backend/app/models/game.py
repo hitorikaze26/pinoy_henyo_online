@@ -132,6 +132,11 @@ class Game(db.Model):
         back_populates="game",
         cascade="all, delete-orphan",
     )
+    ai_generation_logs = db.relationship(
+        "AIGenerationLog",
+        back_populates="game",
+        cascade="all, delete-orphan",
+    )
 
     def __repr__(self):
         return "<Game code={} status={}>".format(self.game_code, self.status)

@@ -5,6 +5,7 @@ from flask import Flask
 from config import config_by_name
 
 from .extensions import cors, migrate, socketio
+from .routes.ai import ai_bp
 from .routes.categories import categories_bp
 from .routes.devices import devices_bp
 from .routes.games import games_bp
@@ -20,6 +21,7 @@ def _register_blueprints(app):
     app.register_blueprint(health_bp)
     app.register_blueprint(games_bp)
     app.register_blueprint(categories_bp)
+    app.register_blueprint(ai_bp)
     app.register_blueprint(words_bp)
     app.register_blueprint(word_requests_bp)
     app.register_blueprint(teams_bp)

@@ -210,6 +210,8 @@ function renderLockBar() {
   const statusLabel = $('lock-btn-label');
   const addBtn   = $('btn-add-word');
   const addBtnEmpty = $('btn-add-word-empty');
+  const aiBtn    = $('btn-ai-generate');
+  const aiBtnEmpty = $('btn-ai-generate-empty');
 
   if (STATE.locked) {
     barIcon.className  = 'fa-solid fa-lock';
@@ -219,6 +221,8 @@ function renderLockBar() {
     statusEl.classList.add('locked');
     if (addBtn)      addBtn.disabled = true;
     if (addBtnEmpty) addBtnEmpty.disabled = true;
+    if (aiBtn)       aiBtn.disabled = true;
+    if (aiBtnEmpty)  aiBtnEmpty.disabled = true;
   } else {
     barIcon.className  = 'fa-solid fa-lock-open';
     barLabel.textContent = 'Words Unlocked';
@@ -227,6 +231,8 @@ function renderLockBar() {
     statusEl.classList.remove('locked');
     if (addBtn)      addBtn.disabled = false;
     if (addBtnEmpty) addBtnEmpty.disabled = false;
+    if (aiBtn)       aiBtn.disabled = false;
+    if (aiBtnEmpty)  aiBtnEmpty.disabled = false;
   }
 }
 
@@ -706,6 +712,45 @@ $('btn-add-word').addEventListener('click', openAddWord);
 $('btn-add-word-empty').addEventListener('click', openAddWord);
 $('close-add').addEventListener('click',  () => closeModal('modal-add'));
 $('cancel-add').addEventListener('click', () => closeModal('modal-add'));
+
+/* ============================================================
+   AI WORD GENERATOR — shared modal (js/ai/ai-word-generator.js)
+   ============================================================ */
+function openAIGenerator() {
+  if (STATE.locked) { showToast('Words are locked.'); return; }
+  if (!STATE.categories.length) { showToast('Add a category first before generating words.'); return; }
+  if (!(window.AIWordGenerator && window.AIAPI)) { showToast('AI Word Generator is not available here.'); return; }
+  const gameId = window.API && API.getGameId();
+  if (!gameId) { showToast('AI Word Generator needs an active game.'); return; }
+
+  AIWordGenerator.open({
+    gameId,
+    mode: 'host',
+    locked: STATE.locked,
+    categories: STATE.categories.map(c => ({ id: c.id, name: c.name })),
+    capacityFor: () => null,
+    existingWordsFor(categoryName) {
+      return STATE.words.filter(w => w.category === categoryName).map(w => w.word);
+    },
+    addWord: async (wordText, categoryName, categoryId) => {
+      const created = await WordAPI.createWord(gameId, {
+        categoryId, wordText, asHost: true, assignedRound: 1,
+      });
+      if (!created.word_id) throw new Error('No word_id returned.');
+      return created;
+    },
+    onWordsChanged: async () => {
+      if (typeof refreshWordPoolHook === 'function') {
+        try { await refreshWordPoolHook(); } catch (e) { /* ignore */ }
+      } else {
+        render();
+      }
+    },
+  });
+}
+
+$('btn-ai-generate').addEventListener('click', openAIGenerator);
+$('btn-ai-generate-empty').addEventListener('click', openAIGenerator);
 
 $('form-add').addEventListener('submit', e => {
   e.preventDefault();

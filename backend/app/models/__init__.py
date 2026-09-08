@@ -1,3 +1,4 @@
+from .ai_generation_log import AIGenerationLog
 from .category import Category
 from .device_session import DeviceSession
 from .game import Game
@@ -14,6 +15,7 @@ from .word import Word
 from .word_change_request import WordChangeRequest
 
 __all__ = [
+    "AIGenerationLog",
     "Category",
     "DeviceSession",
     "Game",

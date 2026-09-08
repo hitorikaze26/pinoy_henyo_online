@@ -908,6 +908,10 @@
     <button class="w-fab" id="btn-add-word-fab" type="button" title="Add a word" aria-label="Add a word" hidden>
       <i class="fa-solid fa-plus"></i>
     </button>
+    <!-- Floating "AI Word Suggestions" button — same visibility rules as Add Word -->
+    <button class="w-fab w-fab--ai" id="btn-ai-word-fab" type="button" title="AI word suggestions" aria-label="AI word suggestions" hidden>
+      <i class="fa-solid fa-wand-magic-sparkles"></i>
+    </button>
 
   </div><!-- /#app-shell -->
 
@@ -1263,6 +1267,8 @@
   <script src="../../js/api/game-api.js"></script>
   <script src="../../js/api/team-api.js"></script>
   <script src="../../js/api/word-api.js"></script>
+  <script src="../../js/api/ai-api.js"></script>
+  <script src="../../js/ai/ai-word-generator.js"></script>
   <script src="../../js/api/device-api.js"></script>
   <script src="../../js/api/connect.js"></script>
   <script src="../../js/api/realtime.js"></script>

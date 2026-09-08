@@ -17,3 +17,5 @@ simple-websocket>=1.0
 python-dotenv>=1.0
 pytest>=8.0
 segno>=1.6
+# Google Gemini backend SDK — used by the AI word generator service.
+google-generativeai>=0.8
