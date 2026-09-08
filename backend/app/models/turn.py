@@ -29,6 +29,9 @@ class Turn(db.Model):
     round_id = db.Column(
         db.Integer, db.ForeignKey("rounds.id"), nullable=False, index=True
     )
+    category_id = db.Column(
+        db.Integer, db.ForeignKey("categories.id"), nullable=True, index=True
+    )
     turn_order = db.Column(
         db.Integer, nullable=False, default=1, server_default=db.text("1")
     )
@@ -67,6 +70,7 @@ class Turn(db.Model):
     match = db.relationship("Match", back_populates="turns")
     team = db.relationship("Team")
     round = db.relationship("Round")
+    category = db.relationship("Category")
     current_word = db.relationship("Word", foreign_keys=[current_word_id])
     turn_words = db.relationship(
         "TurnWord", back_populates="turn", cascade="all, delete-orphan"

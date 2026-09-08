@@ -3,7 +3,11 @@ from datetime import datetime
 
 from ..extensions import socketio
 from ..models import Match, Round, TeamMember, Turn, TurnWord
-from ..services.turn_service import count_results, turn_play_payload
+from ..services.turn_service import (
+    count_results,
+    public_turn_payload,
+    turn_play_payload,
+)
 from ..utils.time import utcnow
 
 
@@ -317,6 +321,38 @@ def emit_turn_completed(turn, outcome=None):
     _emit(game_room(turn.match.game_id), "turn_completed", public)
     _emit(turn_room(turn.id), "turn_completed", public)
     _emit_secret_to_targets("turn_completed", turn)
+
+
+def emit_turn_reset(turn, result):
+    """Tell every client a finished turn was re-opened on the board.
+
+    ``turn_play_payload`` reflects the restored WAITING state; ``result`` is
+    the persistent pre-reset snapshot so the host result modal can stay open.
+    """
+    public = public_turn_payload(turn)
+    data = {
+        "game_id": turn.match.game_id,
+        "match_id": turn.match_id,
+        "team_id": turn.team_id,
+        "turn": public,
+        "result": result,
+    }
+    _emit(game_room(turn.match.game_id), "turn_reset", data)
+    _emit(turn_room(turn.id), "turn_reset", data)
+    _emit_secret_to_targets("turn_reset", turn)
+
+
+def emit_category_selected(game, match):
+    data = {
+        "game_id": game.id,
+        "match_id": match.id,
+        "team_id": match.team_id,
+        "round_id": match.round_id,
+        "round_number": match.round.round_number if match.round else None,
+        "category_id": match.category_id,
+    }
+    _emit(game_room(game.id), "category_selected", data)
+    _emit(team_room(match.team_id), "category_selected", data)
 
 
 # ---------------------------------------------------------------------------

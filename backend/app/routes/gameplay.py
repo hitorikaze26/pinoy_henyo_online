@@ -136,6 +136,39 @@ def _emit_word_changes(turn, before):
         realtime.emit_leaderboard(turn.match.game)
 
 
+def _auto_advance_if_round_done(round_obj, game):
+    """Open the next round when the current one just finished.
+
+    Round 1 -> Round 2 runs the full setup path (round_updated + leaderboard);
+    Round 2 -> auto game-over (game_completed). Anything out of order is left
+    for the host to resolve manually.
+    """
+    from ..services.game_service import finalize_game
+
+    if round_obj is None:
+        return
+    if round_obj.round_number == gameplay_service.ROUND_1:
+        next_round = gameplay_service.get_round(
+            game, gameplay_service.ROUND_2
+        )
+        if next_round is None:
+            return
+        try:
+            gameplay_service.advance_round(
+                game, gameplay_service.ROUND_1
+            )
+        except gameplay_service.GameplayServiceError:
+            db.session.rollback()
+            return
+        db.session.commit()
+        realtime.emit_round_updated(next_round)
+        realtime.emit_leaderboard(game)
+    elif round_obj.round_number == gameplay_service.ROUND_2:
+        if finalize_game(game, auto=True):
+            db.session.commit()
+            realtime.emit_game_completed(game)
+
+
 def _emit_turn_finished(turn, outcome=None):
     display_service.finish_display(turn.match.game)
     realtime.emit_turn_completed(turn, outcome=outcome)
@@ -153,6 +186,7 @@ def _emit_turn_finished(turn, outcome=None):
         )
         db.session.commit()
         realtime.announce_round_completed(turn.match.round)
+        _auto_advance_if_round_done(turn.match.round, turn.match.game)
 
 
 def _after_time_adjustment(turn, delta):
@@ -235,11 +269,11 @@ def select_round_categories(game, round_number):
 @require_host
 def round_categories(game, round_number):
     try:
-        categories = gameplay_service.list_round_categories(game, round_number)
+        data = gameplay_service.list_round_categories(game, round_number)
     except gameplay_service.GameplayServiceError as exc:
         db.session.rollback()
         return _handle(exc)
-    return success_response(data={"categories": categories})
+    return success_response(data=data)
 
 
 @gameplay_bp.post("/games/<int:game_id>/rounds/<int:round_number>/timer")
@@ -387,6 +421,31 @@ def update_match(match_id):
     except gameplay_service.GameplayServiceError as exc:
         db.session.rollback()
         return _handle(exc)
+    return success_response(data=gameplay_service.match_payload(match))
+
+
+@gameplay_bp.post("/matches/<int:match_id>/category")
+def select_match_category(match_id):
+    """Team (or host) picks one category for this Round 1 match."""
+    match, error = _match_or_error(match_id)
+    if error is not None:
+        return error
+    frozen = _ensure_mutable(match.game)
+    if frozen is not None:
+        return frozen
+    denied = _host_or_team_session(match)
+    if denied is not None:
+        return denied
+    body = request.get_json(silent=True) or {}
+    try:
+        match = gameplay_service.select_match_category(
+            match, body.get("category_id")
+        )
+        db.session.commit()
+    except gameplay_service.GameplayServiceError as exc:
+        db.session.rollback()
+        return _handle(exc)
+    realtime.emit_category_selected(match.game, match)
     return success_response(data=gameplay_service.match_payload(match))
 
 
@@ -870,6 +929,53 @@ def end_turn(turn_id):
     return _apply_turn_run(
         turn, turn_service.end_turn, after=_emit_turn_finished
     )
+
+
+@gameplay_bp.post("/turns/<int:turn_id>/reset")
+def reset_turn(turn_id):
+    """Replay a finished turn: re-open the board, wipe words/scores/penalties."""
+    turn, error = _turn_or_error(turn_id)
+    if error is not None:
+        return error
+    frozen = _ensure_mutable(turn.match.game)
+    if frozen is not None:
+        return frozen
+    denied = _host_auth_only(turn.match)
+    if denied is not None:
+        return denied
+    result = turn_service.turn_result_payload(turn)
+    try:
+        turn = turn_service.reset_turn(turn)
+        db.session.commit()
+    except turn_service.TurnServiceError as exc:
+        db.session.rollback()
+        return _handle(exc)
+    realtime.emit_turn_reset(turn, result)
+    realtime.emit_leaderboard(turn.match.game)
+    if turn.match.round and turn.match.round.status != turn.match.round.STATUS_PENDING:
+        realtime.emit_round_updated(turn.match.round)
+    return success_response(data=turn_service.turn_play_payload(turn))
+
+
+@gameplay_bp.get("/turns/<int:turn_id>/result")
+def get_turn_result(turn_id):
+    """Persistent result view of a finished turn (host or team member)."""
+    turn, error = _turn_or_error(turn_id)
+    if error is not None:
+        return error
+    denied = _host_or_team_session(turn.match)
+    if denied is not None:
+        return denied
+    payload = turn_service.turn_result_payload(turn)
+    token = host_token_from_request()
+    can_see_secret = token is not None and host_authorized(turn.match.game)
+    if not can_see_secret:
+        session_token = request.headers.get(SESSION_TOKEN_HEADER)
+        can_see_secret = _session_can_see_secret(turn.match, session_token)
+    if not can_see_secret:
+        for item in payload["words"]:
+            item["word_text"] = None
+    return success_response(data=payload)
 
 
 @gameplay_bp.get("/turns/<int:turn_id>/penalties")

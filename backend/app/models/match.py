@@ -16,6 +16,9 @@ class Match(db.Model):
     round_id = db.Column(
         db.Integer, db.ForeignKey("rounds.id"), nullable=False, index=True
     )
+    category_id = db.Column(
+        db.Integer, db.ForeignKey("categories.id"), nullable=True, index=True
+    )
     match_order = db.Column(
         db.Integer, nullable=False, default=1, server_default=db.text("1")
     )
@@ -48,6 +51,7 @@ class Match(db.Model):
         "Game", foreign_keys=[game_id], back_populates="matches"
     )
     round = db.relationship("Round", back_populates="matches")
+    category = db.relationship("Category")
     team = db.relationship(
         "Team", foreign_keys=[team_id], back_populates="matches_as_team"
     )

@@ -3,6 +3,7 @@ import pytest
 from app import create_app
 from app.extensions import db
 from app.models import Game, GameEvent
+from app.utils.time import utcnow
 
 HOST_TOKEN_HEADER = "X-Host-Token"
 SESSION_TOKEN_HEADER = "X-Session-Token"
@@ -264,6 +265,103 @@ def test_leaderboard_orders_by_points(client):
     assert board[0]["points"] == 3
     assert board[0]["correct_words"] == 3
     assert board[0]["rank"] == 1
+
+
+def test_leaderboard_tie_breaks_by_first_correct(app, client):
+    from datetime import timedelta
+
+    from app.models import (
+        Match,
+        Round,
+        Score,
+        Turn,
+        TurnWord,
+    )
+
+    s = _full(client)
+    with app.app_context():
+        round_obj = Round.query.filter_by(
+            game_id=s.game_id, round_number=1
+        ).first()
+        match_a = Match.query.filter_by(game_id=s.game_id).first()
+        now = utcnow()
+        match_b = Match(
+            game_id=s.game_id,
+            round_id=round_obj.id,
+            team_id=s.team_b["team_id"],
+            opponent_team_id=s.team_a["team_id"],
+            match_order=2,
+            status=Match.STATUS_COMPLETED,
+            winner_team_id=s.team_b["team_id"],
+        )
+        db.session.add(match_b)
+        db.session.flush()
+        db.session.add_all(
+            [
+                Score(
+                    game_id=s.game_id,
+                    team_id=s.team_a["team_id"],
+                    round_id=round_obj.id,
+                    match_id=match_a.id,
+                    points=3,
+                    correct_words=3,
+                ),
+                Score(
+                    game_id=s.game_id,
+                    team_id=s.team_b["team_id"],
+                    round_id=round_obj.id,
+                    match_id=match_b.id,
+                    points=3,
+                    correct_words=3,
+                ),
+            ]
+        )
+        turn_a = Turn(
+            match_id=match_a.id,
+            team_id=s.team_a["team_id"],
+            round_id=round_obj.id,
+            turn_order=1,
+            status=Turn.STATUS_COMPLETED,
+        )
+        turn_b = Turn(
+            match_id=match_b.id,
+            team_id=s.team_b["team_id"],
+            round_id=round_obj.id,
+            turn_order=1,
+            status=Turn.STATUS_COMPLETED,
+        )
+        db.session.add_all([turn_a, turn_b])
+        db.session.flush()
+        db.session.add_all(
+            [
+                TurnWord(
+                    turn_id=turn_a.id,
+                    word_id=s.words_b[0],
+                    sequence=1,
+                    result=TurnWord.RESULT_CORRECT,
+                    used_at=now,
+                ),
+                TurnWord(
+                    turn_id=turn_b.id,
+                    word_id=s.words_b[0],
+                    sequence=1,
+                    result=TurnWord.RESULT_CORRECT,
+                    used_at=now + timedelta(seconds=5),
+                ),
+            ]
+        )
+        db.session.commit()
+
+    response = client.get(
+        "/api/games/{}/leaderboard".format(s.game_id),
+        headers={HOST_TOKEN_HEADER: s.host},
+    )
+    assert response.status_code == 200
+    board = response.get_json()["data"]["leaderboard"]
+    # Equal points and correct words -> the earlier first correct word wins.
+    assert board[0]["team_id"] == s.team_a["team_id"]
+    assert board[1]["team_id"] == s.team_b["team_id"]
+    assert board[0]["first_correct_at"] is not None
 
 
 def test_leaderboard_requires_auth(client):

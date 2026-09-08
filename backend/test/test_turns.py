@@ -4,7 +4,16 @@ import pytest
 
 from app import create_app
 from app.extensions import db
-from app.models import Game, GameEvent, Match, Score, TeamMember, Turn, TurnWord
+from app.models import (
+    Game,
+    GameEvent,
+    Match,
+    Penalty,
+    Score,
+    TeamMember,
+    Turn,
+    TurnWord,
+)
 from app.utils.time import utcnow
 
 HOST_TOKEN_HEADER = "X-Host-Token"
@@ -851,3 +860,162 @@ def test_get_turn_state(client):
     assert data["status"] == Turn.STATUS_ACTIVE
     assert len(data["words"]) == 3
     assert data["total_words"] == 3
+
+
+# ---------------------------------------------------------------------------
+# Turn reset (host replays a finished turn) + persistent result view
+# ---------------------------------------------------------------------------
+
+
+def _win_turn(client, host, match_id, word_ids):
+    resp = _assign_turn_words(client, host, match_id, word_ids=word_ids)
+    assert resp.status_code == 201
+    turn_id = resp.get_json()["data"]["turn_id"]
+    resp = client.post(
+        "/api/matches/{}/turn/start".format(match_id),
+        headers={HOST_TOKEN_HEADER: host},
+    )
+    assert resp.status_code == 200
+    for _ in word_ids:
+        resp = client.post(
+            "/api/turns/{}/correct".format(turn_id),
+            headers={HOST_TOKEN_HEADER: host},
+        )
+        assert resp.status_code == 200
+    return turn_id
+
+
+def test_reset_turn_reopens_board(app, client):
+    s = _setup(client)
+    turn_id = _win_turn(client, s.host, s.match_a["match_id"], s.words_b0[:3])
+
+    result = client.get(
+        "/api/turns/{}/result".format(turn_id),
+        headers={HOST_TOKEN_HEADER: s.host},
+    )
+    assert result.status_code == 200
+    preview = result.get_json()["data"]
+    assert preview["status"] == Turn.STATUS_COMPLETED
+    assert preview["won"] is True
+    assert preview["correct_words"] == 3
+    assert preview["score"]["points"] == 3
+    assert preview["carried_word_ids"] == []
+
+    reset = client.post(
+        "/api/turns/{}/reset".format(turn_id),
+        headers={HOST_TOKEN_HEADER: s.host},
+    )
+    assert reset.status_code == 200
+    data = reset.get_json()["data"]
+    assert data["status"] == Turn.STATUS_WAITING
+
+    with app.app_context():
+        match = db.session.get(Match, s.match_a["match_id"])
+        assert match.status == Match.STATUS_PENDING
+        assert match.winner_team_id is None
+        assert Score.query.filter_by(match_id=match.id).count() == 0
+        turn = db.session.get(Turn, turn_id)
+        assert turn.status == Turn.STATUS_WAITING
+        assert all(
+            tw.result == "PENDING" and tw.used_at is None
+            for tw in turn.turn_words
+        )
+        assert Penalty.query.filter_by(turn_id=turn.id).count() == 0
+
+
+def test_reset_requires_finished_turn(client):
+    s = _setup(client)
+    resp = _assign_turn_words(
+        client, s.host, s.match_a["match_id"], word_ids=s.words_b0[:3]
+    )
+    turn_id = resp.get_json()["data"]["turn_id"]
+    client.post(
+        "/api/matches/{}/turn/start".format(s.match_a["match_id"]),
+        headers={HOST_TOKEN_HEADER: s.host},
+    )
+    response = client.post(
+        "/api/turns/{}/reset".format(turn_id),
+        headers={HOST_TOKEN_HEADER: s.host},
+    )
+    assert response.status_code == 409
+    assert response.get_json()["error"]["code"] == "TURN_NOT_ACTIVE"
+
+
+def test_result_hides_secret_text_from_other_devices(client):
+    s = _setup(client)
+    turn_id = _win_turn(client, s.host, s.match_a["match_id"], s.words_b0[:3])
+    # The Tagasagot (non-target, non-manghuhula) must not receive word text.
+    member_session = _connect(client, s.member_a)["session_token"]
+    resp = client.get(
+        "/api/turns/{}/result".format(turn_id),
+        headers={SESSION_TOKEN_HEADER: member_session},
+    )
+    assert resp.status_code == 200
+    words = resp.get_json()["data"]["words"]
+    assert all(w["word_text"] is None for w in words)
+    # The Manghuhula (display target) recovers the secret.
+    resp = client.get(
+        "/api/turns/{}/result".format(turn_id),
+        headers={SESSION_TOKEN_HEADER: s.sess_a},
+    )
+    assert resp.status_code == 200
+    words = resp.get_json()["data"]["words"]
+    assert all(w["word_text"] is not None for w in words)
+
+
+def test_result_requires_auth(client):
+    s = _setup(client)
+    turn_id = _win_turn(client, s.host, s.match_a["match_id"], s.words_b0[:3])
+    assert client.get("/api/turns/{}/result".format(turn_id)).status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Auto round-advance + auto game-over at the end of Round 2
+# ---------------------------------------------------------------------------
+
+
+def test_auto_advance_and_auto_game_over(app, client):
+    from app.models import Game, Round as RoundModel, Score as ScoreModel
+
+    s = _setup(client)
+    # Open Round 2 (the setup helper only creates Round 1).
+    assert client.post(
+        "/api/games/{}/rounds".format(s.game_id),
+        json={"round_number": 2},
+        headers={HOST_TOKEN_HEADER: s.host},
+    ).status_code == 201
+    # Open Round 2 with a single Round-2 match for Team A.
+    resp = _create_matches(
+        client,
+        s.game_id,
+        s.host,
+        2,
+        [
+            {
+                "team_id": s.team_a["team_id"],
+                "opponent_team_id": s.team_b["team_id"],
+            }
+        ],
+    )
+    assert resp.status_code == 201
+    match_a_round2 = resp.get_json()["data"]["matches"][0]
+
+    # Winning the final Round-1 match auto-advances the game to Round 2.
+    _win_turn(client, s.host, s.match_b["match_id"], s.words_a0[:3])
+    _win_turn(client, s.host, s.match_a["match_id"], s.words_b0[:3])
+    with app.app_context():
+        game = db.session.get(Game, s.game_id)
+        assert game.current_round == 2
+        round_one = RoundModel.query.filter_by(
+            game_id=s.game_id, round_number=1
+        ).first()
+        assert round_one.status == RoundModel.STATUS_COMPLETED
+
+    # Winning the Round-2 match auto-completes the game.
+    _win_turn(
+        client, s.host, match_a_round2["match_id"], s.words_b1[:3]
+    )
+    with app.app_context():
+        game = db.session.get(Game, s.game_id)
+        assert game.status == Game.STATUS_GAME_COMPLETE
+        assert game.ended_at is not None

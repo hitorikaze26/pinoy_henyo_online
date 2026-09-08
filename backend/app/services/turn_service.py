@@ -69,6 +69,11 @@ class TurnNotActiveError(TurnServiceError):
     code = "TURN_NOT_ACTIVE"
 
 
+class RoundTwoBlockedError(TurnServiceError):
+    status = 409
+    code = "ROUND_TWO_BLOCKED"
+
+
 class TurnTimedOutError(TurnServiceError):
     status = 409
     code = "TURN_TIMED_OUT"
@@ -279,6 +284,25 @@ def active_gameplay_session_for_team(team_id, session_token):
     return session
 
 
+def _guard_round_advance(match):
+    """Round 2 turns must not start until every Round 1 match is finished."""
+    if match.round is None or match.round.round_number != 2:
+        return
+    uncompleted = (
+        Match.query.join(Round, Round.id == Match.round_id)
+        .filter(
+            Match.game_id == match.game_id,
+            Round.round_number == 1,
+            Match.status != Match.STATUS_COMPLETED,
+        )
+        .count()
+    )
+    if uncompleted:
+        raise RoundTwoBlockedError(
+            "All Round 1 matches must be completed before Round 2 can start."
+        )
+
+
 # ---------------------------------------------------------------------------
 # Start turn
 # ---------------------------------------------------------------------------
@@ -289,6 +313,7 @@ def start_turn(match):
         raise MatchAlreadyPlayedError(
             "This match has already been completed."
         )
+    _guard_round_advance(match)
     active = Turn.query.filter_by(
         match_id=match.id, status=Turn.STATUS_ACTIVE
     ).first()
@@ -614,6 +639,59 @@ def adjust_time(turn, seconds, reason=None, mode=None):
     return turn
 
 
+def reset_turn(turn):
+    """Restart a finished turn with the same words, team and category.
+
+    Clears every word result back to PENDING, wipes the turn's penalties and
+    score rows, resets the timer fields and puts the match back to PENDING so
+    the display flow can replay the turn from the board. If the round had been
+    auto-completed because this was its last finished match, it is reopened.
+    """
+    if turn.status not in (
+        Turn.STATUS_COMPLETED,
+        Turn.STATUS_TIMEOUT,
+        Turn.STATUS_FAILED,
+    ):
+        raise TurnNotActiveError(
+            "Only a finished turn can be reset."
+        )
+    match = turn.match
+    for turn_word in ordered_words(turn):
+        turn_word.result = TurnWord.RESULT_PENDING
+        turn_word.used_at = None
+    Penalty.query.filter_by(turn_id=turn.id).delete()
+    Score.query.filter_by(
+        game_id=match.game_id,
+        team_id=turn.team_id,
+        round_id=turn.round_id,
+        match_id=match.id,
+    ).delete()
+    first_word_id = turn.current_word_id
+    turn.starting_seconds = 0
+    turn.remaining_seconds = 0
+    turn.pause_total_seconds = 0
+    turn.paused_at = None
+    turn.timer_adjustment_seconds = 0
+    turn.started_at = None
+    turn.ended_at = None
+    turn.status = Turn.STATUS_WAITING
+    turn.current_word_id = first_word_id
+    match.status = Match.STATUS_PENDING
+    match.winner_team_id = None
+    match.ended_at = None
+    round_obj = turn.round
+    if round_obj is not None and round_obj.status == Round.STATUS_COMPLETED:
+        round_obj.status = Round.STATUS_PENDING
+        round_obj.ended_at = None
+    _record_event(
+        match.game_id,
+        "TURN_RESET",
+        {"turn_id": turn.id, "match_id": match.id},
+        team_id=turn.team_id,
+    )
+    return turn
+
+
 def get_penalties_for_turn(turn_id):
     """Return all penalties for a turn as a list of dicts."""
     penalties = Penalty.query.filter_by(turn_id=turn_id).order_by(Penalty.id).all()
@@ -884,6 +962,7 @@ def turn_play_payload(turn, outcome=None):
         "team_id": turn.team_id,
         "round_id": turn.round_id,
         "round_number": match.round.round_number if match.round else None,
+        "category_id": turn.category_id,
         "turn_order": turn.turn_order,
         "status": turn.status,
         "started_at": turn.started_at,
@@ -906,6 +985,79 @@ def turn_play_payload(turn, outcome=None):
     }
     if outcome is not None:
         payload["outcome"] = outcome
+    return payload
+
+
+def turn_result_payload(turn):
+    """Persistent result view of a finished turn.
+
+    Unlike the transient play payload this reports the turn exactly as it
+    stood when it finished, and stores a copy safe to show even after the host
+    resets the board (which clears the live turn state). ``carried_word_ids``
+    lists the unanswered words that would carry into Round 2.
+    """
+    match = turn.match
+    words = [
+        {
+            "word_id": turn_word.word_id,
+            "word_text": turn_word.word.word_text if turn_word.word else None,
+            "sequence": turn_word.sequence,
+            "result": turn_word.result,
+            "used_at": turn_word.used_at,
+        }
+        for turn_word in ordered_words(turn)
+    ]
+    correct = [
+        item for item in words if item["result"] == TurnWord.RESULT_CORRECT
+    ]
+    pending = [
+        item for item in words if item["result"] == TurnWord.RESULT_PENDING
+    ]
+    first_correct_at = None
+    correct_used_at = [
+        item["used_at"]
+        for item in correct
+        if item["used_at"] is not None
+    ]
+    if correct_used_at:
+        first_correct_at = min(correct_used_at)
+    score = Score.query.filter_by(
+        game_id=match.game_id,
+        team_id=turn.team_id,
+        round_id=turn.round_id,
+        match_id=match.id,
+    ).first()
+    payload = {
+        "turn_id": turn.id,
+        "match_id": turn.match_id,
+        "team_id": turn.team_id,
+        "round_id": turn.round_id,
+        "round_number": match.round.round_number if match.round else None,
+        "category_id": turn.category_id,
+        "turn_order": turn.turn_order,
+        "status": turn.status,
+        "started_at": turn.started_at,
+        "ended_at": turn.ended_at,
+        "correct_words": len(correct),
+        "passed_words": count_results(turn, TurnWord.RESULT_PASSED),
+        "failed_words": count_results(turn, TurnWord.RESULT_FAILED),
+        "pending_words": len(pending),
+        "total_words": len(words),
+        "first_correct_at": first_correct_at,
+        "carried_word_ids": [item["word_id"] for item in pending],
+        "won": match.winner_team_id == turn.team_id,
+        "score": None,
+        "words": words,
+    }
+    if score is not None:
+        payload["score"] = {
+            "points": score.points,
+            "correct_words": score.correct_words,
+            "passed_words": score.passed_words,
+            "failed_words": score.failed_words,
+            "penalty_seconds": score.penalty_seconds,
+            "time_bonus_seconds": score.time_bonus_seconds,
+        }
     return payload
 
 

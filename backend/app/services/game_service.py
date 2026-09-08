@@ -166,6 +166,32 @@ def end_game(game):
     return _status_payload(game)
 
 
+def finalize_game(game, auto=False):
+    """Unconditionally mark the game complete.
+
+    Used when the last Round-2 match finishes: every match has been played,
+    so the game never goes back to READY and the normal transition gate does
+    not apply. Round 1 and Round 2 full-game statuses are only set in unit
+    tests, so this must end the game from READY as well.
+    """
+    if game.status in (
+        Game.STATUS_GAME_COMPLETE,
+        Game.STATUS_CANCELLED,
+        Game.STATUS_EXPIRED,
+    ):
+        return False
+    from_status = game.status
+    game.status = Game.STATUS_GAME_COMPLETE
+    if game.ended_at is None:
+        game.ended_at = utcnow()
+    _record_event(
+        game,
+        "GAME_ENDED",
+        {"from_status": from_status, "auto": bool(auto)},
+    )
+    return True
+
+
 def mark_game_expired(game):
     """Set a game to the EXPIRED terminal status (host absent beyond timeout)."""
     if game.status in (

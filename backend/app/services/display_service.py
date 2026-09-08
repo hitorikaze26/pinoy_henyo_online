@@ -241,6 +241,7 @@ def state_payload(game, member_id=None):
         "status": game.display_status,
         "match_id": game.display_go_match_id,
         "team_id": team_id,
+        "category_id": match.category_id if match is not None else None,
         "countdown_seconds": COUNTDOWN_SECONDS,
         "remaining": round(remaining, 2) if remaining is not None else None,
         "go_at": (
@@ -268,6 +269,7 @@ def _armed_payload(game, match, resolution):
         "status": game.display_status,
         "match_id": match.id,
         "team_id": match.team_id,
+        "category_id": match.category_id,
         "countdown_seconds": COUNTDOWN_SECONDS,
         "display_target": resolution["kind"],
     }
@@ -294,6 +296,7 @@ def set_countdown(game, match):
         "status": game.display_status,
         "match_id": match.id,
         "team_id": match.team_id,
+        "category_id": match.category_id,
         "countdown_seconds": COUNTDOWN_SECONDS,
         "go_at": deadline.isoformat(),
         "display_target": resolution["kind"],
@@ -372,10 +375,18 @@ def _start_turn_for_display(game, match):
     )
     match_was_active = match.status == Match.STATUS_ACTIVE
     try:
-        # auto-assign the word list (same count the host used before)
-        gameplay_service.assign_turn_words(
-            match, count=gameplay_service.MAX_WORDS_PER_TURN
+        # A Reset restores its WAITING turn with its words intact; that turn
+        # must never be re-assigned. Otherwise auto-assign a fresh word list
+        # (same count the host used before).
+        has_waiting = (
+            Turn.query.filter_by(match_id=match.id, status=Turn.STATUS_WAITING)
+            .first()
+            is not None
         )
+        if not has_waiting:
+            gameplay_service.assign_turn_words(
+                match, count=gameplay_service.MAX_WORDS_PER_TURN
+            )
         turn = turn_service.start_turn(match)
         if round_starts_now:
             round_obj.started_at = utcnow()

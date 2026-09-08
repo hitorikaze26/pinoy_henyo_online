@@ -531,13 +531,13 @@ def test_select_category_not_in_game(client):
     assert response.get_json()["error"]["code"] == "CATEGORY_NOT_IN_GAME"
 
 
-def test_select_round2_not_allowed(client):
+def test_select_round2_allowed(client):
     s = _basic_setup(client)
     s.cat = _create_category(client, s.game_id, s.host, "Food")
     assert _create_round(client, s.game_id, s.host, 2).status_code == 201
     response = _select_categories(client, s.game_id, s.host, 2, [s.cat])
-    assert response.status_code == 409
-    assert response.get_json()["error"]["code"] == "ROUND_CATEGORY_NOT_ALLOWED"
+    assert response.status_code == 200
+    assert response.get_json()["data"]["round_number"] == 2
 
 
 def test_round1_lists_only_selected(client):
@@ -588,7 +588,8 @@ def test_round_categories_round_not_found(client):
 # ---------------------------------------------------------------------------
 
 
-def test_select_categories_bulk_assigns_words(client):
+def test_select_categories_does_not_reassign_words(client):
+    """The picker re-scopes rounds by category, not by word round field."""
     s = _basic_setup(client)
     s.cats = [
         _create_category(client, s.game_id, s.host, "Food"),
@@ -610,62 +611,64 @@ def test_select_categories_bulk_assigns_words(client):
         headers={HOST_TOKEN_HEADER: s.host},
     ).get_json()["data"]["words"]
     rounds = {w["word_text"]: w["assigned_round"] for w in words}
+    # Round membership is category-driven now; selecting a category for
+    # Round 1 must leave the per-word field alone.
     assert rounds["A0"] == 1
-    assert rounds["A1"] == 2
+    assert rounds["A1"] == 1
 
 
 def test_word_round_drives_round2_pool(client):
     s = _full_setup(client)
-    words = client.get(
-        "/api/games/{}/words".format(s.game_id),
-        headers={HOST_TOKEN_HEADER: s.host},
-    ).get_json()["data"]["words"]
-    by_round = {w["word_text"]: w["assigned_round"] for w in words}
-    # Round 1 picker selected cats[0] only, so cats[0] words are in Round 1
-    # and cats[1] words are in Round 2.
-    assert by_round["B01"] == 1
-    assert by_round["B11"] == 2
+    # Enable only cats[1] for Round 2: the Round 2 pool must draw from it.
+    assert _select_categories(
+        client, s.game_id, s.host, 2, [s.cats[1]]
+    ).status_code == 200
 
-    # Random assignment on the Round 2 match only draws Round 2 words.
+    # B13 was already assigned to the Round 2 match by the setup; the random
+    # draw must stay inside cats[1] and never reuse a dealt word.
     response = _assign_turn_words(
-        client, s.host, s.match_a_round2["match_id"], count=2
+        client, s.host, s.match_a_round2["match_id"], count=1
     )
     assert response.status_code == 201
     turn_words = {w["word_text"] for w in response.get_json()["data"]["words"]}
-    assert turn_words == {"B11", "B12"}
+    assert len(turn_words) == 1
+    assert next(iter(turn_words)).startswith("B1")
 
 
 def test_word_round_change_rescopes_pool(client):
     s = _full_setup(client)
-    target = s.words_b[s.cats[0]][0]  # B01, Round 1
-    move = client.patch(
-        "/api/words/{}/round".format(target),
-        json={"assigned_round": 2},
-        headers={HOST_TOKEN_HEADER: s.host},
-    )
-    assert move.status_code == 200
+    assert _select_categories(
+        client, s.game_id, s.host, 2, [s.cats[1]]
+    ).status_code == 200
+    target = s.words_b[s.cats[0]][0]  # a cats[0] word
 
-    # B01 is now a Round 2 word: it can feed the Round 2 match but not Round 1.
-    ok = _assign_turn_words(
-        client, s.host, s.match_a_round2["match_id"], word_ids=[target]
-    )
-    assert ok.status_code == 201
+    # Round 2 (enabled set cats[1]) must reject a cats[0] word.
     denied = _assign_turn_words(
-        client, s.host, s.match_a["match_id"], word_ids=[target]
+        client, s.host, s.match_a_round2["match_id"], word_ids=[target]
     )
     assert denied.status_code == 409
     assert denied.get_json()["error"]["code"] == "WORD_NOT_IN_ROUND"
+
+    # Round 1 (enabled set cats[0]) accepts it.
+    ok = _assign_turn_words(
+        client, s.host, s.match_a["match_id"], word_ids=[target]
+    )
+    assert ok.status_code == 201
 
 
 def test_readiness_detects_empty_round2(client):
     s = _basic_setup(client)
     s.cat = _create_category(client, s.game_id, s.host, "Food")
+    s.empty_cat = _create_category(client, s.game_id, s.host, "Empty")
     _submit_words(
         client, s.game_id, s.team_a["team_id"], s.cat, ["apple"], s.sess_a
     )
     assert _create_round(client, s.game_id, s.host, 1).status_code == 201
     assert _create_round(client, s.game_id, s.host, 2).status_code == 201
     _select_categories(client, s.game_id, s.host, 1, [s.cat])
+    assert _select_categories(
+        client, s.game_id, s.host, 2, [s.empty_cat]
+    ).status_code == 200
     response = client.get(
         "/api/games/{}/readiness".format(s.game_id),
         headers={HOST_TOKEN_HEADER: s.host},
@@ -868,6 +871,100 @@ def test_matches_endpoints_require_host(client):
         "/api/games/{}/matches".format(s.game_id),
         json={"round_number": 1, "matches": []},
     ).status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Per-turn category pick (Round 1)
+# ---------------------------------------------------------------------------
+
+
+def test_select_match_category_by_team(client):
+    s = _full_setup(client)
+    response = client.post(
+        "/api/matches/{}/category".format(s.match_a["match_id"]),
+        json={"category_id": s.cats[0]},
+        headers={SESSION_TOKEN_HEADER: s.sess_a},
+    )
+    assert response.status_code == 200
+    data = response.get_json()["data"]
+    assert data["match_id"] == s.match_a["match_id"]
+    assert data["category_id"] == s.cats[0]
+
+
+def test_select_match_category_by_host(client):
+    s = _full_setup(client)
+    response = client.post(
+        "/api/matches/{}/category".format(s.match_a["match_id"]),
+        json={"category_id": s.cats[0]},
+        headers={HOST_TOKEN_HEADER: s.host},
+    )
+    assert response.status_code == 200
+    assert response.get_json()["data"]["category_id"] == s.cats[0]
+
+
+def test_select_match_category_requires_auth(client):
+    s = _full_setup(client)
+    assert client.post(
+        "/api/matches/{}/category".format(s.match_a["match_id"]),
+        json={"category_id": s.cats[0]},
+    ).status_code == 401
+
+
+def test_select_match_category_rejects_disabled(client):
+    s = _full_setup(client)
+    # Round 1 enabled set is cats[0]; cats[1] must be rejected.
+    response = client.post(
+        "/api/matches/{}/category".format(s.match_a["match_id"]),
+        json={"category_id": s.cats[1]},
+        headers={SESSION_TOKEN_HEADER: s.sess_a},
+    )
+    assert response.status_code == 409
+    assert response.get_json()["error"]["code"] == "ROUND_CATEGORY_NOT_ALLOWED"
+
+
+def test_select_match_category_round2_not_allowed(client):
+    s = _full_setup(client)
+    response = client.post(
+        "/api/matches/{}/category".format(s.match_a_round2["match_id"]),
+        json={"category_id": s.cats[0]},
+        headers={SESSION_TOKEN_HEADER: s.sess_a},
+    )
+    assert response.status_code == 409
+    assert response.get_json()["error"]["code"] == "ROUND_CATEGORY_NOT_ALLOWED"
+
+
+def test_select_match_category_not_in_game(client):
+    s = _full_setup(client)
+    other_game_id, other_host = _create_game(client)
+    other_cat = _create_category(client, other_game_id, other_host, "Other")
+    response = client.post(
+        "/api/matches/{}/category".format(s.match_a["match_id"]),
+        json={"category_id": other_cat},
+        headers={HOST_TOKEN_HEADER: s.host},
+    )
+    assert response.status_code == 400
+    assert response.get_json()["error"]["code"] == "CATEGORY_NOT_IN_GAME"
+
+
+def test_selected_category_scopes_round1_pool(client):
+    s = _full_setup(client)
+    assert client.post(
+        "/api/matches/{}/category".format(s.match_a["match_id"]),
+        json={"category_id": s.cats[0]},
+        headers={HOST_TOKEN_HEADER: s.host},
+    ).status_code == 200
+    # A cats[1] word cannot enter the Round 1 match once the category is set.
+    denied = _assign_turn_words(
+        client, s.host, s.match_a["match_id"], word_ids=[s.words_b[s.cats[1]][0]]
+    )
+    assert denied.status_code == 409
+    assert denied.get_json()["error"]["code"] == "WORD_NOT_IN_ROUND"
+    # A cats[0] word still works.
+    ok = _assign_turn_words(
+        client, s.host, s.match_a["match_id"], word_ids=[s.words_b[s.cats[0]][0]]
+    )
+    assert ok.status_code == 201
+    assert ok.get_json()["data"]["category_id"] == s.cats[0]
 
 
 # ---------------------------------------------------------------------------
@@ -1254,8 +1351,19 @@ def test_update_round_timer_requires_host(client):
     assert response.status_code == 401
 
 
-def test_advance_round(client):
+def test_advance_round(app, client):
     s = _full_setup(client)
+    # Round 2 is gated: every Round 1 match must be completed first.
+    blocked = client.post(
+        "/api/games/{}/rounds/1/advance".format(s.game_id),
+        headers={HOST_TOKEN_HEADER: s.host},
+    )
+    assert blocked.status_code == 409
+    assert blocked.get_json()["error"]["code"] == "ROUND_ADVANCE_BLOCKED"
+    with app.app_context():
+        match = db.session.get(Match, s.match_a["match_id"])
+        match.status = Match.STATUS_COMPLETED
+        db.session.commit()
     response = client.post(
         "/api/games/{}/rounds/1/advance".format(s.game_id),
         headers={HOST_TOKEN_HEADER: s.host},

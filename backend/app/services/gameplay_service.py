@@ -96,6 +96,12 @@ class NextRoundMissingError(GameplayServiceError):
     code = "NEXT_ROUND_MISSING"
 
 
+class RoundAdvanceGateError(GameplayServiceError):
+    """Round 2 cannot open until every Round 1 match is finished."""
+    status = 409
+    code = "ROUND_ADVANCE_BLOCKED"
+
+
 class CategoriesRequiredError(GameplayServiceError):
     status = 400
     code = "CATEGORIES_REQUIRED"
@@ -265,6 +271,12 @@ def advance_round(game, round_number):
         raise NextRoundMissingError(
             "Round {} has no matches yet.".format(next_number)
         )
+    if next_number == ROUND_2 and any(
+        match.status != Match.STATUS_COMPLETED for match in round_obj.matches
+    ):
+        raise RoundAdvanceGateError(
+            "All Round 1 matches must be completed before Round 2 can start."
+        )
     if round_obj.ended_at is None:
         round_obj.status = Round.STATUS_COMPLETED
         round_obj.ended_at = utcnow()
@@ -427,12 +439,19 @@ def create_round(game, round_number, timer_seconds=60, timer_mode=None):
 
 
 def select_round_categories(game, round_number, category_ids):
+    """Set the enabled categories for a round.
+
+    Round 1's selection is the set the playing team may pick one category
+    from per turn. Round 2's selection is the set whose words feed the
+    Round 2 pool (a turn that stopped early carries its unanswered words in
+    addition). An empty selection means "every category is allowed".
+    """
     round_obj = get_round(game, round_number)
     if round_obj is None:
         raise RoundNotFoundError("The round has not been set up yet.")
-    if round_number != ROUND_1:
+    if round_number not in (ROUND_1, ROUND_2):
         raise RoundCategoryNotAllowedError(
-            "Category selection is only allowed for Round 1."
+            "Category selection is only available for Rounds 1 and 2."
         )
     category_ids = list(dict.fromkeys(category_ids or []))
     if not category_ids:
@@ -451,46 +470,37 @@ def select_round_categories(game, round_number, category_ids):
     RoundCategory.query.filter_by(round_id=round_obj.id).delete()
     for category_id in category_ids:
         db.session.add(RoundCategory(round_id=round_obj.id, category_id=category_id))
-    # Bulk-assign words so round membership is driven by each word's
-    # `assigned_round` (per-word control). The picker is a shortcut: words in
-    # the selected categories go to Round 1, everything else to Round 2.
-    Word.query.filter(
-        Word.game_id == game.id,
-        Word.category_id.in_(selected_ids),
-    ).update(
-        {Word.assigned_round: ROUND_1}, synchronize_session=False
-    )
-    Word.query.filter(
-        Word.game_id == game.id,
-        ~Word.category_id.in_(selected_ids),
-    ).update(
-        {Word.assigned_round: ROUND_2}, synchronize_session=False
-    )
     db.session.flush()
     db.session.expire_all()
     return round_obj
 
 
 def list_round_categories(game, round_number):
+    """Return the enabled categories for a round plus which are selected.
+
+    When nothing is selected the category list falls back to *all* categories
+    so host toggles and the player picker always have something to show.
+    """
     round_obj = get_round(game, round_number)
     if round_obj is None:
         raise RoundNotFoundError("The round has not been set up yet.")
-    if round_number == ROUND_2:
-        categories = (
-            Category.query.filter_by(game_id=game.id)
-            .order_by(Category.name)
-            .all()
-        )
-    else:
-        selected_ids = [
-            rc.category_id for rc in round_obj.selected_categories
-        ]
+    selected_ids = sorted(rc.category_id for rc in round_obj.selected_categories)
+    if selected_ids:
         categories = (
             Category.query.filter(Category.id.in_(selected_ids))
             .order_by(Category.name)
             .all()
         )
-    return _category_payloads(categories)
+    else:
+        categories = (
+            Category.query.filter_by(game_id=game.id)
+            .order_by(Category.name)
+            .all()
+        )
+    return {
+        "categories": _category_payloads(categories),
+        "selected_category_ids": selected_ids,
+    }
 
 
 def _category_payloads(categories):
@@ -668,8 +678,34 @@ def list_game_matches(game):
 # Word assignment
 # ---------------------------------------------------------------------------
 
+# A word that has been dealt (shown) to any team is out of every pool: it was
+# answered (CORRECT/PASSED), abandoned, or survived a stopped turn as PENDING
+# and is only reeled back in as that team's own Round-2 carryover. Round pools
+# are category-driven: Round 1 draws from the turn's picked category (falling
+# back to the round's enabled set, then everything), Round 2 from the round's
+# enabled set (falling back to everything) plus the carrying team's survivors.
 
-def _round_word_pool(match):
+
+def _game_dealt_word_ids(game_id):
+    dealt = set()
+    for (word_id,) in (
+        db.session.query(TurnWord.word_id)
+        .join(Turn, Turn.id == TurnWord.turn_id)
+        .join(Match, Match.id == Turn.match_id)
+        .filter(Match.game_id == game_id)
+        .all()
+    ):
+        dealt.add(word_id)
+    return dealt
+
+
+def _round_enabled_category_ids(round_obj):
+    ids = sorted(rc.category_id for rc in round_obj.selected_categories)
+    return ids or None
+
+
+def _round_word_pool(match, category_id=None):
+    """Words currently assignable to this match, scoped by round rules."""
     round_obj = match.round
     query = Word.query.filter(
         Word.game_id == match.game_id,
@@ -677,27 +713,126 @@ def _round_word_pool(match):
             (Word.STATUS_DISABLED, Word.STATUS_UNDER_REVIEW)
         ),
     )
-    # Rounds 1 and 2 pull only from the words assigned to them. Tie-break and
-    # any extra rounds fall back to the full pool.
-    if round_obj.round_number in (ROUND_1, ROUND_2):
-        query = query.filter(Word.assigned_round == round_obj.round_number)
+    if round_obj.round_number == ROUND_1:
+        if category_id is not None:
+            query = query.filter(Word.category_id == category_id)
+        else:
+            enabled = _round_enabled_category_ids(round_obj)
+            if enabled is not None:
+                query = query.filter(Word.category_id.in_(enabled))
+    elif round_obj.round_number == ROUND_2:
+        enabled = _round_enabled_category_ids(round_obj)
+        if enabled is not None:
+            query = query.filter(Word.category_id.in_(enabled))
+    # Any other round (tie-break) uses the full pool.
+    dealt = _game_dealt_word_ids(match.game_id)
     return [
         word
         for word in query.all()
-        if word.submitted_by_team_id != match.team_id
+        if word.id not in dealt and word.submitted_by_team_id != match.team_id
     ]
+
+
+def _validate_word_for_round(word, match, round_obj):
+    """A manually-assigned word must belong to the round's category scope."""
+    if round_obj.round_number == ROUND_1:
+        if match.category_id is not None:
+            if word.category_id != match.category_id:
+                raise WordNotInRoundError(
+                    "Round 1 can only use words from the chosen category."
+                )
+        else:
+            enabled = _round_enabled_category_ids(round_obj)
+            if enabled is not None and word.category_id not in enabled:
+                raise WordNotInRoundError(
+                    "Round 1 can only use words from its enabled categories."
+                )
+    elif round_obj.round_number == ROUND_2:
+        enabled = _round_enabled_category_ids(round_obj)
+        if enabled is not None and word.category_id not in enabled:
+            raise WordNotInRoundError(
+                "Round 2 can only use words from its enabled categories."
+            )
+
+
+def _carryover_words(match):
+    """The team's unanswered (PENDING) words from earlier rounds.
+
+    A Round 2 turn re-deals every word the same team saw earlier and left
+    unresolved, so a strong stop never guards a word from the next round.
+    """
+    if match.round.round_number != ROUND_2:
+        return []
+    earlier_matches = (
+        Match.query.filter_by(game_id=match.game_id, team_id=match.team_id)
+        .all()
+    )
+    carried = []
+    seen = set()
+    for earlier in earlier_matches:
+        if earlier.round is None or earlier.round.round_number != ROUND_1:
+            continue
+        for turn in earlier.turns:
+            for turn_word in turn.turn_words:
+                if (
+                    turn_word.result == TurnWord.RESULT_PENDING
+                    and turn_word.word_id not in seen
+                ):
+                    seen.add(turn_word.word_id)
+                    carried.append(turn_word.word)
+    return [word for word in carried if word is not None]
+
+
+def select_match_category(match, category_id):
+    """Hold the Round 1 per-turn category chosen by the playing team."""
+    if match.round is None or match.round.round_number != ROUND_1:
+        raise RoundCategoryNotAllowedError(
+            "A per-turn category can only be chosen for Round 1."
+        )
+    if category_id is None:
+        raise CategoriesRequiredError("A category_id is required.")
+    category = db.session.get(Category, category_id)
+    if category is None or category.game_id != match.game_id:
+        raise CategoryNotInGameError(
+            "The category does not belong to this game."
+        )
+    enabled = _round_enabled_category_ids(match.round)
+    if enabled is not None and category_id not in enabled:
+        raise RoundCategoryNotAllowedError(
+            "The chosen category is not enabled for Round 1."
+        )
+    match.category_id = category_id
+    _record_event(
+        match.game,
+        "CATEGORY_SELECTED",
+        {
+            "match_id": match.id,
+            "round_id": match.round_id,
+            "round_number": match.round.round_number,
+            "category_id": category_id,
+        },
+        team_id=match.team_id,
+    )
+    return match
 
 
 def match_eligible_word_count(match):
     """Count the words currently assignable to this match's next turn.
 
-    Mirrors ``assign_turn_words`` exactly: round-scoped, excluding words the
-    team itself submitted and words already used in earlier turns. Lets the
-    two-stage display flow reject a match that cannot actually play before it
-    is ever armed.
+    Mirrors ``assign_turn_words`` exactly: round-scoped, category-aware,
+    excluding words the team itself submitted and words already dealt. Lets
+    the two-stage display flow reject a match that cannot actually play
+    before it is ever armed, and serves as the playing team's eligible-pool
+    measure for the ``min_words_to_start`` gate.
     """
-    used = _used_word_ids(match)
-    return sum(1 for word in _round_word_pool(match) if word.id not in used)
+    dealt = _game_dealt_word_ids(match.game_id)
+    pool = [
+        word
+        for word in _round_word_pool(match, category_id=match.category_id)
+        if word.id not in dealt
+    ]
+    carry_count = len(_carryover_words(match)) if match.round.round_number == ROUND_2 else 0
+    return carry_count + len(pool)
 
 
 def _used_word_ids(match):
@@ -713,51 +848,64 @@ def assign_turn_words(match, word_ids=None, count=None):
         raise TurnParamsInvalidError(
             "Provide either word_ids or count."
         )
-    used = _used_word_ids(match)
     round_obj = match.round
+    dealt = _game_dealt_word_ids(match.game_id)
+
+    # Round 2 re-deals the team's unanswered Round 1 words first.
+    carry = []
+    if round_obj.round_number == ROUND_2:
+        for word in _carryover_words(match):
+            if word.id not in dealt:
+                dealt.add(word.id)
+                carry.append(word)
 
     if word_ids is not None:
         if not word_ids:
             raise TurnParamsInvalidError("word_ids must not be empty.")
-        candidates = set()
+        ordered = []
+        seen = {word.id for word in carry}
         for word_id in word_ids:
             word = db.session.get(Word, word_id)
             if word is None or word.game_id != match.game_id:
                 raise WordNotInGameError(
                     "The word does not belong to this game."
                 )
-            if (
-                round_obj.round_number in (ROUND_1, ROUND_2)
-                and word.assigned_round != round_obj.round_number
-            ):
-                raise WordNotInRoundError(
-                    "Round {} can only use words assigned to it.".format(
-                        round_obj.round_number
-                    )
-                )
+            _validate_word_for_round(word, match, round_obj)
             if word.submitted_by_team_id == match.team_id:
                 raise WordOwnTeamError(
                     "A team can never receive a word it submitted itself."
                 )
-            if word.id in used or word.id in candidates:
+            if word.id in seen or word.id in dealt:
                 raise WordAlreadyAssignedError(
-                    "A word can be assigned at most once per match."
+                    "A dealt word can be assigned at most once."
                 )
-            candidates.add(word.id)
-        chosen = [
-            db.session.get(Word, word_id) for word_id in word_ids
-        ]
+            seen.add(word.id)
+            ordered.append(word)
+        chosen = carry + ordered
+        if len(chosen) > MAX_WORDS_PER_TURN:
+            raise WordLimitExceededError(
+                "A turn can contain at most {} words.".format(
+                    MAX_WORDS_PER_TURN
+                )
+            )
     else:
-        available = [
-            word for word in _round_word_pool(match) if word.id not in used
-        ]
         if (
             not isinstance(count, int)
             or isinstance(count, bool)
             or count <= 0
         ):
             raise TurnParamsInvalidError("count must be a positive integer.")
-        if len(available) < count:
+        needed = count - len(carry)
+        available = [
+            word
+            for word in _round_word_pool(match, category_id=match.category_id)
+            if word.id not in dealt
+        ]
+        if needed < 0:
+            raise WordLimitExceededError(
+                "Carried words already exceed the per-turn limit."
+            )
+        if len(available) < needed:
             raise InsufficientWordsError(
                 "Not enough eligible words remain for this match."
             )
@@ -767,7 +915,7 @@ def assign_turn_words(match, word_ids=None, count=None):
                     MAX_WORDS_PER_TURN
                 )
             )
-        chosen = random.sample(available, count)
+        chosen = carry + random.sample(available, needed)
 
     if len(chosen) > MAX_WORDS_PER_TURN:
         raise WordLimitExceededError(
@@ -784,6 +932,7 @@ def assign_turn_words(match, word_ids=None, count=None):
         match_id=match.id,
         team_id=match.team_id,
         round_id=match.round_id,
+        category_id=match.category_id,
         turn_order=turn_order,
         status=Turn.STATUS_WAITING,
     )
@@ -851,13 +1000,22 @@ def readiness(game):
         issues.append("No rounds have been set up.")
     for round_obj in rounds:
         label = "Round {}".format(round_obj.round_number)
-        round_word_count = (
-            Word.query.filter(
+        if round_obj.round_number in (ROUND_1, ROUND_2):
+            enabled = _round_enabled_category_ids(round_obj)
+            query = Word.query.filter(
                 Word.game_id == game.id,
                 Word.status != Word.STATUS_DISABLED,
-                Word.assigned_round == round_obj.round_number,
-            ).count()
-        )
+            )
+            if enabled is not None:
+                query = query.filter(Word.category_id.in_(enabled))
+            round_word_count = query.count()
+        else:
+            round_word_count = (
+                Word.query.filter(
+                    Word.game_id == game.id,
+                    Word.status != Word.STATUS_DISABLED,
+                ).count()
+            )
         if round_word_count == 0:
             issues.append("{} has no assigned words.".format(label))
         matches = (
@@ -918,6 +1076,7 @@ def match_payload(match):
         "game_id": match.game_id,
         "round_id": match.round_id,
         "round_number": match.round.round_number,
+        "category_id": match.category_id,
         "match_order": match.match_order,
         "team_id": match.team_id,
         "opponent_team_id": match.opponent_team_id,
@@ -944,6 +1103,7 @@ def turn_payload(turn):
         "match_id": turn.match_id,
         "team_id": turn.team_id,
         "round_id": turn.round_id,
+        "category_id": turn.category_id,
         "turn_order": turn.turn_order,
         "status": turn.status,
         "current_word_id": turn.current_word_id,

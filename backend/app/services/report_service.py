@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from ..extensions import db
 from ..models import (
     Category,
@@ -12,6 +14,9 @@ from ..models import (
     TurnWord,
     Word,
 )
+
+# Tie-break baseline for teams with no correct word yet.
+_NEVER = datetime(9999, 1, 1)
 
 
 def _tz_iso(value):
@@ -314,6 +319,22 @@ def leaderboard(game):
     )
     if not teams:
         teams = Team.query.filter_by(game_id=game.id).order_by(Team.id).all()
+    first_correct_at = {}
+    correct_rows = (
+        db.session.query(Turn.team_id, TurnWord.used_at)
+        .join(TurnWord, TurnWord.turn_id == Turn.id)
+        .join(Match, Match.id == Turn.match_id)
+        .filter(
+            Match.game_id == game.id,
+            TurnWord.result == TurnWord.RESULT_CORRECT,
+            TurnWord.used_at.isnot(None),
+        )
+        .order_by(TurnWord.used_at)
+        .all()
+    )
+    for team_id, used_at in correct_rows:
+        if team_id not in first_correct_at:
+            first_correct_at[team_id] = used_at
     aggregate = {}
     for team in teams:
         score_rows = Score.query.filter_by(
@@ -331,6 +352,7 @@ def leaderboard(game):
             "time_bonus_seconds": sum(
                 s.time_bonus_seconds or 0 for s in score_rows
             ),
+            "first_correct_at": first_correct_at.get(team.id, _NEVER),
         }
 
     ranked = sorted(
@@ -338,12 +360,17 @@ def leaderboard(game):
         key=lambda r: (
             -r["points"],
             -r["correct_words"],
+            r["first_correct_at"],
             r["penalty_seconds"],
             r["team_code"] or "",
         ),
     )
     for index, entry in enumerate(ranked, start=1):
         entry["rank"] = index
+    for entry in ranked:
+        entry["first_correct_at"] = _tz_iso(
+            None if entry["first_correct_at"] is _NEVER else entry["first_correct_at"]
+        )
     return ranked
 
 

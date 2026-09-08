@@ -257,6 +257,14 @@ def test_advance_round_auto_creates_matches_for_next_round(client, app):
 
     token = data["host_session_token"]
     assert _start(client, data["game_id"], token).status_code == 200
+    # The Round 2 gate requires every Round 1 match to be completed first.
+    with app.app_context():
+        round_one = Round.query.filter_by(
+            game_id=data["game_id"], round_number=1
+        ).one()
+        for match in round_one.matches:
+            match.status = Match.STATUS_COMPLETED
+        db.session.commit()
     response = client.post(
         "/api/games/{}/rounds/1/advance".format(data["game_id"]),
         headers={HOST_TOKEN_HEADER: token},
