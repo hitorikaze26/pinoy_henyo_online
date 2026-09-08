@@ -123,18 +123,23 @@ def _word_result_snapshot(turn):
 
 
 def _emit_word_changes(turn, before):
+    changed = False
     for turn_word in turn_service.ordered_words(turn):
         if before.get(turn_word.word_id) == turn_word.result:
             continue
+        changed = True
         if turn_word.result == TurnWord.RESULT_CORRECT:
             realtime.emit_word_result(turn, turn_word, "word_correct")
         elif turn_word.result == TurnWord.RESULT_PASSED:
             realtime.emit_word_result(turn, turn_word, "word_passed")
+    if changed:
+        realtime.emit_leaderboard(turn.match.game)
 
 
 def _emit_turn_finished(turn, outcome=None):
     display_service.finish_display(turn.match.game)
     realtime.emit_turn_completed(turn, outcome=outcome)
+    realtime.emit_leaderboard(turn.match.game)
     if realtime.mark_round_completed_if_done(turn.match):
         _record_event(
             turn.match.game_id,
@@ -157,6 +162,7 @@ def _after_time_adjustment(turn, delta):
         .first()
     )
     realtime.emit_time_adjusted(turn, penalty, delta)
+    realtime.emit_leaderboard(turn.match.game)
     if turn.status in (
         Turn.STATUS_TIMEOUT,
         Turn.STATUS_COMPLETED,
@@ -273,6 +279,7 @@ def advance_round(game, round_number):
         return _handle(exc)
     if completed_round is not None:
         realtime.announce_round_completed(completed_round)
+        realtime.emit_leaderboard(game)
     realtime.emit_round_updated(next_round)
     return success_response(data=gameplay_service.round_payload(next_round))
 

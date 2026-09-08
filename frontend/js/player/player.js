@@ -44,6 +44,10 @@ let STATE = {
 
   members: [],
 
+  // Aggregated public standings (server-sourced via leaderboard_updated /
+  // GET /api/games/<id>/leaderboard).
+  leaderboard: [],
+
   words: [],
 
   // Game timer
@@ -208,7 +212,7 @@ function applySettings(s) {
   if (!s) return;
   STATE.settings = Object.assign({}, STATE.settings, s);
   applyDisplaySettings();
-  try { renderHeader(); renderTeamsTab(); renderWordsTab(); renderSettingsTab(); } catch (e) {}
+  try { renderHeader(); renderTeamsTab(); renderWordsTab(); renderScoresTab(); renderSettingsTab(); } catch (e) {}
 }
 
 function applyDisplaySettings() {
@@ -381,6 +385,7 @@ function copyText(text, label) {
 const TAB_IDS = {
   teams:    'tab-teams',
   words:    'tab-words',
+  scores:   'tab-scores',
   settings: 'tab-settings',
 };
 
@@ -820,6 +825,69 @@ if (inputHostCode) {
   inputHostCode.addEventListener('keydown', e => {
     if (e.key === 'Enter') submitHostCodeInput();
   });
+}
+
+/* ============================================================
+   SCORES TAB — RENDER (public leaderboard)
+============================================================ */
+function renderScoresTab() {
+  const list = $('lb-list');
+  const emptyEl = $('lb-empty');
+  const hiddenEl = $('lb-hidden-banner');
+  if (!list) return;
+
+  // Honor the host-controlled "Show scores" display toggle: when hidden,
+  // the tab shows a placeholder instead of any standings.
+  const scoresVisible = settingsGet('show_scores', true) !== false;
+  if (hiddenEl) hiddenEl.hidden = scoresVisible;
+  list.hidden = !scoresVisible;
+  if (!scoresVisible) {
+    list.innerHTML = '';
+    if (emptyEl) emptyEl.hidden = true;
+    return;
+  }
+
+  const board = (STATE.leaderboard || [])
+    .slice()
+    .sort((a, b) => (a.rank || 0) - (b.rank || 0));
+  if (!board.length) {
+    list.innerHTML = '';
+    if (emptyEl) emptyEl.hidden = false;
+    return;
+  }
+  if (emptyEl) emptyEl.hidden = true;
+
+  const myTeamId = API.getTeamId();
+  list.innerHTML = board.map((entry) => {
+    const isMe = myTeamId != null && String(entry.team_id) === String(myTeamId);
+    const medal = entry.rank === 1 ? 'gold' : entry.rank === 2 ? 'silver' : entry.rank === 3 ? 'bronze' : '';
+    const medalIcon = entry.rank === 1 ? 'fa-trophy' : (entry.rank === 2 || entry.rank === 3) ? 'fa-medal' : '';
+    const pts = Number(entry.points) || 0;
+    const correct = Number(entry.correct_words) || 0;
+    const passed = Number(entry.passed_words) || 0;
+    const failed = Number(entry.failed_words) || 0;
+    const penalty = Number(entry.penalty_seconds) || 0;
+    const name = esc(entry.team_name || `Team ${entry.team_code || entry.team_id || ''}`);
+
+    return `
+      <li class="lb-item${medal ? ` lb-item--${medal}` : ''}${isMe ? ' lb-item--me' : ''}">
+        <span class="lb-medal${medal ? ` lb-medal--${medal}` : ''}">
+          ${medal ? `<i class="fa-solid ${medalIcon}"></i>` : entry.rank}
+        </span>
+        <div class="lb-body">
+          <span class="lb-name">
+            ${name}${isMe ? '<span class="lb-you">You</span>' : ''}
+          </span>
+          <span class="lb-meta">
+            ${correct} correct · ${passed} passed · ${failed} missed
+            ${penalty ? ` · ${penalty}s penalty` : ''}
+          </span>
+        </div>
+        <span class="lb-pts">
+          <strong>${pts}</strong><span class="lb-pts__label"> pts</span>
+        </span>
+      </li>`;
+  }).join('');
 }
 
 /* ============================================================
@@ -1858,7 +1926,7 @@ async function hydrateCategories(gameId) {
   } catch (e) { console.warn('[player] categories offline', e && e.message); }
 }
 
-const REFRESH_TABS = ['renderHeader', 'renderTeamsTab', 'renderWordsTab', 'renderSettingsTab'];
+const REFRESH_TABS = ['renderHeader', 'renderTeamsTab', 'renderWordsTab', 'renderScoresTab', 'renderSettingsTab'];
 
 function renderAll() {
   REFRESH_TABS.forEach(fn => { try { window[fn] && window[fn](); } catch (e) {} });
@@ -1888,6 +1956,12 @@ async function refreshAllData({ silent = false } = {}) {
         const s = await GameAPI.getSettings(gameId);
         if (s) applySettings(s);
       } catch (e) { console.warn('[player] refresh settings offline', e && e.message); }
+      if (API.getSessionToken()) {
+        try {
+          const lb = await GameAPI.leaderboard(gameId);
+          if (lb && Array.isArray(lb.leaderboard)) STATE.leaderboard = lb.leaderboard;
+        } catch (e) { console.warn('[player] refresh leaderboard offline', e && e.message); }
+      }
     }
     await hydrateCategories(gameId);
     if (gameId && teamId && API.getSessionToken()) {
@@ -3041,6 +3115,13 @@ init();
   rt.on('settings_updated', (p) => {
     if (!gameIdMatches(p)) return;
     applySettings(p);
+  });
+
+  // Public standings change (word result / penalty / turn / round) → live board.
+  rt.on('leaderboard_updated', (p) => {
+    if (!gameIdMatches(p)) return;
+    if (Array.isArray(p.leaderboard)) STATE.leaderboard = p.leaderboard;
+    try { renderScoresTab(); } catch (e) {}
   });
 
   // Game started -> word pool locks; lock the Words tab immediately.

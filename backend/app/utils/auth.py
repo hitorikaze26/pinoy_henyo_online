@@ -4,11 +4,12 @@ from functools import wraps
 from flask import request
 
 from ..extensions import db
-from ..models import Game
+from ..models import DeviceSession, Game
 from .response import error_response
 from .time import utcnow
 
 HOST_TOKEN_HEADER = "X-Host-Token"
+SESSION_TOKEN_HEADER = "X-Session-Token"
 
 
 def host_token_from_request():
@@ -19,6 +20,27 @@ def host_token_from_request():
     if authorization.startswith("Bearer "):
         return authorization[len("Bearer "):]
     return None
+
+
+def game_session_authorized(game):
+    """True when a valid, connected device session exists for this game.
+
+    Used for read-only player-facing endpoints (e.g. the leaderboard) where
+    any active device of any team in the game may read public game state.
+    """
+    session_token = request.headers.get(SESSION_TOKEN_HEADER)
+    if not session_token:
+        return False
+    session = (
+        DeviceSession.query.filter_by(
+            session_token=session_token,
+            game_id=game.id,
+            disconnected_at=None,
+        ).first()
+        if game is not None
+        else None
+    )
+    return session is not None
 
 
 def host_authorized(game):

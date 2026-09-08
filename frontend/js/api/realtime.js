@@ -111,6 +111,7 @@ const Realtime = (() => {
       'connection_declined', 'connection_disconnected',
       'settings_updated',
       'word_pool_updated',
+      'leaderboard_updated',
       'word_change_request', 'word_change_resolved', 'word_change_cancelled',
       'error',
     ]);
@@ -217,6 +218,7 @@ const Realtime = (() => {
       'connection_declined', 'connection_disconnected',
       'settings_updated',
       'word_pool_updated',
+      'leaderboard_updated',
       'word_change_request', 'word_change_resolved', 'word_change_cancelled',
     ];
     return KNOWN.filter((name) => !(handlers.has(name) && handlers.get(name).size));

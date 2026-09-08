@@ -278,6 +278,27 @@
       </div><!-- /#tab-words -->
 
       <!-- ====================================================
+           TAB: SCORES (leaderboard)
+      ==================================================== -->
+      <div class="tab-view tab-view--hidden" id="tab-scores" role="tabpanel" aria-label="Scores">
+
+        <div class="player-card fade-in">
+          <h2 class="player-card__title">
+            <i class="fa-solid fa-trophy"></i> Leaderboard
+          </h2>
+          <p class="lb-hint" id="lb-hint">Rankings update live as teams play.</p>
+          <div class="lb-hidden-banner" id="lb-hidden-banner" hidden>
+            <i class="fa-solid fa-eye-slash"></i> The host has hidden scores.
+          </div>
+          <ol class="lb-list" id="lb-list" aria-live="polite">
+            <!-- Populated by JS -->
+          </ol>
+          <p class="lb-empty" id="lb-empty" hidden>No teams yet. Scores appear once play begins.</p>
+        </div>
+
+      </div><!-- /#tab-scores -->
+
+      <!-- ====================================================
            TAB: SETTINGS
       ==================================================== -->
       <div class="tab-view tab-view--hidden" id="tab-settings" role="tabpanel" aria-label="Settings">
@@ -873,6 +894,10 @@
         <i class="fa-solid fa-list-ul"></i>
         <span>Words</span>
       </button>
+      <button class="bottom-nav__item" data-tab="scores" id="nav-scores" aria-label="Scores" aria-selected="false">
+        <i class="fa-solid fa-trophy"></i>
+        <span>Scores</span>
+      </button>
       <button class="bottom-nav__item" data-tab="settings" id="nav-settings" aria-label="Settings" aria-selected="false">
         <i class="fa-solid fa-gear"></i>
         <span>Settings</span>
@@ -999,6 +1024,9 @@
       </button>
       <button class="bottom-nav__item" data-tab="words" aria-label="Words">
         <i class="fa-solid fa-list-ul"></i><span>Words</span>
+      </button>
+      <button class="bottom-nav__item" data-tab="scores" aria-label="Scores">
+        <i class="fa-solid fa-trophy"></i><span>Scores</span>
       </button>
       <button class="bottom-nav__item" data-tab="settings" aria-label="Settings">
         <i class="fa-solid fa-gear"></i><span>Settings</span>

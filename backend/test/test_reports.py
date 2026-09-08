@@ -266,10 +266,42 @@ def test_leaderboard_orders_by_points(client):
     assert board[0]["rank"] == 1
 
 
-def test_leaderboard_requires_host(client):
+def test_leaderboard_requires_auth(client):
     s = _full(client)
     assert client.get(
         "/api/games/{}/leaderboard".format(s.game_id)
+    ).status_code == 401
+    assert client.get(
+        "/api/games/{}/leaderboard".format(s.game_id),
+        headers={HOST_TOKEN_HEADER: "bogus-token"},
+    ).status_code == 401
+
+
+def test_leaderboard_allows_any_player_session(client):
+    s = _full(client)
+    _play_turn(client, s, s.match_a, word_ids=s.words_b[:3])
+
+    response = client.get(
+        "/api/games/{}/leaderboard".format(s.game_id),
+        headers={SESSION_TOKEN_HEADER: s.sess_b},
+    )
+    assert response.status_code == 200
+    board = response.get_json()["data"]["leaderboard"]
+    assert board[0]["team_id"] == s.team_a["team_id"]
+    assert board[0]["points"] == 3
+    assert board[0]["rank"] == 1
+    assert all("team_code" in row for row in board)
+
+
+def test_leaderboard_rejects_session_from_other_game(client):
+    s = _full(client)
+    other_game_id, _ = _create_game(client)
+    other_team = _create_team(client, other_game_id, "Team X", "Xyla")
+    other_sess = _connect(client, other_team["leader"]["connection_token"])
+
+    assert client.get(
+        "/api/games/{}/leaderboard".format(s.game_id),
+        headers={SESSION_TOKEN_HEADER: other_sess},
     ).status_code == 401
 
 

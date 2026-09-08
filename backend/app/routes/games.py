@@ -7,7 +7,12 @@ from ..services.game_settings_service import (
     SettingsInvalidError,
     SettingsLockedError,
 )
-from ..utils.auth import host_authorized, host_token_from_request, require_host
+from ..utils.auth import (
+    game_session_authorized,
+    host_authorized,
+    host_token_from_request,
+    require_host,
+)
 from ..utils.rate_limit import rate_limit
 from ..utils.response import error_response, success_response
 
@@ -267,9 +272,11 @@ def game_leaderboard(game_id):
             "Game not found.", code="GAME_NOT_FOUND", status=404
         )
     token = host_token_from_request()
-    if not token or not host_authorized(game):
+    is_host = token is not None and host_authorized(game)
+    is_player = game_session_authorized(game)
+    if not is_host and not is_player:
         return error_response(
-            "Invalid or missing host session token.",
+            "Invalid or missing host session token or player session.",
             code="UNAUTHORIZED",
             status=401,
         )

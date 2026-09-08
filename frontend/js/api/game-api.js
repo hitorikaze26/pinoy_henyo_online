@@ -61,9 +61,10 @@ const GameAPI = (() => {
     return API.request(`/games/${gameId}/history`, { host: true });
   }
 
-  // GET /api/games/<id>/leaderboard  (host only) -> { leaderboard: [...] }
+  // GET /api/games/<id>/leaderboard -> { leaderboard: [...] }
+  // Accessible by the host OR any connected player device (session token).
   function leaderboard(gameId) {
-    return API.request(`/games/${gameId}/leaderboard`, { host: true });
+    return API.request(`/games/${gameId}/leaderboard`, { host: true, session: true });
   }
 
   // GET /api/games/<id>/statistics  (host only) -> statistics object

@@ -732,3 +732,69 @@ def test_settings_updated_reaches_host_and_teams(app, client):
     host_sio.disconnect()
     team_sio.disconnect()
 
+
+# ---------------------------------------------------------------------------
+# 12. leaderboard_updated broadcasts live standings to the game room
+# ---------------------------------------------------------------------------
+
+
+def test_leaderboard_updated_reaches_host_and_players_on_scoring(app, client):
+    s = _setup(client)
+    host_sio = _socket(app, s.host)
+    player_sio = _socket(
+        app, _connect(client, s.member_a, device_id="dev-2")["session_token"]
+    )
+    for sio in (host_sio, player_sio):
+        sio.get_received()
+
+    turn_a = _turn_by_assign(client, s.host, s.match_a, s.words_b0[:4])
+    _start_turn(client, s.host, s.match_a)
+    for sio in (host_sio, player_sio):
+        sio.get_received()
+
+    assert _host_post(
+        client, s.host, "/api/turns/{}/correct".format(turn_a)
+    ).status_code == 200
+
+    for sio in (host_sio, player_sio):
+        events = _named(sio.get_received(), "leaderboard_updated")
+        assert len(events) >= 1
+        payload = events[-1]["args"][0]
+        assert payload["game_id"] == s.game_id
+        board = payload["leaderboard"]
+        assert board
+        assert board[0]["team_id"] == s.team_a["team_id"]
+        assert board[0]["points"] == 1
+        assert board[0]["rank"] == 1
+        assert any(row["team_id"] == s.team_b["team_id"] for row in board)
+
+    host_sio.disconnect()
+    player_sio.disconnect()
+
+
+def test_leaderboard_ignored_by_other_game_room(app, client):
+    s = _setup(client)
+    host_sio = _socket(app, s.host)
+    other_game_id, other_host = _create_game(client)
+    other_host_sio = _socket(app, other_host)
+    for sio in (host_sio, other_host_sio):
+        sio.get_received()
+
+    turn_a = _turn_by_assign(client, s.host, s.match_a, s.words_b0[:4])
+    _start_turn(client, s.host, s.match_a)
+    for sio in (host_sio, other_host_sio):
+        sio.get_received()
+
+    assert _host_post(
+        client, s.host, "/api/turns/{}/correct".format(turn_a)
+    ).status_code == 200
+
+    assert len(_named(host_sio.get_received(), "leaderboard_updated")) >= 1
+    assert len(_named(other_host_sio.get_received(), "leaderboard_updated")) == 0
+
+    host_sio.disconnect()
+    other_host_sio.disconnect()
+
+    # other_game_id is deliberately unused beyond room isolation setup
+    assert other_game_id is not None
+

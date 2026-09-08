@@ -130,6 +130,22 @@ def emit_game_completed(game):
     )
 
 
+def emit_leaderboard(game):
+    """Broadcast the aggregated standings to everyone in the game room.
+
+    Sent after any score-affecting event (word result, penalty/time
+    adjustment, turn or round completion) so player devices can keep a live,
+    public leaderboard in sync.
+    """
+    from ..services.report_service import leaderboard
+
+    _emit(
+        game_room(game.id),
+        "leaderboard_updated",
+        {"game_id": game.id, "leaderboard": leaderboard(game)},
+    )
+
+
 def emit_round_started(round_obj):
     _emit(
         game_room(round_obj.game_id),
