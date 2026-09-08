@@ -15,16 +15,23 @@ def _store():
     return current_app._rate_store, current_app._rate_store_lock
 
 
+def _effective_limit(base_limit):
+    """Scale the base limit by RATE_LIMIT_MULTIPLIER from config."""
+    multiplier = current_app.config.get("RATE_LIMIT_MULTIPLIER", 1)
+    return max(1, int(base_limit) * max(1, int(multiplier)))
+
+
 def check_rate_limit(key, limit, window_seconds):
     """Return (ok, retry_after). Sliding window keyed by (key, client_ip)."""
     store, lock = _store()
     ip = request.remote_addr or "unknown"
     window_key = "{}:{}".format(key, ip)
     now = time.monotonic()
+    effective = _effective_limit(limit)
     with lock:
         events = store.get(window_key, [])
         events = [t for t in events if now - t < window_seconds]
-        if len(events) >= limit:
+        if len(events) >= effective:
             store[window_key] = events
             oldest = events[0] if events else now
             retry_after = max(1, int(window_seconds - (now - oldest)))

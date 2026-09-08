@@ -1,4 +1,5 @@
 import os
+import secrets
 
 from dotenv import load_dotenv
 
@@ -20,6 +21,20 @@ def _cors_origins(allow_wildcard=True):
     return ["*"] if allow_wildcard else []
 
 
+def _deploy_mode(flask_config=None):
+    """Resolve the deployment mode from DEPLOY_MODE env or FLASK_CONFIG.
+
+    Returns one of: 'local', 'lan', 'online'.
+    """
+    raw = os.environ.get("DEPLOY_MODE", "").strip().lower()
+    if raw in ("local", "lan", "online"):
+        return raw
+    cfg = flask_config or os.environ.get("FLASK_CONFIG", "development")
+    if cfg == "production":
+        return "online"
+    return "local"
+
+
 class BaseConfig:
     SECRET_KEY = os.environ.get("SECRET_KEY")
     SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL")
@@ -29,16 +44,17 @@ class BaseConfig:
     CORS_ORIGINS = _cors_origins()
     PORT = int(os.environ.get("PORT", "5000"))
     DEVICE_HEARTBEAT_TIMEOUT = int(os.environ.get("DEVICE_HEARTBEAT_TIMEOUT", "60"))
-    # Host-disconnect reconciliation: a game whose host has been absent for
-    # longer than HOST_INACTIVITY_TIMEOUT seconds is marked EXPIRED (not deleted).
+    DEVICE_HEARTBEAT_GRACE_MULTIPLIER = int(os.environ.get("DEVICE_HEARTBEAT_GRACE_MULTIPLIER", "3"))
     HOST_INACTIVITY_TIMEOUT = int(os.environ.get("HOST_INACTIVITY_TIMEOUT", "900"))
     SWEEPER_INTERVAL = int(os.environ.get("SWEEPER_INTERVAL", "30"))
-    QR_BASE_URL = os.environ.get("QR_BASE_URL", "https://pinoyhenyo.online")
+    QR_BASE_URL = os.environ.get("QR_BASE_URL", "")
+    DEPLOY_MODE = _deploy_mode()
+    RATE_LIMIT_MULTIPLIER = int(os.environ.get("RATE_LIMIT_MULTIPLIER", "1"))
 
 
 class DevelopmentConfig(BaseConfig):
     DEBUG = True
-    SECRET_KEY = BaseConfig.SECRET_KEY or "dev-secret-key-change-me"
+    SECRET_KEY = BaseConfig.SECRET_KEY or secrets.token_hex(32)
 
 
 class TestingConfig(BaseConfig):
@@ -47,12 +63,16 @@ class TestingConfig(BaseConfig):
     SECRET_KEY = "test-secret-key"
     SQLALCHEMY_DATABASE_URI = os.environ.get("TEST_DATABASE_URL") or "sqlite:///:memory:"
     CORS_ORIGINS = ["*"]
+    # Keep tests deterministic — the local backend/.env (RATE_LIMIT_MULTIPLIER,
+    # HOST_INACTIVITY_TIMEOUT, …) must never shape the testing config.
+    RATE_LIMIT_MULTIPLIER = 1
+    HOST_INACTIVITY_TIMEOUT = 900
+    DEVICE_HEARTBEAT_TIMEOUT = 60
+    DEVICE_HEARTBEAT_GRACE_MULTIPLIER = 3
 
 
 class ProductionConfig(BaseConfig):
     DEBUG = False
-    # No wildcard in production — CORS_ORIGINS must name the Vercel origin.
-    # Left empty, cross-origin browser requests (REST + Socket.IO) are refused.
     CORS_ORIGINS = _cors_origins(allow_wildcard=False)
 
 

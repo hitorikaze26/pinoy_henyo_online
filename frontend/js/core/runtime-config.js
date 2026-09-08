@@ -41,8 +41,8 @@
    ============================================================ */
 
 window.PINOY_CONFIG = {
-  apiBaseUrl:    'https://pinoy-henyo-backend.onrender.com',   
-  socketBaseUrl: 'https://pinoy-henyo-backend.onrender.com',
-  qrBaseUrl:     'https://pinoy-henyo-online.vercel.app',   
-  frontendBase:  'https://pinoy-henyo-online.vercel.app',
+  apiBaseUrl:    '',
+  socketBaseUrl: '',
+  qrBaseUrl:     '',
+  frontendBase:  '',
 };

@@ -55,7 +55,11 @@ def reconcile_orphaned_games(host_timeout_seconds, now=None):
     The game is not hard-deleted — it is marked with the terminal EXPIRED
     status so history remains while new teams/members/gameplay are blocked.
     Returns the number of games that were newly expired.
+
+    When host_timeout_seconds <= 0 the sweep is disabled (no games expire).
     """
+    if host_timeout_seconds <= 0:
+        return 0
     now = now or utcnow()
     cutoff = now - timedelta(seconds=max(host_timeout_seconds, 1))
     count = 0
@@ -75,13 +79,15 @@ def reconcile_orphaned_games(host_timeout_seconds, now=None):
 def _sweep(app):
     host_timeout = app.config.get("HOST_INACTIVITY_TIMEOUT", 900)
     heartbeat_timeout = app.config.get("DEVICE_HEARTBEAT_TIMEOUT", 60)
+    grace_multiplier = app.config.get("DEVICE_HEARTBEAT_GRACE_MULTIPLIER", 3)
+    effective_heartbeat = heartbeat_timeout * max(int(grace_multiplier), 1)
     with app.app_context():
         try:
             reconcile_orphaned_games(host_timeout)
         except Exception as exc:  # noqa: BLE001 - never kill the loop
             logger.exception("reconcile_orphaned_games failed: %s", exc)
         try:
-            expire_stale_device_sessions(heartbeat_timeout)
+            expire_stale_device_sessions(effective_heartbeat)
         except Exception as exc:  # noqa: BLE001
             logger.exception("expire_stale_device_sessions failed: %s", exc)
 

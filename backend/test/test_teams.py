@@ -468,7 +468,7 @@ def test_game_qr_generation(client):
     )
     assert response.status_code == 200
     data = response.get_json()["data"]
-    assert data["payload"].startswith("https://pinoyhenyo.online/join/game/")
+    assert data["payload"].startswith("http://localhost/join/game/")
     assert data["payload"].endswith(game_code)
     image = base64.b64decode(data["qr_image"].split(",", 1)[1])
     assert image[:4] == PNG_MAGIC

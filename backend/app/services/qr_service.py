@@ -5,7 +5,7 @@ from flask import current_app, request
 
 import segno
 
-DEFAULT_QR_BASE_URL = "https://pinoyhenyo.online"
+DEFAULT_QR_BASE_URL = "http://localhost:5000"
 
 QR_PNG_DATA_URI_PREFIX = "data:image/png;base64,"
 

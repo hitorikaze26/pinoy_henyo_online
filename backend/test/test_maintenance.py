@@ -220,3 +220,76 @@ def test_expire_stale_sweep_skips_fresh_sessions(app, client):
         assert swept == []
         sess = team_service._get_device_session(session_token)
         assert sess.disconnected_at is None
+
+
+def test_reconcile_disabled_when_timeout_zero(app, client):
+    data = _create_game(client)
+    _set_host_absent(app, data["game_id"])
+
+    expired = _reconcile(app, timeout=0)
+
+    with app.app_context():
+        game = db.session.get(Game, data["game_id"])
+        assert expired == 0
+        assert game.status != Game.STATUS_EXPIRED
+
+
+def test_sweep_keeps_recent_heartbeat_within_grace(app, client):
+    # A device that stopped beating for a while but is still inside the grace
+    # window (DEVICE_HEARTBEAT_TIMEOUT * GRACE_MULTIPLIER) must NOT be swept.
+    app.config["DEVICE_HEARTBEAT_TIMEOUT"] = 60
+    app.config["DEVICE_HEARTBEAT_GRACE_MULTIPLIER"] = 3  # effective = 180s
+
+    data = _create_game(client)
+    team_resp = client.post(
+        "/api/games/{}/teams".format(data["game_id"]),
+        json={"team_name": "Team A", "username": "Juan"},
+    )
+    leader = team_resp.get_json()["data"]["leader"]
+    conn_resp = client.post(
+        "/api/devices/connect",
+        json={"connection_token": leader["connection_token"], "device_id": "dev-1"},
+    )
+    session_token = conn_resp.get_json()["data"]["session_token"]
+
+    with app.app_context():
+        sess = team_service._get_device_session(session_token)
+        # 120s stale: past the raw 60s timeout but inside the 180s grace.
+        sess.last_heartbeat = utcnow() - timedelta(seconds=120)
+        db.session.commit()
+
+        from app.services.maintenance import _sweep
+
+        _sweep(app)
+
+        refreshed = team_service._get_device_session(session_token)
+        assert refreshed.disconnected_at is None
+
+
+def test_sweep_expires_heartbeat_beyond_grace(app, client):
+    app.config["DEVICE_HEARTBEAT_TIMEOUT"] = 60
+    app.config["DEVICE_HEARTBEAT_GRACE_MULTIPLIER"] = 3  # effective = 180s
+
+    data = _create_game(client)
+    team_resp = client.post(
+        "/api/games/{}/teams".format(data["game_id"]),
+        json={"team_name": "Team A", "username": "Juan"},
+    )
+    leader = team_resp.get_json()["data"]["leader"]
+    conn_resp = client.post(
+        "/api/devices/connect",
+        json={"connection_token": leader["connection_token"], "device_id": "dev-1"},
+    )
+    session_token = conn_resp.get_json()["data"]["session_token"]
+
+    with app.app_context():
+        sess = team_service._get_device_session(session_token)
+        sess.last_heartbeat = utcnow() - timedelta(seconds=9999)
+        db.session.commit()
+
+        from app.services.maintenance import _sweep
+
+        _sweep(app)
+
+        refreshed = team_service._get_device_session(session_token)
+        assert refreshed.disconnected_at is not None

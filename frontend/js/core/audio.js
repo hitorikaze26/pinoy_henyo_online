@@ -29,7 +29,7 @@
      GameAudio.setMusicTrack(fileName)  -> switch background track
    ============================================================ */
 (function () {
-  const ASSET_ROOT = 'assets/sounds/';
+  const ASSET_ROOT = '/assets/sounds/';
   const SETTINGS_KEY = 'pinoy_henyo_settings';
 
   // Short name -> file under assets/sounds/ui/ (extra names reserved).
