@@ -67,6 +67,8 @@
       ==================================================== -->
       <div class="tab-view" id="tab-teams" role="tabpanel" aria-label="Teams">
 
+        <div data-gate="session">
+
         <!-- Team Information Card -->
         <div class="player-card fade-in">
           <h2 class="player-card__title">
@@ -214,12 +216,22 @@
           </div>
         </div>
 
+      </div><!-- /#data-gate -->
+
+        <div class="tab-empty" data-no-session hidden>
+          <div class="tab-empty__icon"><i class="fa-solid fa-user-plus"></i></div>
+          <strong>No active team yet</strong>
+          <span>Join a game from the home page to see your team, members, and connection here.</span>
+        </div>
+
       </div><!-- /#tab-teams -->
 
       <!-- ====================================================
            TAB: WORDS
       ==================================================== -->
       <div class="tab-view tab-view--hidden" id="tab-words" role="tabpanel" aria-label="Words">
+
+        <div data-gate="session">
 
         <!-- ── Status bar: lock state + top category ─────────── -->
         <div class="w-statusbar fade-in">
@@ -275,12 +287,22 @@
           </div>
         </div>
 
+      </div><!-- /#data-gate -->
+
+        <div class="tab-empty" data-no-session hidden>
+          <div class="tab-empty__icon"><i class="fa-solid fa-language"></i></div>
+          <strong>No active team yet</strong>
+          <span>Join a game from the home page to submit and track your team's words here.</span>
+        </div>
+
       </div><!-- /#tab-words -->
 
       <!-- ====================================================
            TAB: SCORES (leaderboard)
       ==================================================== -->
       <div class="tab-view tab-view--hidden" id="tab-scores" role="tabpanel" aria-label="Scores">
+
+        <div data-gate="session">
 
         <div class="player-card fade-in">
           <h2 class="player-card__title">
@@ -296,12 +318,25 @@
           <p class="lb-empty" id="lb-empty" hidden>No teams yet. Scores appear once play begins.</p>
         </div>
 
+      </div><!-- /#data-gate -->
+
+        <div class="tab-empty" data-no-session hidden>
+          <div class="tab-empty__icon"><i class="fa-solid fa-trophy"></i></div>
+          <strong>No active team yet</strong>
+          <span>Join a game from the home page and the leaderboard appears here as your team plays.</span>
+        </div>
+
       </div><!-- /#tab-scores -->
 
       <!-- ====================================================
            TAB: SETTINGS
       ==================================================== -->
       <div class="tab-view tab-view--hidden" id="tab-settings" role="tabpanel" aria-label="Settings">
+
+        <div class="tab-empty tab-empty--slim" data-no-session hidden>
+          <i class="fa-solid fa-circle-info"></i>
+          <span>No active session — options re-enable once you join a team.</span>
+        </div>
 
         <!-- ─── PROFILE SECTION ─────────────────────────────── -->
         <div class="s-section fade-in" data-gate="session">
@@ -712,6 +747,17 @@
             </button>
             <button type="button" class="s-btn s-btn--ghost s-btn--flex" id="btn-refresh-connection">
               <i class="fa-solid fa-rotate"></i> Refresh Status
+            </button>
+          </div>
+
+          <!-- Leave this host — full disconnect; your team stays saved on this device -->
+          <div class="s-danger-action s-danger-action--inline" style="margin-top:0.9rem">
+            <div class="s-danger-action__info">
+              <strong>Leave this Host</strong>
+              <span>Disconnect from the host — your team stays saved on this device so you can hop back in anytime.</span>
+            </div>
+            <button type="button" class="s-btn s-btn--leave" id="btn-leave-host">
+              <i class="fa-solid fa-right-from-bracket"></i> Leave this Host
             </button>
           </div>
         </div>

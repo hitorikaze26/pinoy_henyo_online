@@ -22,6 +22,9 @@
   const REFRESH = document.getElementById('my-games-refresh');
   if (!SECTION || !LIST) return;
 
+  const TEAMS_HEADER = document.getElementById('my-teams');
+  const TEAMS_LIST   = document.getElementById('my-teams-list');
+
   const overlayReport = document.getElementById('modal-report-game');
   const overlayDelete = document.getElementById('modal-delete-game');
 
@@ -29,7 +32,8 @@
   const deleteBtn  = document.getElementById('btn-delete-confirm');
   const deleteSelectedBtn = document.getElementById('my-games-delete-selected');
 
-  const HOST_ENTRY = 'pages/host/host_dashboard.html';
+  const HOST_ENTRY   = 'pages/host/host_dashboard.html';
+  const PLAYER_ENTRY = 'pages/player/player.html';
 
   const LIVE_STATUSES = new Set([
     'LOBBY', 'SETUP', 'READY',
@@ -55,6 +59,7 @@
   let games = [];
   let deletePending = []; // game objects queued for deletion
   const selected = new Set(); // game ids ticked for bulk delete
+  let teams = [];          // saved player-team sessions (mobile only)
 
   function esc(s) {
     return String(s == null ? '' : s)
@@ -223,6 +228,112 @@
           ${continueBtn}${reportBtn}${deleteBtn2}
         </div>
       </article>`;
+  }
+
+  /* ---------- Your Teams (mobile-only saved player sessions) ---------- */
+  function teamKey(t) {
+    return String(t.game_id || '') + ':' + String(t.team_id || '');
+  }
+
+  function teamCardHtml(t) {
+    const name = t.team_name || (t.team_code ? 'Team #' + t.team_code : 'Saved team');
+    const meta = [
+      t.game_code ? 'Game ' + t.game_code : '',
+      t.team_code ? 'Team ' + t.team_code : '',
+      t.saved_at ? 'Saved ' + fmtDate(t.saved_at) : '',
+    ].filter(Boolean).join(' · ');
+    return `
+      <article class="my-games__card my-teams__card" data-key="${esc(teamKey(t))}">
+        <div class="my-games__card-main">
+          <span class="my-games__card-title">
+            <span class="my-games__code">${esc(name)}</span>
+          </span>
+          <span class="my-games__status my-games__status--live">Your Team</span>
+        </div>
+        <p class="my-games__meta">${esc(meta)}</p>
+        <div class="my-games__acts">
+          <button type="button" class="my-games__act my-games__act--primary" data-team-act="continue" title="Reconnect to this team">
+            <i class="fa-solid fa-play"></i> Continue
+          </button>
+          <button type="button" class="my-games__act my-games__act--danger" data-team-act="delete" title="Forget this saved team">
+            <i class="fa-solid fa-trash"></i>
+          </button>
+        </div>
+      </article>`;
+  }
+
+  function renderTeams() {
+    if (!TEAMS_HEADER || !TEAMS_LIST) return;
+    if (!API.isCompactDevice()) { TEAMS_HEADER.hidden = true; TEAMS_LIST.innerHTML = ''; return; }
+    TEAMS_HEADER.hidden = false;
+    TEAMS_LIST.innerHTML = teams.length
+      ? teams.map(teamCardHtml).join('')
+      : '<div class="my-games__state">No saved teams yet. Join a game from this device and it appears here so you can hop back in.</div>';
+  }
+
+  function loadTeams() {
+    teams = API.getPlayerTeams() || [];
+    renderTeams();
+  }
+
+  // Clear the live PLAYER session without wiping a host session that may
+  // also live on this device (API.clearTokens() clears everything).
+  function clearSavedSession() {
+    API.setSessionToken(null);
+    API.setMemberId(null);
+    API.setTeamId(null);
+    API.setTeamCode(null);
+    API.setTeamName(null);
+    API.setUsername(null);
+  }
+
+  async function continueTeam(team) {
+    if (!team || !team.session_token) { showToast('This saved team has no session to resume.'); return; }
+    // Apply the saved token, then let the server confirm it before heading to
+    // the player page. A dead session (401/404) is dropped, not carried over.
+    const priorToken = API.getSessionToken();
+    API.setSessionToken(team.session_token);
+    try {
+      const data = await DeviceAPI.connect({});
+      if (data && data.session_token) {
+        window.location.href = PLAYER_ENTRY;
+        return;
+      }
+      throw new Error('Reconnect failed.');
+    } catch (err) {
+      const dead = err && (err.status === 401 || err.status === 404 || err.code === 'NO_SESSION');
+      if (dead) {
+        API.removePlayerTeam(team.game_id, team.team_id);
+        showToast('This team session is no longer valid.');
+      } else {
+        showToast((err && err.message) || 'Could not reconnect to that team.');
+      }
+      if (priorToken) API.setSessionToken(priorToken);
+      else clearSavedSession();
+      loadTeams();
+    }
+  }
+
+  async function confirmDeleteTeam(team) {
+    const name = team.team_name || (team.team_code ? 'Team #' + team.team_code : 'this team');
+    let ok = false;
+    if (window.openConfirm) {
+      ok = await window.openConfirm({
+        title: 'Forget this team?',
+        body: 'Remove ' + name + ' from this device? The game and its scores stay on the host.',
+        confirmLabel: 'Forget Team',
+        destructive: true,
+      });
+    } else {
+      ok = window.confirm('Forget ' + name + ' from this device?');
+    }
+    if (!ok) return;
+    API.removePlayerTeam(team.game_id, team.team_id);
+    // If the deleted entry was the active player session, clear it so the
+    // player page stops trying to restore a team the user just removed.
+    if (team.session_token && API.getSessionToken() === team.session_token) clearSavedSession();
+    showToast('Team removed.');
+    loadTeams();
   }
 
   /* ---------- bulk delete toolbar ---------- */
@@ -568,6 +679,19 @@
     if (e.target.closest && e.target.closest('#my-games-retry')) load();
   });
 
+  if (TEAMS_LIST) {
+    TEAMS_LIST.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-team-act]');
+      if (!btn) return;
+      const card = btn.closest('.my-teams__card');
+      const team = card && teams.find((t) => teamKey(t) === card.getAttribute('data-key'));
+      if (!team) return;
+      const act = btn.getAttribute('data-team-act');
+      if (act === 'continue') continueTeam(team);
+      else if (act === 'delete') confirmDeleteTeam(team);
+    });
+  }
+
   // Checkbox selection for bulk delete (checkboxes only exist on terminal
   // games, so anything ticked is always deletable).
   LIST.addEventListener('change', (e) => {
@@ -617,8 +741,14 @@
 
   /* ---------- bootstrap ---------- */
   if (!API.getHostToken() && !(API.getMyGames() || []).length) {
+    // A mobile player with only saved teams still wants this section.
+    if (API.isCompactDevice() && (API.getPlayerTeams() || []).length) {
+      loadTeams();
+      return;
+    }
     SECTION.hidden = true;
     return;
   }
   load();
+  loadTeams();
 })();

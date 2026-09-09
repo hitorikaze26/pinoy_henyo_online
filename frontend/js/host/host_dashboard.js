@@ -996,21 +996,24 @@ function renderRealQr(container, dataUri) {
   let gameSettings = null;  // server-backed /api/games/<id>/settings payload
   let displayState = { status: 'IDLE', matchId: null }; // two-stage start lifecycle
   let liveLeaderboard = null; // server-ranked standings (leaderboard_updated / GET leaderboard)
+  let gameCategories = [];  // [{category_id, name}] for the Round-1 category picker
 
   const $ = (id) => document.getElementById(id);
 
   /* ---------- data loading ---------- */
   async function loadData() {
-    const [scoreRes, matchRes, roundRes, settingsRes, lbRes] = await Promise.all([
+    const [scoreRes, matchRes, roundRes, settingsRes, lbRes, catRes] = await Promise.all([
       GameAPI.scores(gameId).catch(() => ({ scores: [] })),
       MatchAPI.listMatches(gameId).catch(() => ({ matches: [] })),
       RoundAPI.listRounds(gameId).catch(() => ({ rounds: [] })),
       GameAPI.getSettings(gameId).catch(() => null),
       GameAPI.leaderboard(gameId).catch(() => null),
+      WordAPI.listCategories(gameId).catch(() => ({ categories: [] })),
     ]);
     scores = (scoreRes && scoreRes.scores) || [];
     matches = (matchRes && matchRes.matches) || [];
     roundsCache = (roundRes && roundRes.rounds) || [];
+    gameCategories = (catRes && catRes.categories) || [];
     // Server-authoritative standings (includes the first-correct-word
     // tie-break the scores list cannot express). Falls back to scores-based
     // aggregation only if this fetch is unavailable.
@@ -1339,16 +1342,46 @@ function renderRealQr(container, dataUri) {
     if (api && api.renderOptions) api.renderOptions();
   }
 
+  function categoryName(categoryId) {
+    if (categoryId == null) return '';
+    const c = gameCategories.find((x) => String(x.category_id) === String(categoryId));
+    return c ? c.name : '';
+  }
+
+  // "Category" card — a Round-1-only picker for the active match. Round 2+
+  // and matches mid-turn are locked (the backend rejects both anyway).
   function renderCategory() {
-    const el = $('current-category');
-    if (!el) return;
-    if (activeMatch) {
-      el.innerHTML = '<i class="fa-solid fa-shield-halved"></i> ' +
-        teamNameOf(activeMatch.team_id) +
-        ' <span style="opacity:.6">- Round ' + activeMatch.round_number + '</span>';
-    } else {
-      el.textContent = 'No active match';
+    const sel = $('category-select');
+    if (!sel) return;
+    const empty = $('category-empty');
+    const turnActive = turn && isTurnRunning(turn);
+    const match = activeMatch;
+    const currentId = match && match.category_id != null ? String(match.category_id) : '';
+    const canEdit = !!match && Number(match.round_number) === 1 && !turnActive;
+    const opts = gameCategories.map((c) =>
+      '<option value="' + c.category_id + '"' +
+        (String(c.category_id) === currentId ? ' selected' : '') + '>' +
+        escHtml(c.name) + '</option>'
+    );
+    let placeholder = 'No active match';
+    if (match) {
+      if (Number(match.round_number) === 1) placeholder = currentId ? categoryName(currentId) : 'Pick a category…';
+      else placeholder = 'Locked for Round ' + match.round_number;
     }
+    sel.innerHTML = '<option value="">' + escHtml(placeholder) + '</option>' + opts.join('');
+    sel.disabled = !canEdit;
+    sel.setAttribute('aria-disabled', String(!canEdit));
+    sel.title = !match
+      ? 'Select a match first.'
+      : (turnActive
+          ? 'Category is fixed while a turn is playing.'
+          : (Number(match.round_number) === 1
+              ? 'Category for this Round 1 match — the playing team may ask to change it.'
+              : 'Category is fixed for this round.'));
+    if (empty) empty.hidden = true;
+    const wrapper = sel.closest('.dd');
+    const api = wrapper && wrapper.__api;
+    if (api && api.renderOptions) api.renderOptions();
   }
 
   function renderWord() {
@@ -1446,7 +1479,11 @@ function renderRealQr(container, dataUri) {
       return '<li class="lb-item ' + (isActive ? 'lb-item--active' : '') + '">' +
         '<span class="lb-medal ' + medalClass + '" aria-hidden="true">' + rankLabel + '</span>' +
         '<span class="lb-team-name">' + t.team_name + '</span>' +
-        '<span class="lb-score-wrap"><span class="lb-pts">' + t.points + ' pts</span></span>' +
+        '<span class="lb-score-wrap">' +
+          '<span class="lb-pts">' + t.points + ' pts</span>' +
+          '<span class="lb-pen ' + (t.penalties > 0 ? '' : 'lb-pen--zero') + '">' + t.penalties + ' pen</span>' +
+          (t.passes > 0 ? '<span class="lb-pen lb-pass">' + t.passes + ' pass</span>' : '') +
+        '</span>' +
         '</li>';
     }).join('') || '<li class="lb-item">No scores yet</li>';
   }
@@ -1984,6 +2021,34 @@ rebind('btn-penalty', (e) => handlePenalty(-penaltySeconds(), e));
         })();
       }).catch(() => { setActiveTurn(null); renderAll(); });
       renderAll();
+    });
+  }
+
+  // Round-1 Category picker — persist the choice to the match; the backend
+  // rejects anything but Round 1 with a clear message we surface as a toast.
+  const categorySelectEl = $('category-select');
+  if (categorySelectEl) {
+    categorySelectEl.addEventListener('change', async () => {
+      const mid = activeMatch ? activeMatch.match_id : null;
+      const catId = categorySelectEl.value;
+      if (!mid || !catId || categorySelectEl.disabled) return;
+      categorySelectEl.disabled = true;
+      try {
+        await API.request('/matches/' + mid + '/category', {
+          method: 'POST',
+          body: { category_id: parseInt(catId, 10) },
+          host: true,
+        });
+        toast('Category set: ' + categoryName(catId));
+        await loadData();
+        if (mid) activeMatch = matches.find((m) => m.match_id === mid) || null;
+        renderAll();
+      } catch (err) {
+        toast(API.messageForStatus && err && err.status ? API.messageForStatus(err.status, err.message) : (err && err.message ? err.message : 'Could not set category.'));
+        renderAll();
+      } finally {
+        renderAll();
+      }
     });
   }
 

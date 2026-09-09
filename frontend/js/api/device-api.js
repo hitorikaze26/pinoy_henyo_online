@@ -38,6 +38,20 @@ const DeviceAPI = (() => {
       if (data.member_id) API.setMemberId(data.member_id);
       if (data.device_type === 'TEAM_LEADER') { API.setRole('team-leader'); API.setDeviceRole('TEAM_LEADER'); }
       else if (data.device_type === 'TEAM_MEMBER') { API.setRole('team-member'); API.setDeviceRole('TEAM_MEMBER'); }
+      // Snapshot this session into the player-team registry so a mobile
+      // player can re-connect from the landing page without the host flow.
+      try {
+        API.recordPlayerTeam({
+          game_id: data.game_id || API.getGameId(),
+          game_code: API.getGameCode(),
+          team_id: data.team_id || API.getTeamId(),
+          team_name: API.getTeamName(),
+          team_code: API.getTeamCode(),
+          username: API.getUsername(),
+          member_id: data.member_id || API.getMemberId(),
+          session_token: data.session_token,
+        });
+      } catch (e) { /* registry is best-effort */ }
     }
     return data;
   }

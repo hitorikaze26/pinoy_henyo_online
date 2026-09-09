@@ -1304,6 +1304,16 @@ ol, ul { list-style: none; }
 }
 .lb-pen--zero { background: rgba(148,163,184,0.08); color: rgba(255,255,255,0.25); border-color: transparent; }
 
+.lb-pass {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.1rem 0.4rem;
+  border-radius: var(--r-full);
+  background: rgba(68,166,51,0.15);
+  color: var(--secondary-400);
+  border: 1px solid rgba(68,166,51,0.22);
+}
+
 /* View all button */
 .leaderboard-view-all {
   width: 100%;

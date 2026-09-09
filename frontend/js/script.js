@@ -151,6 +151,14 @@ document.getElementById('modal-start-cancel').addEventListener('click', () => cl
 document.getElementById('btn-are-you-host').addEventListener('click', async () => {
   console.log('[Pinoy Henyo] Are you a Host? clicked');
 
+  // Hosting is a desktop-only flow — the sidebar dashboard is not usable on
+  // a phone/tablet. Keep the button visible but decline with a clear toast.
+  if (API.isCompactDevice()) {
+    if (window.Toast && Toast.warning) Toast.warning('Hosting is for desktop only — join a team instead.');
+    else alert('Hosting is for desktop only — open this page on a computer to host a game.');
+    return;
+  }
+
   const btn = document.getElementById('btn-are-you-host');
   const original = btn.innerHTML;
   btn.disabled = true;

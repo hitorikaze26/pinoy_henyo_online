@@ -151,7 +151,12 @@
               <i class="fa-solid fa-tag"></i>
               Category
             </p>
-            <p class="ctrl-card__category" id="current-category">Hayop / Animal</p>
+            <div class="ctrl-card__team-wrap ctrl-card__team-wrap--select" id="category-select-wrap">
+              <select id="category-select" class="form-select ctrl-card__team-select dd" size="1" aria-label="Category for the active match">
+                <option value="">No active match</option>
+              </select>
+              <p class="ctrl-card__match-empty" id="category-empty" hidden></p>
+            </div>
           </div>
 
           <!-- Word Display -->
@@ -209,16 +214,14 @@
 
               <!-- Primary timer controls: -3s · START/STOP · +3s -->
               <div class="timer-card__action-row">
-                <button class="ctrl-btn ctrl-btn--penalty" id="btn-penalty" aria-label="Subtract 3 seconds" title="-3 seconds">
-                  <i class="fa-solid fa-minus"></i>
+<button class="ctrl-btn ctrl-btn--penalty" id="btn-penalty" aria-label="Subtract 3 seconds" title="-3 seconds">
                   <span>3s</span>
                 </button>
 <button class="ctrl-btn ctrl-btn--pause" id="btn-pause-play" aria-label="Start/Pause timer">
                   <i class="fa-solid fa-play" id="pause-icon"></i>
                   <span class="ctrl-btn--pause__label" id="btn-pause-play-label">Start</span>
                 </button>
-                <button class="ctrl-btn ctrl-btn--bonus" id="btn-bonus" aria-label="Add 3 seconds" title="+3 seconds">
-                  <i class="fa-solid fa-plus"></i>
+<button class="ctrl-btn ctrl-btn--bonus" id="btn-bonus" aria-label="Add 3 seconds" title="+3 seconds">
                   <span>3s</span>
                 </button>
               </div>

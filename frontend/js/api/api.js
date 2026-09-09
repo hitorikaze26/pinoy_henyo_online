@@ -189,6 +189,82 @@ const API = (() => {
     try { localStorage.removeItem(MY_GAMES_KEY); } catch (e) { /* ignore */ }
   }
 
+  /* ============================================================
+     Player-team registry (saved "Continue" sessions for players).
+     Mirrors my-games but keyed by team: lets a mobile player
+     re-open a recent team without the host flow.
+     ============================================================ */
+  const PLAYER_TEAMS_KEY = 'pinoy_henyo_player_teams';
+  const MAX_PLAYER_TEAMS = 10;
+
+  function loadPlayerTeams() {
+    try {
+      const raw = localStorage.getItem(PLAYER_TEAMS_KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function savePlayerTeams(list) {
+    try { localStorage.setItem(PLAYER_TEAMS_KEY, JSON.stringify(list)); }
+    catch (e) { /* storage disabled */ }
+  }
+
+  // Upsert a team session (deduped by game + team; newest first).
+  function recordPlayerTeam(info) {
+    if (!info) return;
+    const list = loadPlayerTeams();
+    const existing = list.find((t) =>
+      String(t.game_id || '') === String(info.game_id || '') &&
+      String(t.team_id || '') === String(info.team_id || '')
+    );
+    if (existing) {
+      ['game_code', 'team_code', 'team_name', 'username', 'member_id', 'session_token']
+        .forEach((k) => { if (info[k] !== undefined && info[k] !== null && String(info[k]) !== '') existing[k] = info[k]; });
+      existing.saved_at = info.saved_at || new Date().toISOString();
+    } else {
+      list.unshift({
+        game_id: info.game_id || null,
+        game_code: info.game_code || '',
+        team_id: info.team_id || null,
+        team_code: info.team_code || '',
+        team_name: info.team_name || '',
+        username: info.username || '',
+        member_id: info.member_id || null,
+        session_token: info.session_token || null,
+        saved_at: info.saved_at || new Date().toISOString(),
+      });
+      if (list.length > MAX_PLAYER_TEAMS) list.length = MAX_PLAYER_TEAMS;
+    }
+    savePlayerTeams(list);
+  }
+
+  function getPlayerTeams() {
+    return loadPlayerTeams();
+  }
+
+  function removePlayerTeam(gameId, teamId) {
+    savePlayerTeams(loadPlayerTeams().filter((t) =>
+      String(t.game_id || '') !== String(gameId || '') ||
+      String(t.team_id || '') !== String(teamId || '')
+    ));
+  }
+
+  function clearPlayerTeams() {
+    try { localStorage.removeItem(PLAYER_TEAMS_KEY); } catch (e) { /* ignore */ }
+  }
+
+  // "is this a small touch device that should hide desktop-only flows?"
+  // Coarse pointer (phones/tablets) or a narrow window -> mobile layout.
+  function isCompactDevice() {
+    try {
+      if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) return true;
+    } catch (e) { /* matchMedia unavailable */ }
+    return Boolean(window.innerWidth && window.innerWidth <= 820);
+  }
+
   /* ---------- generic get/set that keep ctx + storage in sync ---------- */
   function set(field, value) {
     ctx[field] = value === undefined ? null : value;
@@ -567,6 +643,11 @@ const API = (() => {
     updateMyGame,
     removeMyGame,
     clearMyGames,
+    getPlayerTeams,
+    recordPlayerTeam,
+    removePlayerTeam,
+    clearPlayerTeams,
+    isCompactDevice,
     request,
     withLoading,
     isLoading,

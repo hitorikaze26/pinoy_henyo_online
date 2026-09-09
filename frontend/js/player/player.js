@@ -1357,33 +1357,66 @@ $('form-player-settings').addEventListener('submit', async e => {
   showToast('Username updated');
 });
 
-$('btn-leave-game').addEventListener('click', async () => {
+async function requestAndLeaveGame(opts) {
   const confirmed = await openConfirm({
-    title: 'Leave the game?',
+    title: opts.title,
     subtitle: '',
-    body: 'You will be disconnected from the host and return to the landing page. You can rejoin anytime with your team code or the host’s QR.',
-    confirmLabel: 'Leave Game',
-    icon: 'leave',
+    body: opts.body,
+    confirmLabel: opts.confirmLabel,
+    icon: opts.icon || 'leave',
     requestKey: 'leave-game',
   });
   if (!confirmed) return;
-  setConfirmBusy(true, 'Leaving game…');
+  setConfirmBusy(true, 'Leaving…');
+  try {
+    await performLeave();
+  } finally {
+    closeConfirm();
+  }
+}
+
+// Save the current player session into the device registry so "Continue"
+// on the landing page can restore it later — leaving never loses a team.
+function snapshotTeamForRegistry() {
+  const teamId = API.getTeamId();
+  if (!teamId) return;
+  API.recordPlayerTeam({
+    game_id: API.getGameId(),
+    game_code: API.getGameCode(),
+    team_id: teamId,
+    team_code: API.getTeamCode(),
+    team_name: API.getTeamName(),
+    username: API.getUsername(),
+    member_id: API.getMemberId(),
+    session_token: API.getSessionToken(),
+  });
+}
+
+async function performLeave() {
+  // Snapshot BEFORE disconnect() — disconnect() clears the tokens.
+  snapshotTeamForRegistry();
   try {
     if (window.DeviceAPI && API.getSessionToken()) {
       await DeviceAPI.disconnect().catch(() => {});
     }
-    stopHeartbeat();
-    API.clearTokens();
-    STATE.isConnected   = false;
-    STATE.hostConnected = false;
-    STATE.gameStatus    = 'waiting';
-    setConnectionStatus('NOT_CONNECTED');
-    applySessionGating();
-    try { renderHeader(); renderTeamsTab(); renderSettingsTab(); } catch (err) {}
-    window.location.href = '../../index.html';
-  } finally {
-    closeConfirm();
-  }
+  } catch (e) { /* transient disconnect failure — leave anyway */ }
+  stopHeartbeat();
+  API.clearTokens();
+  STATE.isConnected   = false;
+  STATE.hostConnected = false;
+  STATE.gameStatus    = 'waiting';
+  setConnectionStatus('NOT_CONNECTED');
+  applySessionGating();
+  try { renderHeader(); renderTeamsTab(); renderSettingsTab(); } catch (err) {}
+  window.location.href = '../../index.html';
+}
+
+$('btn-leave-game').addEventListener('click', () => {
+  requestAndLeaveGame({
+    title: 'Leave the game?',
+    body: 'You will be disconnected from the host and return to the landing page. Your team stays saved on this device so you can hop back in anytime.',
+    confirmLabel: 'Leave Game',
+  });
 });
 
 /* ============================================================
@@ -2652,6 +2685,14 @@ function initPlayerPrefsUi() {
   on('btn-reconnect', 'click', handleReconnect);
   on('btn-refresh-connection', 'click', handleRefreshConnection);
 
+  on('btn-leave-host', 'click', () => {
+    requestAndLeaveGame({
+      title: 'Leave this Host?',
+      body: 'This disconnects you from the host and returns to the landing page. Your team stays saved on this device so you can rejoin or continue later.',
+      confirmLabel: 'Leave this Host',
+    });
+  });
+
   on('btn-reset-all-prefs', 'click', async () => {
     const confirmed = await openConfirm({
       title: 'Reset all player settings?',
@@ -2695,8 +2736,12 @@ function initPlayerPrefsEvents() {
 
 function applySessionGating() {
   const hasSession = !!API.getSessionToken();
+  document.body.classList.toggle('ph-no-session', !hasSession);
   document.querySelectorAll('[data-gate="session"]').forEach((el) => {
     el.hidden = !hasSession;
+  });
+  document.querySelectorAll('[data-no-session]').forEach((el) => {
+    el.hidden = hasSession;
   });
 }
 
@@ -2716,12 +2761,18 @@ function init() {
   // Set initial tab
   switchTab('teams');
 
-  // Populate category select in word modal
+  // Populate category select in word modal. Without a session the demo
+// defaults don't map to any real game — leave the dropdown empty/disabled
+// and let hydrateCategories() fill it the moment a team is joined.
   const catSel = $('add-word-category');
   catSel.innerHTML = '<option value="">Select Category</option>';
-  CATEGORIES.forEach(c => {
-    catSel.innerHTML += `<option value="${esc(c)}">${esc(c)}</option>`;
-  });
+  if (!API.getSessionToken()) {
+    catSel.disabled = true;
+  } else {
+    CATEGORIES.forEach(c => {
+      catSel.innerHTML += `<option value="${esc(c)}">${esc(c)}</option>`;
+    });
+  }
 }
 
 init();
